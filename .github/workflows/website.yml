@@ -3,10 +3,10 @@ name: Website CI
 on:
   push:
     paths:
-      - 'apps/website/**'
+      - 'website/**'
   pull_request:
     paths:
-      - 'apps/website/**'
+      - 'website/**'
 
 jobs:
   build:
@@ -16,10 +16,10 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/website/package-lock.json
+          cache-dependency-path: website/package-lock.json
       - name: Install dependencies
-        run: cd apps/website && npm install
+        run: cd website && npm ci
       - name: Build
-        run: cd apps/website && npm run build
+        run: cd website && npm run build

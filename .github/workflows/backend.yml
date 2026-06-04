@@ -3,10 +3,10 @@ name: Backend CI
 on:
   push:
     paths:
-      - 'apps/backend/**'
+      - 'backend/**'
   pull_request:
     paths:
-      - 'apps/backend/**'
+      - 'backend/**'
 
 jobs:
   build:
@@ -16,10 +16,10 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/backend/package-lock.json
+          cache-dependency-path: backend/package-lock.json
       - name: Install dependencies
-        run: cd apps/backend && npm install
+        run: cd backend && npm ci
       - name: Build
-        run: cd apps/backend && npm run build
+        run: cd backend && npm run build
