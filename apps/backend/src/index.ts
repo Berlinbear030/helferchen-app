@@ -1,6 +1,14 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import authRoutes from './routes/auth';
+import assignmentRoutes from './routes/assignments';
+import timelogRoutes from './routes/timelogs';
+import customerRoutes from './routes/customers';
+import reportRoutes from './routes/reports';
+import signatureRoutes from './routes/signatures';
+import pdfRoutes from './routes/pdf';
+import adminRoutes from './routes/admin';
 
 dotenv.config();
 
@@ -8,12 +16,21 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // larger limit for signature image blobs
 
-app.get('/', (req: Request, res: Response) => {
-  res.send('Helferchen API is running');
+app.use('/api/auth', authRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/timelogs', timelogRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/signatures', signatureRoutes);
+app.use('/api/pdf', pdfRoutes);
+app.use('/api/admin', adminRoutes);
+
+app.get('/', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });
 });
 
 app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
+  console.log(`Helferchen API running at http://localhost:${port}`);
 });
