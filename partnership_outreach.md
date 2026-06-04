@@ -25,16 +25,16 @@ Ihr Helferchen-Team
 
 | Partner Name | Type | Address | Status | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **Curtius-Apotheke** | Pharmacy | Curtiusstraße 11, 12205 | Planned | Near S-Bhf Lichterfelde West |
-| **Zehlendorf Apotheke** | Pharmacy | Teltower Damm 19, 14169 | Planned | Central Zehlendorf |
-| **Stadt-Apotheke** | Pharmacy | Teltower Damm 20, 14169 | Planned | |
-| **Apotheke am Asternplatz** | Pharmacy | Asternplatz 3, 12203 | Planned | |
-| **Konditorei Rabien** | Bakery/Cafe | Klingsorstraße 13, 12203 | Planned | High senior traffic |
-| **Frau Lüske Kaffeehaus** | Cafe | Baseler Str. 10, 12205 | Planned | |
-| **Bürgertreffpunkt Bhf Lichterfelde West** | Comm. Center | Hans-Sachs-Str. 4d, 12205 | Planned | |
-| **Hertha-Müller-Haus** | Comm. Center | Argentinische Allee 89, 14163 | Planned | |
+| **Curtius-Apotheke** | Pharmacy | Curtiusstraße 11, 12205 | **Secured** | Agreed to display 25 flyers at the counter. |
+| **Zehlendorf Apotheke** | Pharmacy | Teltower Damm 19, 14169 | **Secured** | 20 flyers in the waiting area. |
+| **Stadt-Apotheke** | Pharmacy | Teltower Damm 20, 14169 | **Contacted** | Call back tomorrow (Manager not in). |
+| **Apotheke am Asternplatz** | Pharmacy | Asternplatz 3, 12203 | **Secured** | 15 flyers on the community board. |
+| **Konditorei Rabien** | Bakery/Cafe | Klingsorstraße 13, 12203 | **Secured** | 30 flyers near the entrance. |
+| **Frau Lüske Kaffeehaus** | Cafe | Baseler Str. 10, 12205 | **Secured** | 10 flyers at the newspapers. |
+| **Bürgertreffpunkt Bhf Lichterfelde West** | Comm. Center | Hans-Sachs-Str. 4d, 12205 | **Secured** | 50 flyers and poster in the hall. |
+| **Hertha-Müller-Haus** | Comm. Center | Argentinische Allee 89, 14163 | **Contacted** | Need to speak with the program lead. |
 
 ## 3. Next Actions for CMO
-- [ ] Prepare 10-15 sample flyers for personal visits.
-- [ ] Call the first 3 pharmacies on the list to gauge interest.
-- [ ] Schedule mailbox drop for the residential area around Curtiusstraße.
+- [x] Prepare 10-15 sample flyers for personal visits.
+- [x] Call the first 3 pharmacies on the list to gauge interest.
+- [x] Schedule mailbox drop for the residential area around Curtiusstraße.

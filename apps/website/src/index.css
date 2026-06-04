@@ -1,24 +1,64 @@
+:root {
+  --primary-color: #6366f1;
+  --bg-color: #f8fafc;
+  --text-color: #1e293b;
+  --header-bg: #ffffff;
+  --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f0f0f0;
-  color: #333;
+  padding: 0;
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
 }
 
-.App {
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+header {
+  background-color: var(--header-bg);
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
   text-align: center;
-  padding: 50px;
+  margin-bottom: 2rem;
 }
 
-.App-header h1 {
+h1 {
+  color: var(--primary-color);
   font-size: 3rem;
-  color: #007bff;
+  margin: 0;
 }
 
-.App-header p {
-  font-size: 1.5rem;
+h2 {
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 0.5rem;
+}
+
+section {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+footer {
+  text-align: center;
+  margin-top: 4rem;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* Accessibility for seniors */
+@media (prefers-contrast: more) {
+  :root {
+    --primary-color: #0000ff;
+    --text-color: #000000;
+  }
 }

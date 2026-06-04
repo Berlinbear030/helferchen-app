@@ -11,10 +11,12 @@ This document specifies the layout, typography, and content for the physical fly
 
 ## Pre-Print Checklist
 - [x] **Final Phone Number:** Placeholder `030 / 123 456 78` accepted for pilot phase.
-- [ ] **Imagery Check:** Ensure all photos are high-resolution (300 DPI) for physical printing.
-- [ ] **Bleed & Margins:** Verify that all critical text is within the "safe zone" for the chosen print provider.
+- [x] **Imagery Check:** Ensure all photos are high-resolution (300 DPI) for physical printing. (Verified for first batch)
+- [x] **Bleed & Margins:** Verify that all critical text is within the "safe zone" for the chosen print provider. (Verified for first batch)
 - [x] **Office Hours:** Included in the CTA sections ("Erreichbar Mo-Fr 9-17 Uhr").
-- [ ] **Trial Offer (Optional):** Consider a "Welcome Discount" or "First 15 Minutes Free" to lower the barrier for the first call.
+- [x] **Trial Offer (Optional):** Added "Die ersten 15 Min. 20 €" as the introductory hook.
+
+**Status: First batch of 500 flyers printed on 2026-06-04.**
 
 ## Side A: The Hook & Overview
 
