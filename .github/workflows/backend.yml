@@ -1,0 +1,25 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'apps/backend/**'
+  pull_request:
+    paths:
+      - 'apps/backend/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: apps/backend/package-lock.json
+      - name: Install dependencies
+        run: cd apps/backend && npm install
+      - name: Build
+        run: cd apps/backend && npm run build

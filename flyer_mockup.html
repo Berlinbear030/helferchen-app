@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helferchen Flyer Mockup</title>
+    <style>
+        :root {
+            --primary-blue: #003366;
+            --accent-orange: #FF8C00;
+            --text-dark: #222222;
+            --bg-light: #FFFFFF;
+            --bg-cream: #FFFDD0; /* Slightly easier on the eyes than pure white */
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: var(--text-dark);
+        }
+
+        .flyer-page {
+            width: 210mm;
+            height: 297mm; /* A4 size */
+            background-color: var(--bg-cream);
+            margin: 0 auto 40px auto;
+            padding: 40px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            text-align: center;
+            border-bottom: 4px solid var(--primary-blue);
+            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            font-size: 60px;
+            font-weight: bold;
+            color: var(--primary-blue);
+            margin: 0;
+        }
+
+        .tagline {
+            font-size: 28px;
+            color: var(--text-dark);
+            margin: 10px 0 0 0;
+        }
+
+        h1 {
+            font-size: 42px;
+            color: var(--primary-blue);
+            text-align: center;
+            margin-bottom: 30px;
+            line-height: 1.2;
+        }
+
+        .intro {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 50px;
+            line-height: 1.5;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        .service-box {
+            background-color: white;
+            padding: 30px;
+            border: 3px solid var(--primary-blue);
+            border-radius: 15px;
+        }
+
+        .service-box h2 {
+            font-size: 32px;
+            color: var(--primary-blue);
+            margin-top: 0;
+        }
+
+        .service-box p {
+            font-size: 20px;
+            line-height: 1.4;
+        }
+
+        .pricing-teaser {
+            background-color: var(--primary-blue);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 15px;
+            margin-bottom: 60px;
+        }
+
+        .pricing-teaser p {
+            font-size: 32px;
+            margin: 0;
+            font-weight: bold;
+        }
+
+        .cta-section {
+            text-align: center;
+            margin-top: auto;
+            border-top: 4px solid var(--primary-blue);
+            padding-top: 30px;
+        }
+
+        .cta-text {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .phone-number {
+            font-size: 64px;
+            font-weight: bold;
+            color: #FFFF00; /* High-visibility yellow */
+            background-color: var(--primary-blue);
+            display: inline-block;
+            padding: 10px 40px;
+            border-radius: 10px;
+        }
+
+        /* Side B Specifics */
+        .details-list {
+            font-size: 22px;
+            line-height: 1.6;
+        }
+
+        .trust-factors {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            gap: 20px;
+        }
+
+        .factor {
+            flex: 1;
+            text-align: center;
+            padding: 20px;
+            background-color: #eef;
+            border-radius: 10px;
+        }
+
+        .factor h3 {
+            font-size: 24px;
+            margin-top: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+            font-size: 24px;
+        }
+
+        th, td {
+            border: 2px solid var(--primary-blue);
+            padding: 20px;
+            text-align: left;
+        }
+
+        th {
+            background-color: var(--primary-blue);
+            color: white;
+        }
+
+        @media print {
+            body { background-color: white; padding: 0; }
+            .flyer-page { margin: 0; box-shadow: none; border: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDE A -->
+    <div class="flyer-page">
+        <header>
+            <p class="logo">Helferchen</p>
+            <p class="tagline">Ihre helfende Hand im Alltag</p>
+        </header>
+
+        <p style="text-align: center; color: var(--accent-orange); font-size: 28px; font-weight: bold; margin-bottom: 0;">JETZT NEU IN STEGLITZ-ZEHLENDORF</p>
+        <h1 style="margin-top: 10px;">Technik-Probleme?<br>Haushalt zu anstrengend?</h1>
+        
+        <p class="intro">Wir unterstützen Sie kompetent, geduldig und direkt bei Ihnen zu Hause.</p>
+
+        <div class="services-grid">
+            <div class="service-box">
+                <h2>Technik-Hilfe</h2>
+                <p>Wir bändigen Ihren Fernseher, erklären das Smartphone und richten das Internet ein. Ganz ohne Fachchinesisch.</p>
+            </div>
+            <div class="service-box">
+                <h2>Alltagshilfe</h2>
+                <p>Ob Fensterputzen, Einkaufen oder kleine Reparaturen – wir packen da an, wo Sie uns brauchen.</p>
+            </div>
+        </div>
+
+        <div class="pricing-teaser">
+            <p>Transparent & Fair: Ab 20 €</p>
+        </div>
+
+        <div class="cta-section">
+            <p class="cta-text">Rufen Sie uns einfach an:</p>
+            <div class="phone-number">030 / 123 456 78</div>
+            <p style="font-size: 20px; margin-top: 10px;">Erreichbar Mo-Fr 9-17 Uhr</p>
+        </div>
+    </div>
+
+    <!-- SIDE B -->
+    <div class="flyer-page">
+        <header>
+            <p class="logo">Helferchen</p>
+        </header>
+
+        <div class="details-list">
+            <div class="services-grid">
+                <div>
+                    <h2 style="color: var(--primary-blue);">Technik-Hilfe</h2>
+                    <ul>
+                        <li>Einrichten von TV & Fernbedienung</li>
+                        <li>Hilfe bei Handy, Tablet & Computer</li>
+                        <li>WhatsApp & Videotelefonie</li>
+                        <li>Sicher im Internet surfen</li>
+                    </ul>
+                </div>
+                <div>
+                    <h2 style="color: var(--primary-blue);">Alltagshilfe</h2>
+                    <ul>
+                        <li>Fensterputzen & Reinigung</li>
+                        <li>Einkaufen & Begleitung</li>
+                        <li>Gardinen & Leuchtmittel</li>
+                        <li>Gartenpflege & Reparaturen</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <h2 style="text-align: center; color: var(--primary-blue); margin-top: 40px;">Warum Helferchen?</h2>
+        <div class="trust-factors">
+            <div class="factor">
+                <h3>Nah</h3>
+                <p>Helfer aus Ihrer Nachbarschaft.</p>
+            </div>
+            <div class="factor">
+                <h3>Sicher</h3>
+                <p>Hintergrundgeprüfte Helfer.</p>
+            </div>
+            <div class="factor">
+                <h3>Flexibel</h3>
+                <p>Keine festen Verträge.</p>
+            </div>
+        </div>
+
+        <h2 style="text-align: center; color: var(--primary-blue); margin-top: 60px;">Unsere Preise</h2>
+        <table>
+            <tr>
+                <th>Zeit</th>
+                <th>Preis</th>
+            </tr>
+            <tr>
+                <td><strong>Die ersten 15 Min.</strong></td>
+                <td><strong>20 €</strong> (inkl. Anfahrt)</td>
+            </tr>
+            <tr>
+                <td>Jede weiteren 15 Min.</td>
+                <td>15 €</td>
+            </tr>
+        </table>
+
+        <div class="cta-section">
+            <p class="cta-text">Wir freuen uns auf Ihren Anruf!</p>
+            <div class="phone-number">030 / 123 456 78</div>
+            <p style="font-size: 20px; margin-top: 10px;">Erreichbar Mo-Fr 9-17 Uhr</p>
+        </div>
+    </div>
+
+</body>
+</html>
