@@ -1,21 +1,20 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import PublicHome from './pages/PublicHome';
+import Login from './pages/Login';
+import Portal from './pages/Portal';
+import AdminDashboard from './admin/AdminDashboard';
+
 function App() {
   return (
-    <div className="container">
-      <header>
-        <h1>Helferchen</h1>
-        <p>Alltagshilfe für Senioren</p>
-      </header>
-      <main>
-        <section>
-          <h2>Unsere Services</h2>
-          <p>Technische Hilfe und Alltagshilfe für ein einfacheres Leben.</p>
-        </section>
-      </main>
-      <footer>
-        <p>&copy; 2026 Helferchen GmbH</p>
-      </footer>
-    </div>
-  )
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<PublicHome />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/portal" element={<Portal />} />
+        <Route path="/admin/*" element={<AdminDashboard />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
