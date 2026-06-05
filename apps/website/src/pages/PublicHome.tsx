@@ -174,10 +174,7 @@ function PublicHome() {
             <p className="hero-hint">Mo–Fr · 9–17 Uhr</p>
           </div>
           <div className="hero-visual">
-            <div className="hero-img-placeholder">
-              <span style={{ fontSize: '4rem' }}>🏘️</span>
-              <p>Ihr Helfer aus der Nachbarschaft</p>
-            </div>
+            <img src="/service-social.png" alt="Helfer beim Kunden" className="hero-img" />
             <div className="floating-card">
               <span>⭐</span>
               <div>
@@ -223,7 +220,7 @@ function PublicHome() {
           <h2 className="section-heading">Was wir für Sie tun</h2>
           <div className="services-grid">
             <div className="service-card">
-              <div className="service-icon-wrap">🖥️</div>
+              <img src="/hero-laptop.png" alt="Technik-Hilfe" className="service-img" />
               <div className="service-body">
                 <h3>Technik-Hilfe</h3>
                 <ul>
@@ -235,7 +232,7 @@ function PublicHome() {
               </div>
             </div>
             <div className="service-card">
-              <div className="service-icon-wrap">🧹</div>
+              <img src="/service-repair.png" alt="Alltagshilfe" className="service-img" />
               <div className="service-body">
                 <h3>Alltagshilfe</h3>
                 <ul>
@@ -247,14 +244,14 @@ function PublicHome() {
               </div>
             </div>
             <div className="service-card">
-              <div className="service-icon-wrap">📋</div>
+              <img src="/service-cleaning.png" alt="Haushalt & Reinigung" className="service-img" />
               <div className="service-body">
-                <h3>Behörden &amp; Formulare</h3>
+                <h3>Haushalt &amp; Reinigung</h3>
                 <ul>
-                  <li>Online-Anträge ausfüllen</li>
+                  <li>Fensterputzen &amp; gründliche Reinigung</li>
+                  <li>Küche &amp; Bad auf Hochglanz</li>
                   <li>Behördenpost verstehen</li>
-                  <li>Bankgeschäfte online erledigen</li>
-                  <li>Renten- &amp; Kassenformulare</li>
+                  <li>Online-Anträge ausfüllen</li>
                 </ul>
               </div>
             </div>

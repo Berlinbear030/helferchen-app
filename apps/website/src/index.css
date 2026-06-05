@@ -126,8 +126,17 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 
 /* ── Hero ────────────────────────────────────────────────── */
 .hero-wrapper {
-  background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy) 55%, #2c5f8a 100%);
+  position: relative;
+  background: url('/hero-laptop.png') center 30% / cover no-repeat;
 }
+.hero-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, rgba(13,30,48,0.92) 0%, rgba(0,69,74,0.82) 50%, rgba(44,95,138,0.65) 100%);
+  z-index: 0;
+}
+.hero { position: relative; z-index: 1; }
 .hero {
   display: flex;
   align-items: center;
@@ -209,6 +218,8 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .service-img-wrap { height: 200px; overflow: hidden; background: var(--light-bg); }
 .service-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
 .service-card:hover .service-img-wrap img { transform: scale(1.04); }
+.service-img { width: 100%; height: 200px; object-fit: cover; object-position: center; display: block; transition: transform 0.4s ease; }
+.service-card:hover .service-img { transform: scale(1.04); }
 .service-body { padding: 26px 24px 28px; }
 .service-body h3 { color: var(--navy); margin-bottom: 14px; font-size: 1.2rem; }
 .service-body ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
