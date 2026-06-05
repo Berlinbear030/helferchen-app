@@ -350,7 +350,7 @@ export default function Portal() {
     <div className="portal-layout">
       <header className="portal-header">
         <div className="portal-header-left">
-          <span className="portal-logo">🏠 HELFERCHEN</span>
+          <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
           <span className="portal-user">Angemeldet als <strong>{user.full_name}</strong></span>
         </div>
         <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>Abmelden</button>
