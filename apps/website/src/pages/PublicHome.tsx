@@ -145,11 +145,7 @@ function PublicHome() {
       <header className="header">
         <div className="header-inner">
           <div className="brand">
-            <span className="logo-icon">🏠</span>
-            <div>
-              <span className="logo-text">HELFERCHEN</span>
-              <span className="brand-sub">Berlin & Brandenburg</span>
-            </div>
+            <img src="/logo.png" alt="Helferchen" className="header-logo" />
           </div>
           <nav className="nav-links">
             <a href="#leistungen">Leistungen</a>
@@ -165,7 +161,7 @@ function PublicHome() {
       <div className="hero-wrapper">
         <section className="hero container">
           <div className="hero-content">
-            <span className="badge">In Berlin & Brandenburg</span>
+            <span className="badge">Ihr Helfer vor Ort</span>
             <h1>Technik-Probleme?<br />Haushalt zu viel?</h1>
             <p className="hero-sub">
               Wir kommen zu Ihnen nach Hause — kompetent,
@@ -329,7 +325,7 @@ function PublicHome() {
           <div className="trust-list">
             <div className="trust-item">
               <span className="trust-icon">🏘️</span>
-              <div><h3>Nah bei Ihnen</h3><p>Alle Helfer kommen aus Berlin und Brandenburg.</p></div>
+              <div><h3>Nah bei Ihnen</h3><p>Alle Helfer kommen aus Ihrer Nachbarschaft.</p></div>
             </div>
             <div className="trust-item">
               <span className="trust-icon">🔒</span>
@@ -346,13 +342,13 @@ function PublicHome() {
       {/* FOOTER */}
       <footer className="footer">
         <div className="footer-inner container">
-          <span className="logo-text footer-logo">HELFERCHEN</span>
+          <img src="/logo.png" alt="Helferchen" className="footer-logo-img" />
           <div className="footer-links">
             <a href="#">Impressum</a>
             <a href="#">Datenschutz</a>
             <a href={phoneHref}>{phoneNumber}</a>
           </div>
-          <p className="footer-copy">© 2026 Helferchen · Berlin &amp; Brandenburg · noreply@helferchen.info</p>
+          <p className="footer-copy">© 2026 Helferchen · noreply@helferchen.info</p>
         </div>
       </footer>
 

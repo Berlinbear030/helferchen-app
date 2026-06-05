@@ -115,7 +115,8 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   align-items: center;
   gap: 24px;
 }
-.brand { display: flex; flex-direction: column; }
+.brand { display: flex; align-items: center; }
+.header-logo { height: 40px; width: auto; display: block; }
 .logo-text { font-size: 1.55rem; font-weight: 900; color: var(--navy); letter-spacing: -0.5px; line-height: 1; }
 .brand-sub { font-size: 0.68rem; color: var(--text-mid); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
 .nav-links { display: flex; gap: 28px; margin-left: auto; }
@@ -384,6 +385,7 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   text-align: center;
 }
 .footer-logo { color: #fff; }
+.footer-logo-img { height: 32px; width: auto; filter: brightness(0) invert(1); }
 .footer-links { display: flex; gap: 24px; }
 .footer-links a { color: rgba(255,255,255,0.55); text-decoration: none; font-size: 0.88rem; transition: color 0.15s; }
 .footer-links a:hover { color: #fff; }
