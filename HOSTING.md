@@ -4,6 +4,23 @@ Schritt-für-Schritt-Anleitung zum Deployment der Helferchen-Plattform auf einem
 
 ---
 
+## Hosting-Details (webspace.bz)
+
+| Eigenschaft | Wert |
+|---|---|
+| **Provider** | webspace.bz (INWX) |
+| **IP-Adresse** | 185.181.105.76 |
+| **FTP-Server** | ftp.webspace.bz |
+| **FTP-Benutzername** | kd250524ftp1 |
+| **FTP-Pfad** | / |
+| **DB-Server** | localhost (customer-db3.prod0.webspace.bz) |
+| **WebFTP** | webftp.webspace.bz |
+| **phpMyAdmin** | pma.webspace.bz/?server=4 |
+
+> **Hinweis:** Das FTP-Passwort wird als GitHub Secret `FTP_PASSWORD` gespeichert und nie im Repository hinterlegt.
+
+---
+
 ## Voraussetzungen
 
 | Tool | Zweck |

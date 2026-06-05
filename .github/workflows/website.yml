@@ -23,3 +23,13 @@ jobs:
         run: cd apps/website && npm ci
       - name: Build
         run: cd apps/website && npm run build
+      - name: Deploy via FTP
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ftp.webspace.bz
+          username: kd250524ftp1
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: apps/website/dist/
+          server-dir: /
+          protocol: ftps
