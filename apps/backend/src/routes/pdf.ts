@@ -107,7 +107,7 @@ router.post('/:reportId/email', authenticateToken, async (req: AuthRequest, res:
     });
 
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'noreply@helferchen.de',
+      from: process.env.SMTP_FROM || 'noreply@helferchen.info',
       to,
       subject: `Helferchen Arbeitsbericht #${req.params.reportId as string}`,
       text: 'Anbei finden Sie den Arbeitsbericht als PDF.',

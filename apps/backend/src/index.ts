@@ -9,6 +9,8 @@ import reportRoutes from './routes/reports';
 import signatureRoutes from './routes/signatures';
 import pdfRoutes from './routes/pdf';
 import adminRoutes from './routes/admin';
+import bookingRequestRoutes from './routes/bookingRequests';
+import dashboardRoutes from './routes/dashboard';
 
 dotenv.config();
 
@@ -26,6 +28,8 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/signatures', signatureRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/booking-requests', bookingRequestRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });

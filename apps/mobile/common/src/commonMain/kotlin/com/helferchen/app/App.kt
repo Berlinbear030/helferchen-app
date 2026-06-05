@@ -32,14 +32,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.helferchen.app.model.Assignment
 import com.helferchen.app.viewmodel.AppViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-private val PrimaryBlue = Color(0xFF003366)
-private val AccentOrange = Color(0xFFFF8C00)
-private val GreenStart = Color(0xFF4CAF50)
-private val RedStop = Color(0xFFE53935)
+private val PrimaryTeal = Color(0xFF00454A)
+private val AccentGold = Color(0xFFFFB300)
+private val GreenSuccess = Color(0xFF10B981)
+private val RedError = Color(0xFFEF4444)
 
 enum class Screen {
-    Login, AppointmentList, Timer, Report, Signature, PdfShare
+    Login, Dashboard, AppointmentList, Timer, Report, Signature, PdfShare
 }
 
 @Composable
@@ -48,17 +51,25 @@ fun App() {
     val vm = remember { AppViewModel() }
 
     MaterialTheme(
-        colors = lightColors(primary = PrimaryBlue, secondary = AccentOrange)
+        colors = lightColors(primary = PrimaryTeal, secondary = AccentGold)
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF5F5F5)) {
+        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF9FAFB)) {
             when (screen) {
-                Screen.Login -> LoginScreen(vm) { screen = Screen.AppointmentList }
+                Screen.Login -> LoginScreen(vm) { screen = Screen.Dashboard }
+                Screen.Dashboard -> DashboardScreen(vm,
+                    onOpenAppointments = { screen = Screen.AppointmentList },
+                    onLogout = {
+                        vm.logout()
+                        screen = Screen.Login
+                    }
+                )
                 Screen.AppointmentList -> AppointmentListScreen(vm,
                     onAssignmentSelected = { screen = Screen.Timer },
                     onLogout = {
                         vm.logout()
                         screen = Screen.Login
-                    }
+                    },
+                    onBack = { screen = Screen.Dashboard }
                 )
                 Screen.Timer -> TimerScreen(vm,
                     onBack = { screen = Screen.AppointmentList },
@@ -75,7 +86,7 @@ fun App() {
                 Screen.PdfShare -> PdfShareScreen(vm,
                     onDone = {
                         vm.fetchAssignments()
-                        screen = Screen.AppointmentList
+                        screen = Screen.Dashboard
                     }
                 )
             }
@@ -98,8 +109,25 @@ fun LoginScreen(vm: AppViewModel, onSuccess: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Helferchen", fontSize = 36.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
-        Text("Zeiterfassung", fontSize = 16.sp, color = Color.Gray)
+        // Sketch-style logo placeholder: house icon + brand name
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .background(Color(0xFFE8F5EF), RoundedCornerShape(20.dp))
+                .border(2.dp, PrimaryTeal, RoundedCornerShape(20.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("🏠", fontSize = 44.sp)
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "HELFERCHEN",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = PrimaryTeal,
+            letterSpacing = 3.sp
+        )
+        Text("Nachbarschaftshilfe", fontSize = 14.sp, color = Color.Gray)
         Spacer(Modifier.height(48.dp))
 
         OutlinedTextField(
@@ -143,10 +171,148 @@ fun LoginScreen(vm: AppViewModel, onSuccess: () -> Unit) {
     }
 }
 
+// ─── Dashboard Screen ─────────────────────────────────────────────────────────
+
+@Composable
+fun DashboardScreen(vm: AppViewModel, onOpenAppointments: () -> Unit, onLogout: () -> Unit) {
+    val user by vm.user.collectAsState()
+    val assignments by vm.assignments.collectAsState()
+    val isLoading by vm.isLoading.collectAsState()
+
+    LaunchedEffect(Unit) { vm.fetchAssignments() }
+
+    val today = LocalDate.now().toString()
+    val todayAssignments = assignments.filter { it.scheduledAt.startsWith(today) }
+    val openAssignments = assignments.filter { it.status == "pending" || it.status == "in_progress" }
+    val completedToday = todayAssignments.filter { it.status == "completed" }
+
+    // Revenue calculation: 20€ first 15min, 15€ each additional 15min → approx 60€/h average
+    val dailyRevenue = completedToday.size * 35.0
+    val monthlyRevenue = assignments.filter { it.status == "completed" }.size * 35.0
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("Dashboard") },
+            backgroundColor = PrimaryTeal,
+            contentColor = Color.White,
+            actions = {
+                TextButton(onClick = onLogout) { Text("Abmelden", color = Color.White) }
+            }
+        )
+
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())
+        ) {
+            user?.let { u ->
+                Text("Hallo, ${u.fullName}!", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = PrimaryTeal)
+                Text(
+                    LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale("de"))),
+                    fontSize = 14.sp, color = Color.Gray
+                )
+                Spacer(Modifier.height(20.dp))
+            }
+
+            // Stats row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatCard("Heute", "${todayAssignments.size} Termine", AccentGold, Modifier.weight(1f))
+                StatCard("Tageseinnahmen", "%.0f €".format(dailyRevenue), GreenSuccess, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatCard("Monatseinnahmen", "%.0f €".format(monthlyRevenue), PrimaryTeal, Modifier.weight(1f))
+                StatCard("Offene Aufträge", "${openAssignments.size}", Color(0xFFEF4444), Modifier.weight(1f))
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Heutige Termine
+            Text("Heutige Termine", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = PrimaryTeal)
+                }
+            } else if (todayAssignments.isEmpty()) {
+                Card(modifier = Modifier.fillMaxWidth(), elevation = 2.dp, shape = RoundedCornerShape(8.dp)) {
+                    Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("Keine Termine für heute.", color = Color.Gray, textAlign = TextAlign.Center)
+                    }
+                }
+            } else {
+                todayAssignments.take(3).forEach { assignment ->
+                    AssignmentCard(assignment) {}
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Offene Aufträge section
+            if (openAssignments.isNotEmpty()) {
+                Text("Offene Aufträge", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                openAssignments.take(5).forEach { assignment ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = 2.dp,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(assignment.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                assignment.customer?.let { c ->
+                                    Text(c.fullName, fontSize = 13.sp, color = Color.Gray)
+                                }
+                            }
+                            StatusChip(assignment.status)
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Button(
+                onClick = onOpenAppointments,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(backgroundColor = PrimaryTeal, contentColor = Color.White)
+            ) {
+                Text("Alle Aufträge anzeigen", fontSize = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun StatCard(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, elevation = 3.dp, shape = RoundedCornerShape(10.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = color, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(4.dp))
+            Text(label, fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center)
+        }
+    }
+}
+
 // ─── Appointment List Screen ───────────────────────────────────────────────────
 
 @Composable
-fun AppointmentListScreen(vm: AppViewModel, onAssignmentSelected: () -> Unit, onLogout: () -> Unit) {
+fun AppointmentListScreen(vm: AppViewModel, onAssignmentSelected: () -> Unit, onLogout: () -> Unit, onBack: () -> Unit = {}) {
     val user by vm.user.collectAsState()
     val assignments by vm.assignments.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
@@ -157,8 +323,11 @@ fun AppointmentListScreen(vm: AppViewModel, onAssignmentSelected: () -> Unit, on
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Meine Aufträge") },
-            backgroundColor = PrimaryBlue,
+            backgroundColor = PrimaryTeal,
             contentColor = Color.White,
+            navigationIcon = {
+                TextButton(onClick = onBack) { Text("< Zurück", color = Color.White) }
+            },
             actions = {
                 TextButton(onClick = onLogout) { Text("Abmelden", color = Color.White) }
             }
@@ -173,7 +342,7 @@ fun AppointmentListScreen(vm: AppViewModel, onAssignmentSelected: () -> Unit, on
             error?.let { err ->
                 Card(backgroundColor = Color(0xFFFFEBEE), modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(err, color = RedStop, modifier = Modifier.weight(1f))
+                        Text(err, color = RedError, modifier = Modifier.weight(1f))
                         TextButton(onClick = { vm.clearError() }) { Text("OK") }
                     }
                 }
@@ -182,7 +351,7 @@ fun AppointmentListScreen(vm: AppViewModel, onAssignmentSelected: () -> Unit, on
 
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = PrimaryBlue)
+                    CircularProgressIndicator(color = PrimaryTeal)
                 }
             } else if (assignments.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -261,7 +430,7 @@ fun TimerScreen(vm: AppViewModel, onBack: () -> Unit, onTimerStopped: () -> Unit
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Zeiterfassung") },
-            backgroundColor = PrimaryBlue,
+            backgroundColor = PrimaryTeal,
             contentColor = Color.White,
             navigationIcon = {
                 TextButton(onClick = onBack, enabled = !isRunning) {
@@ -275,7 +444,7 @@ fun TimerScreen(vm: AppViewModel, onBack: () -> Unit, onTimerStopped: () -> Unit
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             assignment?.let { a ->
-                Text(a.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                Text(a.title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = PrimaryTeal)
                 a.customer?.let { c ->
                     Spacer(Modifier.height(4.dp))
                     Text(c.fullName, fontSize = 16.sp)
@@ -306,7 +475,7 @@ fun TimerScreen(vm: AppViewModel, onBack: () -> Unit, onTimerStopped: () -> Unit
                         formatDuration(elapsedSeconds),
                         fontSize = 56.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isRunning) GreenStart else PrimaryBlue
+                        color = if (isRunning) GreenSuccess else PrimaryTeal
                     )
 
                     val blocks = ((elapsedSeconds / 60) / 15).coerceAtLeast(if (elapsedSeconds > 0) 1 else 0)
@@ -323,7 +492,7 @@ fun TimerScreen(vm: AppViewModel, onBack: () -> Unit, onTimerStopped: () -> Unit
                             enabled = !isLoading,
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(backgroundColor = GreenStart, contentColor = Color.White)
+                            colors = ButtonDefaults.buttonColors(backgroundColor = GreenSuccess, contentColor = Color.White)
                         ) {
                             if (isLoading) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                             else Text("Starten", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -334,7 +503,7 @@ fun TimerScreen(vm: AppViewModel, onBack: () -> Unit, onTimerStopped: () -> Unit
                             enabled = !isLoading,
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(backgroundColor = RedStop, contentColor = Color.White)
+                            colors = ButtonDefaults.buttonColors(backgroundColor = RedError, contentColor = Color.White)
                         ) {
                             if (isLoading) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                             else Text("Stoppen", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -345,7 +514,7 @@ fun TimerScreen(vm: AppViewModel, onBack: () -> Unit, onTimerStopped: () -> Unit
 
             error?.let { err ->
                 Spacer(Modifier.height(12.dp))
-                Text(err, color = RedStop, textAlign = TextAlign.Center)
+                Text(err, color = RedError, textAlign = TextAlign.Center)
                 TextButton(onClick = { vm.clearError() }) { Text("OK") }
             }
         }
@@ -373,7 +542,7 @@ fun ReportScreen(vm: AppViewModel, onBack: () -> Unit, onReportSubmitted: () -> 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Arbeitsbericht") },
-            backgroundColor = PrimaryBlue,
+            backgroundColor = PrimaryTeal,
             contentColor = Color.White,
             navigationIcon = {
                 TextButton(onClick = onBack) { Text("< Zurück", color = Color.White) }
@@ -386,7 +555,7 @@ fun ReportScreen(vm: AppViewModel, onBack: () -> Unit, onReportSubmitted: () -> 
             // Summary card
             Card(modifier = Modifier.fillMaxWidth(), elevation = 2.dp, shape = RoundedCornerShape(8.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Zusammenfassung", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PrimaryBlue)
+                    Text("Zusammenfassung", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PrimaryTeal)
                     Spacer(Modifier.height(8.dp))
                     assignment?.let { a ->
                         SummaryRow("Auftrag", a.title)
@@ -418,7 +587,7 @@ fun ReportScreen(vm: AppViewModel, onBack: () -> Unit, onReportSubmitted: () -> 
 
             error?.let { err ->
                 Spacer(Modifier.height(12.dp))
-                Text(err, color = RedStop, textAlign = TextAlign.Center)
+                Text(err, color = RedError, textAlign = TextAlign.Center)
                 TextButton(onClick = { vm.clearError() }) { Text("OK") }
             }
 
@@ -470,7 +639,7 @@ fun SignatureScreen(vm: AppViewModel, onBack: () -> Unit, onSigned: () -> Unit) 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Unterschrift") },
-            backgroundColor = PrimaryBlue,
+            backgroundColor = PrimaryTeal,
             contentColor = Color.White,
             navigationIcon = {
                 TextButton(onClick = onBack) { Text("< Zurück", color = Color.White) }
@@ -548,7 +717,7 @@ fun SignatureScreen(vm: AppViewModel, onBack: () -> Unit, onSigned: () -> Unit) 
 
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = { paths.clear(); currentPath.clear() }) {
-                Text("Löschen", color = RedStop)
+                Text("Löschen", color = RedError)
             }
 
             Spacer(Modifier.height(16.dp))
@@ -562,7 +731,7 @@ fun SignatureScreen(vm: AppViewModel, onBack: () -> Unit, onSigned: () -> Unit) 
 
             error?.let { err ->
                 Spacer(Modifier.height(12.dp))
-                Text(err, color = RedStop, textAlign = TextAlign.Center)
+                Text(err, color = RedError, textAlign = TextAlign.Center)
                 TextButton(onClick = { vm.clearError() }) { Text("OK") }
             }
 
@@ -630,7 +799,7 @@ fun PdfShareScreen(vm: AppViewModel, onDone: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("Bericht & PDF") },
-            backgroundColor = PrimaryBlue,
+            backgroundColor = PrimaryTeal,
             contentColor = Color.White
         )
 
@@ -645,11 +814,11 @@ fun PdfShareScreen(vm: AppViewModel, onDone: () -> Unit) {
                 modifier = Modifier.size(80.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text("✓", fontSize = 40.sp, color = GreenStart)
+                    Text("✓", fontSize = 40.sp, color = GreenSuccess)
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Text("Auftrag abgeschlossen!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+            Text("Auftrag abgeschlossen!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = PrimaryTeal)
             Text("Bericht & Unterschrift gespeichert.", fontSize = 14.sp, color = Color.Gray, textAlign = TextAlign.Center)
 
             Spacer(Modifier.height(32.dp))
@@ -675,7 +844,7 @@ fun PdfShareScreen(vm: AppViewModel, onDone: () -> Unit) {
                 enabled = emailInput.isNotBlank() && !isLoading && !emailSent,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(backgroundColor = AccentOrange, contentColor = Color.White)
+                colors = ButtonDefaults.buttonColors(backgroundColor = AccentGold, contentColor = Color.White)
             ) {
                 if (isLoading) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                 else Text(if (emailSent) "E-Mail gesendet ✓" else "PDF per E-Mail senden", fontSize = 15.sp)
@@ -688,12 +857,12 @@ fun PdfShareScreen(vm: AppViewModel, onDone: () -> Unit) {
                 Spacer(Modifier.height(16.dp))
                 Text("PDF-Link (für Browser):", fontSize = 14.sp, color = Color.Gray)
                 Spacer(Modifier.height(4.dp))
-                Text(url, fontSize = 12.sp, color = PrimaryBlue, textAlign = TextAlign.Center)
+                Text(url, fontSize = 12.sp, color = PrimaryTeal, textAlign = TextAlign.Center)
             }
 
             error?.let { err ->
                 Spacer(Modifier.height(12.dp))
-                Text(err, color = RedStop, textAlign = TextAlign.Center)
+                Text(err, color = RedError, textAlign = TextAlign.Center)
                 TextButton(onClick = { vm.clearError() }) { Text("OK") }
             }
 

@@ -72,13 +72,27 @@ export interface AuditEntry {
   timestamp: string;
 }
 
+export interface BookingRequest {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  service_description: string;
+  preferred_date: string;
+  preferred_time: string;
+  status: 'open' | 'accepted' | 'rejected' | 'assigned';
+  assigned_user_id: string | null;
+  notes: string;
+  created_at: string;
+}
+
 const adminHash = bcrypt.hashSync('admin123', 10);
 const empHash = bcrypt.hashSync('employee123', 10);
 
 const db = {
   users: [
-    { id: 'u1', username: 'admin', password_hash: adminHash, role: 'admin' as const, email: 'admin@helferchen.de', full_name: 'Admin User', created_at: new Date().toISOString() },
-    { id: 'u2', username: 'employee1', password_hash: empHash, role: 'employee' as const, email: 'emp1@helferchen.de', full_name: 'Max Mustermann', created_at: new Date().toISOString() },
+    { id: 'u1', username: 'admin', password_hash: adminHash, role: 'admin' as const, email: 'admin@helferchen.info', full_name: 'Admin User', created_at: new Date().toISOString() },
+    { id: 'u2', username: 'employee1', password_hash: empHash, role: 'employee' as const, email: 'emp1@helferchen.info', full_name: 'Max Mustermann', created_at: new Date().toISOString() },
   ] as User[],
 
   customers: [
@@ -95,6 +109,7 @@ const db = {
   signatures: [] as Signature[],
   reports: [] as Report[],
   audit: [] as AuditEntry[],
+  bookingRequests: [] as BookingRequest[],
 };
 
 export function addAudit(entity_type: string, entity_id: string, action: string, actor_user_id: string, details: string) {

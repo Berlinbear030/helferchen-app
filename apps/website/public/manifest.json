@@ -1,0 +1,18 @@
+{
+  "name": "Helferchen",
+  "short_name": "Helferchen",
+  "description": "Nachbarschaftshilfe in Berlin & Brandenburg",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F9FAFB",
+  "theme_color": "#00454A",
+  "icons": [
+    {
+      "src": "/logo_light.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}
