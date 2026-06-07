@@ -87,11 +87,13 @@ export interface BookingRequest {
 }
 
 const adminHash = bcrypt.hashSync('admin123', 10);
+const boardHash = bcrypt.hashSync('board2026', 10);
 const empHash = bcrypt.hashSync('employee123', 10);
 
 const db = {
   users: [
     { id: 'u1', username: 'admin', password_hash: adminHash, role: 'admin' as const, email: 'admin@helferchen.info', full_name: 'Admin User', created_at: new Date().toISOString() },
+    { id: 'u3', username: 'board', password_hash: boardHash, role: 'admin' as const, email: 'board@helferchen.info', full_name: 'Board Member', created_at: new Date().toISOString() },
     { id: 'u2', username: 'employee1', password_hash: empHash, role: 'employee' as const, email: 'emp1@helferchen.info', full_name: 'Max Mustermann', created_at: new Date().toISOString() },
   ] as User[],
 

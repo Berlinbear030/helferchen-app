@@ -1,7 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
 import { ReportRepo } from '../db/queries';
-import { query } from '../db/pool';
 
 const router = Router();
 
@@ -12,16 +11,17 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ message: 'assignment_id and timelog_id are required' });
   }
 
+  const { TimelogRepo } = await import('../db/queries');
+
   // Check if timelog exists and is stopped
-  const timelogRes = await query('SELECT end_time FROM time_logs WHERE id = $1', [timelog_id]);
-  const timelog = timelogRes.rows[0];
+  const timelog = await TimelogRepo.findById(String(timelog_id));
   
   if (!timelog) return res.status(404).json({ message: 'Timelog not found' });
   if (!timelog.end_time) return res.status(409).json({ message: 'Cannot create report for a running timer' });
 
   // Check if report already exists
-  const existingRes = await query('SELECT id FROM reports WHERE timelog_id = $1', [timelog_id]);
-  if (existingRes.rows.length > 0) return res.status(409).json({ message: 'Report already exists for this timelog' });
+  const existing = await ReportRepo.findByTimelogId(String(timelog_id));
+  if (existing) return res.status(409).json({ message: 'Report already exists for this timelog' });
 
   const report = await ReportRepo.create(
     String(assignment_id),

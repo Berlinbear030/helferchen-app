@@ -1,17 +1,16 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
-import { AssignmentRepo } from '../db/queries';
-import { query } from '../db/pool';
+import { AssignmentRepo, CustomerRepo, UserRepo } from '../db/queries';
 
 const router = Router();
 
 router.get('/', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   const assignments = await AssignmentRepo.findAll();
-  // Join customer and user info
+  // Join customer and user info using Repos (which have fallbacks)
   const result = await Promise.all(assignments.map(async a => {
-      const customerRes = await query('SELECT * FROM customers WHERE id = $1', [a.customer_id]);
-      const userRes = await query('SELECT id, full_name FROM users WHERE id = $1', [a.assigned_user_id]);
-      return { ...a, customer: customerRes.rows[0], assigned_user: userRes.rows[0] || null };
+      const customer = await CustomerRepo.findById(a.customer_id);
+      const user = await UserRepo.findById(a.assigned_user_id);
+      return { ...a, customer, assigned_user: user ? { id: user.id, full_name: user.full_name } : null };
   }));
   res.json(result);
 });
@@ -21,8 +20,8 @@ router.get('/my', authenticateToken, async (req: AuthRequest, res: Response) => 
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
   const assignments = await AssignmentRepo.findByUserId(userId);
   const result = await Promise.all(assignments.map(async a => {
-      const customerRes = await query('SELECT * FROM customers WHERE id = $1', [a.customer_id]);
-      return { ...a, customer: customerRes.rows[0] };
+      const customer = await CustomerRepo.findById(a.customer_id);
+      return { ...a, customer };
   }));
   res.json(result);
 });
@@ -55,8 +54,8 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
 });
 
 router.delete('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
-  const res_db = await query('DELETE FROM assignments WHERE id = $1 RETURNING id', [String(req.params.id)]);
-  if (res_db.rowCount === 0) return res.status(404).json({ message: 'Assignment not found' });
+  const success = await AssignmentRepo.delete(String(req.params.id));
+  if (!success) return res.status(404).json({ message: 'Assignment not found' });
   res.status(204).send();
 });
 

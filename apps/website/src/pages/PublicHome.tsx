@@ -171,6 +171,11 @@ function PublicHome() {
               <button className="btn-primary btn-lg" onClick={scrollToBooking}>Jetzt Termin buchen</button>
               <a href={phoneHref} className="btn-secondary btn-lg">{phoneNumber}</a>
             </div>
+            <div style={{ marginTop: '16px' }}>
+              <a href="/downloads/helferchen-mobile.apk" className="btn-text" style={{ color: 'var(--text-mid)', fontSize: '0.9rem' }}>
+                📲 Helferchen App für Android herunterladen
+              </a>
+            </div>
             <p className="hero-hint">Mo–Fr · 9–17 Uhr</p>
           </div>
           <div className="hero-visual">

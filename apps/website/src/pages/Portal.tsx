@@ -352,6 +352,9 @@ export default function Portal() {
         <div className="portal-header-left">
           <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
           <span className="portal-user">Angemeldet als <strong>{user.full_name}</strong></span>
+          <a href="/downloads/helferchen-mobile.apk" className="btn-secondary btn-sm" style={{ marginLeft: '16px', fontSize: '0.8rem' }}>
+            📲 App laden
+          </a>
         </div>
         <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>Abmelden</button>
       </header>

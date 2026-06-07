@@ -3,4 +3,5 @@ dist/
 build/
 .gradle/
 *.apk
+!apps/website/public/downloads/*.apk
 .env

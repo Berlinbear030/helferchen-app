@@ -1,7 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken } from '../middleware/auth';
 import { SignatureRepo, ReportRepo, TimelogRepo } from '../db/queries';
-import { query } from '../db/pool';
 
 const router = Router();
 
@@ -16,8 +15,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   if (!report) return res.status(404).json({ message: 'Report not found' });
   if (report.signature_id) return res.status(409).json({ message: 'Report is already signed — immutable' });
 
-  const timelogRes = await query('SELECT end_time FROM time_logs WHERE id = $1', [report.timelog_id]);
-  const timelog = timelogRes.rows[0];
+  const timelog = await TimelogRepo.findById(report.timelog_id);
   
   if (!timelog) return res.status(404).json({ message: 'Timelog not found' });
   if (!timelog.end_time) return res.status(409).json({ message: 'Cannot sign a report with a running timer' });
@@ -34,8 +32,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 });
 
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const res_db = await query('SELECT * FROM signatures WHERE id = $1', [req.params.id]);
-  const sig = res_db.rows[0];
+  const sig = await SignatureRepo.findById(req.params.id);
   if (!sig) return res.status(404).json({ message: 'Not found' });
   res.json(sig);
 });
