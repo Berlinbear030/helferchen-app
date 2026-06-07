@@ -31,7 +31,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 // Auth: update status / assign
 router.patch('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
   const { status, assigned_user_id, notes } = req.body;
-  const entry = await BookingRequestRepo.update(req.params.id, { status, assigned_user_id, notes });
+  const entry = await BookingRequestRepo.update(req.params.id as string, { status, assigned_user_id, notes });
   if (!entry) return res.status(404).json({ error: 'Nicht gefunden.' });
   
   await AuditRepo.create('booking_request', entry.id, 'update', req.user!.id, JSON.stringify({ status, assigned_user_id }));

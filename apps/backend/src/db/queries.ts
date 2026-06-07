@@ -1,4 +1,4 @@
-import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest } from './index';
+import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, AuditEntry } from './index';
 import { query } from './pool';
 
 const useDb = !!process.env.DATABASE_URL;

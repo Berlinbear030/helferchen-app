@@ -12,11 +12,13 @@ router.get('/stats', authenticateToken, async (req: AuthRequest, res: Response) 
     ? await AssignmentRepo.findAll()
     : await AssignmentRepo.findByUserId(req.user!.id);
 
-  const todayAssignments = allAssignments.filter(a => a.scheduled_at.startsWith(today));
+  const ensureStr = (d: any) => typeof d === 'string' ? d : d.toISOString();
+
+  const todayAssignments = allAssignments.filter(a => ensureStr(a.scheduled_at).startsWith(today));
   const openAssignments = allAssignments.filter(a => a.status === 'pending' || a.status === 'in_progress');
   const completedToday = todayAssignments.filter(a => a.status === 'completed');
   const completedMonth = allAssignments.filter(a =>
-    a.status === 'completed' && a.scheduled_at.startsWith(thisMonth)
+    a.status === 'completed' && ensureStr(a.scheduled_at).startsWith(thisMonth)
   );
 
   const revenuePerJob = 35;

@@ -32,7 +32,7 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
 });
 
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
-  const sig = await SignatureRepo.findById(req.params.id);
+  const sig = await SignatureRepo.findById(req.params.id as string);
   if (!sig) return res.status(404).json({ message: 'Not found' });
   res.json(sig);
 });
