@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Helferchen Admin Dashboard</title>
+    <style>
+        body { font-family: sans-serif; background: #eee; margin: 0; padding: 20px; }
+        .dashboard { display: grid; grid-template-columns: 200px 1fr; gap: 20px; }
+        .sidebar { background: #003366; color: white; padding: 20px; height: 100vh; border-radius: 10px; }
+        .main { background: white; padding: 20px; border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #f4f4f4; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="sidebar">
+            <h2>Helferchen Admin</h2>
+            <nav>
+                <p>Dashboard</p>
+                <p>Mitarbeiter</p>
+                <p>Berichte</p>
+            </nav>
+        </div>
+        <div class="main">
+            <h1>Monitoring & Audit</h1>
+            <table>
+                <tr>
+                    <th>Mitarbeiter</th>
+                    <th>Auftrag</th>
+                    <th>Status</th>
+                    <th>Zeit</th>
+                </tr>
+                <tr>
+                    <td>Max</td>
+                    <td>TV & Internet</td>
+                    <td style="color: green;">Läuft (00:18:45)</td>
+                    <td>09:00 - ...</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

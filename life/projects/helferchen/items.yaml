@@ -1,0 +1,18 @@
+- fact: Pilot distribution area is Steglitz-Zehlendorf.
+  date: 2026-06-04
+  status: active
+- fact: Approved budget for mailbox distribution is 80 EUR.
+  date: 2026-06-04
+  status: active
+- fact: Sipgate selected as phone provider.
+  date: 2026-06-04
+  status: active
+- fact: Phase 2 includes Backend MVP, Website MVP, and UI Design.
+  date: 2026-06-04
+  status: active
+- fact: FTP connection to ftp.webspace.bz (User kd250524ftp1) verified as successful.
+  date: 2026-06-06
+  status: active
+- fact: GitHub Secret FTP_PASSWORD with value Klara2010! is required for CI deployment.
+  date: 2026-06-06
+  status: active

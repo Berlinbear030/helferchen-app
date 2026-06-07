@@ -1,0 +1,13 @@
+{
+  "kind": "request_confirmation",
+  "title": "Review Onboarding and Feedback Mockups",
+  "description": "Please review the new design mockups for onboarding and feedback in EIS-37.",
+  "payload": {
+    "version": 1,
+    "prompt": "Please review the following mockups for senior-friendly accessibility:
+
+- [Onboarding Mockup](designs/customer_onboarding_mockup.html)
+- [Feedback Mockup](designs/customer_feedback_mockup.html)",
+    "mockups": ["designs/customer_onboarding_mockup.html", "designs/customer_feedback_mockup.html"]
+  }
+}

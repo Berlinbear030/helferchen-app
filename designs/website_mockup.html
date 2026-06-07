@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helferchen - Ihre helfende Hand im Alltag</title>
+    <style>
+        :root {
+            --primary-blue: #003366;
+            --accent-orange: #FF8C00;
+            --text-dark: #222222;
+            --bg-cream: #FFFDD0;
+            --white: #FFFFFF;
+            --yellow: #FFFF00;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-cream);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 24px; /* Large base font for seniors */
+        }
+
+        header {
+            background-color: var(--white);
+            border-bottom: 5px solid var(--primary-blue);
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: bold;
+            color: var(--primary-blue);
+            margin: 0;
+            text-decoration: none;
+        }
+
+        .tagline {
+            font-size: 20px;
+            margin: 0;
+            color: var(--text-dark);
+        }
+
+        .header-cta {
+            background-color: var(--primary-blue);
+            color: var(--yellow);
+            padding: 15px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 28px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+        .hero {
+            padding: 80px 5%;
+            text-align: center;
+            background-color: var(--white);
+            border-bottom: 2px solid #ddd;
+        }
+
+        h1 {
+            font-size: 56px;
+            color: var(--primary-blue);
+            margin-bottom: 20px;
+            line-height: 1.1;
+        }
+
+        .hero-sub {
+            font-size: 32px;
+            margin-bottom: 40px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .main-cta-box {
+            background-color: var(--primary-blue);
+            color: var(--white);
+            padding: 40px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 20px;
+        }
+
+        .main-cta-box p {
+            margin: 0 0 10px 0;
+            font-size: 28px;
+        }
+
+        .phone-large {
+            font-size: 72px;
+            font-weight: bold;
+            color: var(--yellow);
+            display: block;
+        }
+
+        .section {
+            padding: 80px 5%;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 48px;
+            color: var(--primary-blue);
+            margin-bottom: 60px;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
+        }
+
+        .service-card {
+            background-color: var(--white);
+            padding: 40px;
+            border-radius: 20px;
+            border: 4px solid var(--primary-blue);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .service-card h2 {
+            color: var(--primary-blue);
+            font-size: 40px;
+            margin-top: 0;
+        }
+
+        .service-card ul {
+            padding-left: 20px;
+        }
+
+        .service-card li {
+            margin-bottom: 15px;
+        }
+
+        .pricing-section {
+            background-color: var(--primary-blue);
+            color: var(--white);
+            text-align: center;
+        }
+
+        .pricing-section h2 {
+            color: var(--white);
+        }
+
+        .pricing-table {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            font-size: 32px;
+            background-color: var(--white);
+            color: var(--text-dark);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .pricing-table th, .pricing-table td {
+            padding: 30px;
+            border: 2px solid var(--primary-blue);
+            text-align: left;
+        }
+
+        .pricing-table th {
+            background-color: #eee;
+        }
+
+        .trust-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            text-align: center;
+        }
+
+        .trust-item h3 {
+            font-size: 36px;
+            color: var(--primary-blue);
+        }
+
+        footer {
+            background-color: #333;
+            color: white;
+            padding: 60px 5%;
+            text-align: center;
+        }
+
+        .footer-links {
+            margin-top: 20px;
+        }
+
+        .footer-links a {
+            color: white;
+            margin: 0 20px;
+            text-decoration: none;
+            font-size: 20px;
+        }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 40px; }
+            .phone-large { font-size: 48px; }
+            .services-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">
+            <a href="#" class="logo">Helferchen</a>
+            <p class="tagline">Ihre helfende Hand im Alltag</p>
+        </div>
+        <a href="tel:03012345678" class="header-cta">Jetzt Anrufen</a>
+    </header>
+
+    <main>
+        <section class="hero">
+            <p style="color: var(--accent-orange); font-weight: bold; font-size: 32px; margin-bottom: 10px;">NEU IN STEGLITZ-ZEHLENDORF</p>
+            <h1>Technik-Probleme? Haushalt zu anstrengend?</h1>
+            <p class="hero-sub">Wir unterstützen Sie kompetent, geduldig und direkt bei Ihnen zu Hause. Ganz ohne Fachchinesisch.</p>
+            
+            <div class="main-cta-box">
+                <p>Rufen Sie uns einfach an:</p>
+                <span class="phone-large">030 / 123 456 78</span>
+                <p style="font-size: 20px; margin-top: 10px;">Erreichbar Mo-Fr 9-17 Uhr</p>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Wie wir Ihnen helfen</h2>
+            <div class="services-grid">
+                <div class="service-card">
+                    <h2>Technik-Hilfe</h2>
+                    <ul>
+                        <li>Einrichten von TV & Fernbedienung</li>
+                        <li>Hilfe bei Handy, Tablet & Computer</li>
+                        <li>WhatsApp & Videotelefonie mit der Familie</li>
+                        <li>Sicher im Internet surfen</li>
+                    </ul>
+                </div>
+                <div class="service-card">
+                    <h2>Alltagshilfe</h2>
+                    <ul>
+                        <li>Fensterputzen & leichte Reinigung</li>
+                        <li>Einkaufen & Begleitung zu Terminen</li>
+                        <li>Gardinen aufhängen & Leuchtmittel wechseln</li>
+                        <li>Gartenpflege & kleinere Reparaturen</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="section pricing-section">
+            <h2 class="section-title">Faire und transparente Preise</h2>
+            <table class="pricing-table">
+                <tr>
+                    <th>Zeit</th>
+                    <th>Preis</th>
+                </tr>
+                <tr>
+                    <td><strong>Die ersten 15 Min.</strong></td>
+                    <td><strong>20 €</strong> <br><small>(inkl. Anfahrt)</small></td>
+                </tr>
+                <tr>
+                    <td>Jede weiteren 15 Min.</td>
+                    <td>15 €</td>
+                </tr>
+            </table>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Warum Helferchen?</h2>
+            <div class="trust-grid">
+                <div class="trust-item">
+                    <h3>Nah</h3>
+                    <p>Helfer aus Ihrer direkten Nachbarschaft in Steglitz-Zehlendorf.</p>
+                </div>
+                <div class="trust-item">
+                    <h3>Sicher</h3>
+                    <p>Alle Helfer sind persönlich bekannt und hintergrundgeprüft.</p>
+                </div>
+                <div class="trust-item">
+                    <h3>Flexibel</h3>
+                    <p>Keine Abos, keine festen Verträge. Buchen Sie uns nach Bedarf.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p class="logo" style="color: white; font-size: 36px;">Helferchen</p>
+        <p>Wir freuen uns darauf, Ihnen das Leben ein Stück leichter zu machen!</p>
+        <p style="font-size: 32px; font-weight: bold; margin-top: 20px;">Tel: 030 / 123 456 78</p>
+        
+        <div class="footer-links">
+            <a href="#">Impressum</a>
+            <a href="#">Datenschutz</a>
+        </div>
+    </footer>
+
+</body>
+</html>

@@ -86,5 +86,6 @@ To track calls and provide a professional point of contact, we are acquiring a d
 - [x] Select the pilot neighborhood (Steglitz-Zehlendorf).
 - [x] Create outreach templates for local partners.
 - [x] Set up the pilot distribution log.
-- [ ] Contact 3 local pharmacies in Steglitz-Zehlendorf to test "partnership" interest.
-- [ ] CEO to finalize Sipgate account and provide the number (Real acquisition deferred to Board for live deployment).
+- [x] Contact 3 local pharmacies in Steglitz-Zehlendorf to test "partnership" interest.
+- [x] CEO to finalize Sipgate account and provide the number.
+- [ ] Hire student/minijobber for mailbox distribution (Action: [EIS-28](/EIS/issues/EIS-28)).

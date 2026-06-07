@@ -97,3 +97,11 @@ data class SubmitSignatureRequest(
 
 @Serializable
 data class SendEmailRequest(val to: String)
+
+@Serializable
+data class AppVersionInfo(
+    val versionCode: Int,
+    val versionName: String,
+    val downloadUrl: String,
+    val releaseNotes: String? = null
+)

@@ -38,8 +38,8 @@ export default function AdminDashboard() {
     <div className="admin-layout">
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
-          <h1>Helferchen</h1>
-          <span className="badge badge--admin">Admin</span>
+          <img src="/logo_light.svg" alt="Helferchen Logo" style={{ width: '100%', marginBottom: '10px' }} />
+          <span className="badge badge--admin">Admin Control</span>
         </div>
         <nav className="admin-nav">
           {NAV.map(item => {

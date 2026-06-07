@@ -6,7 +6,11 @@ pluginManagement {
     }
 }
 
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
 rootProject.name = "helferchen-mobile"
-include(":common")
-include(":android")
-include(":ios")

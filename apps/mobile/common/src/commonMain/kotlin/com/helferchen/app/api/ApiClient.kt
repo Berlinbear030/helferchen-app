@@ -9,7 +9,7 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 
-class ApiClient(private val baseUrl: String = "https://api.helferchen.com") {
+class ApiClient(private val baseUrl: String = "https://api.helferchen.info") {
     var token: String? = null
 
     private val client = HttpClient {
@@ -20,6 +20,14 @@ class ApiClient(private val baseUrl: String = "https://api.helferchen.com") {
 
     private fun HttpRequestBuilder.auth() {
         token?.let { headers.append(HttpHeaders.Authorization, "Bearer $it") }
+    }
+
+    suspend fun checkUpdate(): AppVersionInfo? {
+        return try {
+            client.get("https://helferchen.info/version.json").body()
+        } catch (e: Exception) {
+            null
+        }
     }
 
     suspend fun login(username: String, password: String): LoginResponse {

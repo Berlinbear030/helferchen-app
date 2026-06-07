@@ -1,24 +1,28 @@
-# Stellenausschreibung: Minijob / Studentische Hilfskraft für Flyerverteilung (m/w/d)
+# Minijob: Flyerverteiler (m/w/d) in Steglitz-Zehlendorf gesucht!
 
-**Über uns:**
-Helferchen ist ein neuer Nachbarschaftsservice in Berlin Steglitz-Zehlendorf. Wir unterstützen Senioren bei Technik-Problemen und im Alltag. Um unser Angebot bekannter zu machen, suchen wir motivierte Unterstützung für die Verteilung unserer Flyer.
+Wir von **'Helferchen'** suchen eine zuverlässige Unterstützung für die Verteilung unserer neuen Informationsflyer in den Gebieten **Lichterfelde-West** und **Zehlendorf-Mitte**.
 
-**Deine Aufgaben:**
-- Verteilung von Flyern in Briefkästen in fest definierten Wohngebieten (Lichterfelde-West & Zehlendorf-Mitte).
+## Deine Aufgaben:
+- Verteilung von ca. 400 Flyern in Briefkästen von Wohngebieten.
+- Auslegen von kleinen Stapeln bei unseren Partnern (Apotheken, Cafés).
 - Dokumentation der abgelaufenen Straßen.
 
-**Dein Profil:**
-- Du bist zuverlässig, pünktlich und wetterfest.
-- Du kennst dich idealerweise in Steglitz-Zehlendorf aus.
-- Du arbeitest gewissenhaft und stellst sicher, dass die Flyer ordentlich verteilt werden.
+## Das bringst du mit:
+- Zuverlässigkeit und Gewissenhaftigkeit.
+- Gute Ortskenntnisse in Steglitz-Zehlendorf sind von Vorteil.
+- Zeit für ca. 4-5 Stunden Arbeit (flexibel einteilbar).
 
-**Eckdaten:**
-- **Umfang:** Einmalige Aktion (ca. 4-5 Stunden).
-- **Vergütung:** 15 € / Stunde (insgesamt 60-75 €).
-- **Ort:** Steglitz-Zehlendorf (Lichterfelde-West / Zehlendorf-Mitte).
-- **Zeitpunkt:** Ab sofort / nach Absprache.
+## Wir bieten:
+- **Vergütung:** 80 € Pauschale für den Pilot-Einsatz.
+- Einen unkomplizierten Minijob in deiner Nachbarschaft.
+- Sinnstiftende Arbeit: Du hilfst Senioren, unser lokales Unterstützungsangebot zu finden.
+
+## Über uns:
+'Helferchen' bietet Senioren technische Hilfe (TV, Handy, Internet) und Alltagshilfe (Einkaufen, kleine Reparaturen) direkt vor Ort an.
 
 **Interesse?**
-Schicke uns eine kurze Nachricht an [Email-Adresse / Kontakt] oder rufe uns an unter **030 / 123 456 78**.
+Dann melde dich einfach kurz bei uns unter:
+**Telefon:** 030 / 123 456 78
+**E-Mail:** [E-MAIL ADRESSE]
 
-Wir freuen uns auf deine Unterstützung!
+Wir freuen uns auf dich!

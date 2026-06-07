@@ -152,22 +152,13 @@ nginx -t && systemctl reload nginx
 
 ---
 
-## 4. Datenbank (SQLite)
+## 4. Datenbank (PostgreSQL)
 
-Die App verwendet SQLite – die Datenbank ist eine einzelne Datei.
+Die App verwendet PostgreSQL für die Datenhaltung.
 
-- **Standard-Pfad:** `./helferchen.db` (im Backend-Verzeichnis)
-- **Backup:** Datei einfach kopieren:
-
-```bash
-# Tägliches Backup per Cron (auf dem Server)
-cp /var/www/helferchen/backend/helferchen.db /backups/helferchen-$(date +%Y%m%d).db
-
-# Cron einrichten (crontab -e)
-0 3 * * * cp /var/www/helferchen/backend/helferchen.db /backups/helferchen-$(date +\%Y\%m\%d).db
-```
-
-> **Hinweis:** Die aktuelle Implementierung nutzt ein In-Memory-Objekt statt einer persistenten SQLite-Datei. Für Produktion sollte `better-sqlite3` oder `node-sqlite3` ergänzt werden, damit Daten bei Neustart erhalten bleiben.
+1. **Datenbank erstellen:** Erstellen Sie in Ihrem Hosting-Panel eine neue PostgreSQL-Datenbank (z.B. `helferchen`).
+2. **Schema initialisieren:** Führen Sie die SQL-Befehle aus `apps/backend/src/db/schema.sql` in Ihrer Datenbank aus (z.B. über pgAdmin oder das Terminal).
+3. **Verbindung konfigurieren:** Tragen Sie die Verbindungsdaten in die `.env`-Datei ein (`DATABASE_URL`).
 
 ---
 

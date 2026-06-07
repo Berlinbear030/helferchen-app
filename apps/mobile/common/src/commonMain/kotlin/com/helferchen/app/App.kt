@@ -49,11 +49,29 @@ enum class Screen {
 fun App() {
     var screen by remember { mutableStateOf(Screen.Login) }
     val vm = remember { AppViewModel() }
+    val updateInfo by vm.updateInfo.collectAsState()
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+
+    LaunchedEffect(Unit) {
+        vm.checkForUpdate()
+    }
 
     MaterialTheme(
         colors = lightColors(primary = PrimaryTeal, secondary = AccentGold)
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF9FAFB)) {
+            updateInfo?.let { info ->
+                AlertDialog(
+                    onDismissRequest = { },
+                    title = { Text("Update verfügbar") },
+                    text = { Text("Eine neue Version (${info.versionName}) von Helferchen ist verfügbar. Bitte laden Sie das Update herunter.") },
+                    confirmButton = {
+                        Button(onClick = { uriHandler.openUri(info.downloadUrl) }) {
+                            Text("Download")
+                        }
+                    }
+                )
+            }
             when (screen) {
                 Screen.Login -> LoginScreen(vm) { screen = Screen.Dashboard }
                 Screen.Dashboard -> DashboardScreen(vm,

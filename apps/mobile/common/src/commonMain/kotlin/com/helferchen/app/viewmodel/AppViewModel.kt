@@ -37,6 +37,19 @@ class AppViewModel(private val api: ApiClient = ApiClient()) {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    private val _updateInfo = MutableStateFlow<AppVersionInfo?>(null)
+    val updateInfo: StateFlow<AppVersionInfo?> = _updateInfo
+
+    fun checkForUpdate() {
+        scope.launch {
+            val info = api.checkUpdate()
+            // current versionCode is 1 (hardcoded for now, or could be passed from platform)
+            if (info != null && info.versionCode > 1) {
+                _updateInfo.value = info
+            }
+        }
+    }
+
     fun login(username: String, password: String, onSuccess: () -> Unit) {
         scope.launch {
             _isLoading.value = true

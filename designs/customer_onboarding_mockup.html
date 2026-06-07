@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helferchen - Onboarding</title>
+    <style>
+        :root {
+            --primary-blue: #003366;
+            --accent-orange: #FF8C00;
+            --text-dark: #222222;
+            --bg-cream: #FFFDD0;
+            --white: #FFFFFF;
+        }
+        body { font-family: Arial, sans-serif; background-color: var(--bg-cream); color: var(--text-dark); font-size: 24px; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: var(--white); padding: 40px; border-radius: 20px; }
+        h1 { color: var(--primary-blue); font-size: 40px; }
+        .step { margin-bottom: 30px; }
+        label { display: block; margin-bottom: 10px; font-weight: bold; }
+        input, select { width: 100%; padding: 20px; font-size: 24px; border: 2px solid var(--primary-blue); border-radius: 10px; }
+        .btn { display: block; width: 100%; padding: 20px; font-size: 24px; background-color: var(--primary-blue); color: var(--white); border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Anmeldung bei Helferchen</h1>
+        <div class="step">
+            <label>1. Welche Hilfe benötigen Sie?</label>
+            <select>
+                <option>Technik-Hilfe (TV, Handy, PC)</option>
+                <option>Alltagshilfe (Einkaufen, Putzen)</option>
+                <option>Sonstiges</option>
+            </select>
+        </div>
+        <div class="step">
+            <label>2. Ihr Name:</label>
+            <input type="text" placeholder="Max Mustermann">
+        </div>
+        <div class="step">
+            <label>3. Ihre Telefonnummer (für Rückruf):</label>
+            <input type="tel" placeholder="030 123 456">
+        </div>
+        <button class="btn">Absenden & Rückruf anfordern</button>
+    </div>
+</body>
+</html>

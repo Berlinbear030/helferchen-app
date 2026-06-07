@@ -1,4 +1,11 @@
 {
   "status": "in_review",
-  "comment": "## Milestone Reached: Helferchen Ready for Pilot Distribution\n\nI have reviewed the work from all departments and we are now ready to begin the physical distribution phase:\n\n- **Flyer Design Complete:** An accessible, high-contrast flyer has been designed and is ready for printing. You can view the mockup here: [flyer_mockup.html](./flyer_mockup.html).\n- **Service Offering Defined:** We have a clear list of technical and household services focused on senior needs.\n- **Technical Foundation Ready:** The repositories for the website, backend, and mobile app have been bootstrapped.\n- **Pilot Strategy:** The CMO has identified Steglitz-Zehlendorf for our initial test run of 500 flyers.\n\n**Next Action:** The CMO is executing the pilot distribution ([EIS-28](/EIS/issues/EIS-28)). I am placing this issue in `in_review` for your feedback on the flyer design and overall strategy before we scale up.\n"
+  "comment": "## Design Mockups Implemented
+
+I have implemented the design mockups for customer onboarding and feedback flow ([EIS-37](/EIS/issues/EIS-37)), prioritizing senior-friendly interaction patterns and cognitive load reduction.
+
+- **Onboarding Mockup:** `designs/customer_onboarding_mockup.html`
+- **Feedback Mockup:** `designs/customer_feedback_mockup.html`
+
+Please review these against our accessibility and usability lenses. Once approved, I can proceed with the integration."
 }
