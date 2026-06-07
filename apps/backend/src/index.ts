@@ -11,6 +11,7 @@ import pdfRoutes from './routes/pdf';
 import adminRoutes from './routes/admin';
 import bookingRequestRoutes from './routes/bookingRequests';
 import dashboardRoutes from './routes/dashboard';
+import { initDatabase } from './db/init';
 
 dotenv.config();
 
@@ -35,6 +36,16 @@ app.get('/', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });
 });
 
-app.listen(port, () => {
-  console.log(`Helferchen API running at http://localhost:${port}`);
+async function start() {
+  if (process.env.DATABASE_URL) {
+    await initDatabase();
+  }
+  app.listen(port, () => {
+    console.log(`Helferchen API running at http://localhost:${port}`);
+  });
+}
+
+start().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });

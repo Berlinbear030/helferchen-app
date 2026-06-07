@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: helferchen-api
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: cd apps/backend && npm install && npm run build
+    startCommand: cd apps/backend && node dist/index.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: helferchen-db
+          property: connectionString
+
+databases:
+  - name: helferchen-db
+    databaseName: helferchen
+    user: helferchen
+    region: frankfurt
+    plan: free
