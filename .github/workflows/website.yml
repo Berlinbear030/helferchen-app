@@ -23,16 +23,13 @@ jobs:
         run: cd apps/website && npm ci
       - name: Build
         run: cd apps/website && npm run build
-      - name: Deploy to Netlify
+      - name: Deploy via FTP
         if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-        uses: nwtgck/actions-netlify@v3.0
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          publish-dir: './apps/website/dist'
-          production-branch: master
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          deploy-message: "Deploy from GitHub Actions - ${{ github.sha }}"
-          enable-pull-request-comment: false
-          enable-commit-comment: false
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          server: ftp.webspace.bz
+          username: kd250524ftp1
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: apps/website/dist/
+          server-dir: /
+          protocol: ftps

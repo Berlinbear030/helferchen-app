@@ -1,6 +1,6 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0",
+  "versionCode": 2,
+  "versionName": "1.1",
   "downloadUrl": "https://helferchen.info/downloads/helferchen-mobile.apk",
-  "releaseNotes": "Initial release via website."
+  "releaseNotes": "Fehlerbehebungen und Performance-Optimierungen."
 }

@@ -1,16 +1,16 @@
 import { Router, Response } from 'express';
-import db from '../db';
+import { AssignmentRepo, BookingRequestRepo, CustomerRepo } from '../db/queries';
 import { AuthRequest, authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/stats', authenticateToken, (req: AuthRequest, res: Response) => {
+router.get('/stats', authenticateToken, async (req: AuthRequest, res: Response) => {
   const today = new Date().toISOString().slice(0, 10);
   const thisMonth = new Date().toISOString().slice(0, 7);
 
   const allAssignments = req.user!.role === 'admin'
-    ? db.assignments
-    : db.assignments.filter(a => a.assigned_user_id === req.user!.id);
+    ? await AssignmentRepo.findAll()
+    : await AssignmentRepo.findByUserId(req.user!.id);
 
   const todayAssignments = allAssignments.filter(a => a.scheduled_at.startsWith(today));
   const openAssignments = allAssignments.filter(a => a.status === 'pending' || a.status === 'in_progress');
@@ -20,7 +20,17 @@ router.get('/stats', authenticateToken, (req: AuthRequest, res: Response) => {
   );
 
   const revenuePerJob = 35;
-  const openBookingRequests = db.bookingRequests.filter(r => r.status === 'open').length;
+  const openBookingRequests = await BookingRequestRepo.countOpen();
+  
+  const recentAssignments = allAssignments
+    .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
+    .slice(0, 10);
+    
+  // Fetch customer data for recent assignments
+  const enrichedAssignments = await Promise.all(recentAssignments.map(async a => ({
+    ...a,
+    customer: await CustomerRepo.findById(a.customer_id)
+  })));
 
   return res.json({
     today_appointments: todayAssignments.length,
@@ -29,13 +39,7 @@ router.get('/stats', authenticateToken, (req: AuthRequest, res: Response) => {
     daily_revenue: completedToday.length * revenuePerJob,
     monthly_revenue: completedMonth.length * revenuePerJob,
     open_booking_requests: openBookingRequests,
-    recent_assignments: allAssignments
-      .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
-      .slice(0, 10)
-      .map(a => ({
-        ...a,
-        customer: db.customers.find(c => c.id === a.customer_id) || null,
-      })),
+    recent_assignments: enrichedAssignments,
   });
 });
 
