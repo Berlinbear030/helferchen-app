@@ -1,0 +1,57 @@
+import { Router, Request, Response } from 'express';
+import { AuditRepo } from '../db/queries';
+
+const router = Router();
+
+// Endpoint for triggering report generation (protected by a secret)
+router.post('/report', async (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+    if (!process.env.CRON_SECRET || authHeader !== 'Bearer ' + process.env.CRON_SECRET) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    try {
+        // 1. Fetch recent activity (e.g., last 100 entries)
+        const recentLogs = await AuditRepo.findAll({ limit: 100 });
+        
+        // 2. Generate report text
+        const newline = String.fromCharCode(10);
+        let reportLines = ["# Automated Activity Report", "", "Generated at: " + new Date().toISOString(), "", "## Recent Audit Logs:"];
+        
+        recentLogs.forEach(log => {
+            reportLines.push("- [" + log.timestamp + "] " + log.entity_type + " " + log.entity_id + ": " + log.action + " by " + log.actor_user_id);
+        });
+
+        let report = reportLines.join(newline);
+
+        // 3. Post to GitHub
+        const githubToken = process.env.GITHUB_TOKEN;
+        const githubRepo = process.env.GITHUB_REPO;
+        
+        if (!githubToken || !githubRepo) {
+            throw new Error('GitHub configuration missing');
+        }
+
+        const response = await fetch('https://api.github.com/repos/' + githubRepo + '/issues/124/comments', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'token ' + githubToken,
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'Helferchen-Backend'
+            },
+            body: JSON.stringify({ body: report })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to post to GitHub: ' + await response.text());
+        }
+
+        res.status(200).json({ message: 'Report posted successfully' });
+    } catch (error) {
+        console.error('Error in cron report generation:', error);
+        res.status(500).json({ message: 'Internal server error', error: String(error) });
+    }
+});
+
+export default router;

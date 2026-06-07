@@ -11,12 +11,14 @@ import pdfRoutes from './routes/pdf';
 import adminRoutes from './routes/admin';
 import bookingRequestRoutes from './routes/bookingRequests';
 import dashboardRoutes from './routes/dashboard';
+import cronRoutes from './routes/cron';
+import telegramRoutes from './telegram';
 import { initDatabase } from './db/init';
 
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // larger limit for signature image blobs
@@ -31,6 +33,8 @@ app.use('/api/pdf', pdfRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/booking-requests', bookingRequestRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/cron', cronRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });
