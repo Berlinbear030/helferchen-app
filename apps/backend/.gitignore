@@ -1,0 +1,3 @@
+# Allow dist/ for Render deployment
+!dist/
+!dist/**
