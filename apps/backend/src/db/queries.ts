@@ -99,9 +99,10 @@ export const AssignmentRepo = {
       return a;
     }
     const id = randomUUID();
+    const formattedDate = scheduled_at.replace('T', ' ').slice(0, 19).padEnd(19, ':00').slice(0, 19);
     await query(
       'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, customer_id, assigned_user_id, title, description, scheduled_at]
+      [id, customer_id, assigned_user_id || null, title, description, formattedDate]
     );
     return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
   },
@@ -297,6 +298,7 @@ export const BookingRequestRepo = {
         name: data.name!,
         phone: data.phone!,
         email: data.email || '',
+        address: data.address || '',
         service_description: data.service_description!,
         preferred_date: data.preferred_date!,
         preferred_time: data.preferred_time!,
@@ -310,14 +312,15 @@ export const BookingRequestRepo = {
     }
     const id = randomUUID();
     await query(
-      'INSERT INTO booking_requests (id, name, phone, email, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, data.name, data.phone, data.email, data.service_description, data.preferred_date, data.preferred_time]
+      'INSERT INTO booking_requests (id, name, phone, email, address, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, data.name, data.phone, data.email, data.address, data.service_description, data.preferred_date, data.preferred_time]
     );
     return {
       id,
       name: data.name!,
       phone: data.phone!,
       email: data.email || '',
+      address: data.address || '',
       service_description: data.service_description!,
       preferred_date: data.preferred_date!,
       preferred_time: data.preferred_time!,

@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS `booking_requests` (
   `name` TEXT NOT NULL,
   `phone` TEXT NOT NULL,
   `email` TEXT NOT NULL DEFAULT '',
+  `address` TEXT NOT NULL,
   `service_description` TEXT NOT NULL,
   `preferred_date` TEXT,
   `preferred_time` TEXT,
@@ -98,6 +99,13 @@ CREATE TABLE IF NOT EXISTS `booking_requests` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   FOREIGN KEY (`assigned_user_id`) REFERENCES `users`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `mail_users` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `email` VARCHAR(255) UNIQUE NOT NULL,
+  `password` VARCHAR(255) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `audit_logs` (

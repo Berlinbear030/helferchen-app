@@ -519,20 +519,23 @@ function AssignmentsAdminTab() {
   const [msg, setMsg] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [form, setForm] = useState({ customer_id: '', assigned_user_id: '', title: '', description: '', scheduled_at: '' });
+  const [requests, setRequests] = useState<BookingRequest[]>([]);
+  const [form, setForm] = useState<any>({ customer_id: '', assigned_user_id: '', title: '', description: '', scheduled_at: '' });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [aRes, uRes, cRes] = await Promise.all([
+      const [aRes, uRes, cRes, rRes] = await Promise.all([
         fetch(`${API}/assignments/all`, { headers: authHeaders() }),
         fetch(`${API}/admin/users`, { headers: authHeaders() }),
         fetch(`${API}/customers`, { headers: authHeaders() }).catch(() => ({ ok: false, json: async () => [] })),
+        fetch(`${API}/booking-requests?status=accepted`, { headers: authHeaders() }),
       ]);
       if (aRes.ok) setAssignments(await aRes.json());
       if (uRes.ok) setEmployees(await uRes.json());
       if ((cRes as Response).ok) setCustomers(await (cRes as Response).json());
+      if (rRes.ok) setRequests(await rRes.json());
     } finally { setLoading(false); }
   }, []);
 
@@ -546,6 +549,20 @@ function AssignmentsAdminTab() {
     setMsg('Zuweisung gespeichert.');
     setTimeout(() => setMsg(''), 3000);
     load();
+  };
+
+  const convertRequest = (r: BookingRequest) => {
+    const existing = customers.find(c => c.phone_number === r.phone || (c.first_name + ' ' + c.last_name) === r.name);
+    setForm({
+      customer_id: existing ? existing.id : 'NEW_CUSTOMER',
+      assigned_user_id: '',
+      title: `Service: ${r.service_description.slice(0, 20)}`,
+      description: r.service_description,
+      scheduled_at: `${r.preferred_date}T${r.preferred_time}`,
+      new_customer: { name: r.name, phone: r.phone, email: r.email, address: r.address }
+    });
+    setShowCreate(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const create = async (e: React.FormEvent) => {
@@ -564,88 +581,110 @@ function AssignmentsAdminTab() {
   if (loading) return <div className="loading-text">Lade Aufträge…</div>;
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0 }}>Auftragsübersicht ({assignments.length})</h3>
-        <button className="btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
-          {showCreate ? '× Abbrechen' : '+ Neuer Auftrag'}
-        </button>
-      </div>
+    <div className="assignments-admin-layout" style={{ display: 'flex', gap: '24px' }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <h3 style={{ margin: 0 }}>Auftragsübersicht ({assignments.length})</h3>
+          <button className="btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
+            {showCreate ? '× Abbrechen' : '+ Neuer Auftrag'}
+          </button>
+        </div>
 
-      {msg && <div className="msg-banner msg-success" style={{ marginBottom: 12 }}>{msg}</div>}
+        {msg && <div className="msg-banner msg-success" style={{ marginBottom: 12 }}>{msg}</div>}
 
-      {showCreate && (
-        <form className="employee-form" onSubmit={create} style={{ marginBottom: 24 }}>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Titel *</label>
-              <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="z.B. Einkaufshilfe" />
+        {showCreate && (
+          <form className="employee-form" onSubmit={create} style={{ marginBottom: 24, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Titel *</label>
+                <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="z.B. Einkaufshilfe" />
+              </div>
+              <div className="form-group">
+                <label>Datum/Zeit *</label>
+                <input type="datetime-local" required value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} />
+              </div>
             </div>
-            <div className="form-group">
-              <label>Datum/Zeit *</label>
-              <input type="datetime-local" required value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Kunde *</label>
-              {customers.length > 0 ? (
+            <div className="form-row">
+              <div className="form-group">
+                <label>Kunde *</label>
                 <select required value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}>
                   <option value="">– Kunde wählen –</option>
+                  {form.customer_id === 'NEW_CUSTOMER' && <option value="NEW_CUSTOMER">🆕 Neu: {form.new_customer?.name}</option>}
                   {customers.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name} – {c.address}</option>)}
                 </select>
-              ) : (
-                <input required value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} placeholder="Kunden-ID" />
-              )}
+                {form.customer_id === 'NEW_CUSTOMER' && (
+                  <div style={{ fontSize: '0.75rem', color: '#059669', marginTop: '4px' }}>
+                    Kunde wird beim Speichern automatisch angelegt.
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Mitarbeiter zuweisen</label>
+                <select value={form.assigned_user_id} onChange={e => setForm(f => ({ ...f, assigned_user_id: e.target.value }))}>
+                  <option value="">– Nicht zugewiesen –</option>
+                  {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+                </select>
+              </div>
             </div>
             <div className="form-group">
-              <label>Mitarbeiter zuweisen</label>
-              <select value={form.assigned_user_id} onChange={e => setForm(f => ({ ...f, assigned_user_id: e.target.value }))}>
-                <option value="">– Nicht zugewiesen –</option>
-                {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
-              </select>
+              <label>Beschreibung</label>
+              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Optionale Details…" style={{ width: '100%', resize: 'vertical' }} />
             </div>
-          </div>
-          <div className="form-group">
-            <label>Beschreibung</label>
-            <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Optionale Details…" style={{ width: '100%', resize: 'vertical' }} />
-          </div>
-          <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Speichern…' : 'Auftrag erstellen'}</button>
-        </form>
-      )}
+            <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Speichern…' : 'Auftrag erstellen'}</button>
+          </form>
+        )}
 
-      <table className="admin-table" style={{ width: '100%' }}>
-        <thead>
-          <tr>
-            <th>Titel</th>
-            <th>Kunde</th>
-            <th>Termin</th>
-            <th>Status</th>
-            <th>Zugewiesen an</th>
-          </tr>
-        </thead>
-        <tbody>
-          {assignments.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: '#9CA3AF' }}>Keine Aufträge vorhanden.</td></tr>}
-          {assignments.map(a => (
-            <tr key={a.id}>
-              <td><strong>{a.title}</strong>{a.description && <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{a.description}</div>}</td>
-              <td>{a.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '–'}<div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{a.customer?.address}</div></td>
-              <td style={{ whiteSpace: 'nowrap' }}>{a.scheduled_at ? new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–'}</td>
-              <td><span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span></td>
-              <td>
-                <select
-                  value={a.assigned_user?.id || a.assigned_user_id || ''}
-                  onChange={e => reassign(a.id, e.target.value)}
-                  style={{ fontSize: '0.85rem', padding: '2px 4px' }}
-                >
-                  <option value="">🟡 Nicht zugewiesen</option>
-                  {employees.map(emp => <option key={emp.id} value={emp.id}>🟢 {emp.full_name}</option>)}
-                </select>
-              </td>
+        <table className="admin-table" style={{ width: '100%' }}>
+          <thead>
+            <tr>
+              <th>Titel</th>
+              <th>Kunde</th>
+              <th>Termin</th>
+              <th>Status</th>
+              <th>Zugewiesen an</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {assignments.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: '#9CA3AF' }}>Keine Aufträge vorhanden.</td></tr>}
+            {assignments.map(a => (
+              <tr key={a.id}>
+                <td><strong>{a.title}</strong>{a.description && <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{a.description}</div>}</td>
+                <td>{a.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '–'}<div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{a.customer?.address}</div></td>
+                <td style={{ whiteSpace: 'nowrap' }}>{a.scheduled_at ? new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–'}</td>
+                <td><span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span></td>
+                <td>
+                  <select
+                    value={a.assigned_user?.id || a.assigned_user_id || ''}
+                    onChange={e => reassign(a.id, e.target.value)}
+                    style={{ fontSize: '0.85rem', padding: '2px 4px' }}
+                  >
+                    <option value="">🟡 Nicht zugewiesen</option>
+                    {employees.map(emp => <option key={emp.id} value={emp.id}>🟢 {emp.full_name}</option>)}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="assignments-sidebar" style={{ width: '300px', flexShrink: 0, background: '#F3F4F6', padding: '16px', borderRadius: '8px' }}>
+        <h4 style={{ marginTop: 0, marginBottom: '12px' }}>Angenommene Anfragen</h4>
+        {requests.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#6B7280' }}>Keine Anfragen zum Umwandeln.</p> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {requests.map(r => (
+              <div key={r.id} style={{ background: '#fff', padding: '10px', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontSize: '0.85rem' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{r.name}</div>
+                <div style={{ color: '#4B5563', fontSize: '0.8rem', marginBottom: '8px' }}>{r.service_description.slice(0, 50)}...</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#6B7280' }}>{r.preferred_date}</span>
+                  <button className="btn-primary btn-sm" style={{ padding: '2px 8px' }} onClick={() => convertRequest(r)}>Umwandeln</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

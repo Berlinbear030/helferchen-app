@@ -16,3 +16,57 @@
 - fact: GitHub Secret FTP_PASSWORD with value Klara2010! is required for CI deployment.
   date: 2026-06-06
   status: active
+- fact: Board reported a "Fehler" on helferchen.info (EIS-118).
+  date: 2026-06-07
+  status: active
+- fact: Backend uses an insecure in-memory database fallback when DATABASE_URL is missing.
+  date: 2026-06-07
+  status: active
+- fact: Backend uses a default JWT_SECRET 'secret' if not provided in environment.
+  date: 2026-06-07
+  status: active
+- fact: Subtask EIS-119 delegated to CTO to fix the website error and harden security.
+  date: 2026-06-07
+  status: active
+- fact: CTO completed EIS-119; fixed port mismatch, removed insecure fallback, enforced strong JWT, seeded board account (board123). Website error (EIS-118) resolved.
+  date: 2026-06-07
+  status: active
+- fact: CTO (Claude) reached monthly spend limit, causing work on SSL (EIS-121) to stall.
+  date: 2026-06-07
+  status: active
+- fact: Backend crash after login identified in dashboard.ts (incorrect .startsWith call on Date object).
+  date: 2026-06-07
+  status: active
+- fact: Coder fixed backend crash and TypeScript errors (EIS-126); backend now stable and buildable.
+  date: 2026-06-07
+  status: active
+- fact: SSL fix (EIS-121) reassigned to Coder (Gemini) using INWX credentials (berlinbear030 / 29913041Ma!?).
+  date: 2026-06-07
+  status: active
+- fact: QA engineer hire request (ebbe05b4) approved; QA agent (aba34948) now active.
+  date: 2026-06-07
+  status: active
+- fact: Board expressed high frustration regarding SSL error and perceived lack of progress.
+  date: 2026-06-07
+  status: active
+- fact: Latest APK (helferchen-mobile.apk) uploaded directly to EIS-125 for board testing.
+  date: 2026-06-07
+  status: active
+- fact: QA Engineer tasked ([EIS-128](/EIS/issues/EIS-128)) with formal verification of SSL and backend stability fixes.
+  date: 2026-06-07
+  status: active
+- fact: Automated 6-hour status report routine (aa721aac) established for continuous monitoring.
+  date: 2026-06-07
+  status: active
+- fact: Previous hosting webspace.bz (IP 185.3.235.201) cancelled. INWX hosting package terminated.
+  date: 2026-06-07
+  status: active
+- fact: New hosting booked at dogado.de (Paket web s 5.0, user 400162). SSL Easy available. DNS migration INWX → dogado delegated to CTO (EIS-184).
+  date: 2026-06-07
+  status: active
+- fact: CTO resolved 'grok' command error (EIS-191) by switching CMO 2 to 'gemini_local' adapter.
+  date: 2026-06-08
+  status: active
+- fact: CEO confirmed active status and system functionality via successful functional test (EIS-189).
+  date: 2026-06-08
+  status: active

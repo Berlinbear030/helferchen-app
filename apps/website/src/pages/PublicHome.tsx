@@ -13,6 +13,7 @@ function BookingPortal() {
     name: '',
     phone: '',
     email: '',
+    address: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -46,7 +47,7 @@ function BookingPortal() {
         <div className="booking-success-icon">✓</div>
         <h3>Anfrage eingegangen!</h3>
         <p>Wir melden uns innerhalb von 24 Stunden bei Ihnen.</p>
-        <button className="btn-primary" onClick={() => { setSubmitted(false); setStep(1); setForm({ preferred_date: '', preferred_time: '', service_description: '', name: '', phone: '', email: '' }); }}>
+        <button className="btn-primary" onClick={() => { setSubmitted(false); setStep(1); setForm({ preferred_date: '', preferred_time: '', service_description: '', name: '', phone: '', email: '', address: '' }); }}>
           Weitere Anfrage
         </button>
       </div>
@@ -104,21 +105,30 @@ function BookingPortal() {
       {step === 3 && (
         <div className="booking-panel">
           <h3>Ihre Kontaktdaten</h3>
-          <label>Name *</label>
-          <input type="text" placeholder="Ihr vollständiger Name" value={form.name} onChange={e => set('name', e.target.value)} required />
-          <label>Telefon *</label>
-          <input type="tel" placeholder="Ihre Telefonnummer" value={form.phone} onChange={e => set('phone', e.target.value)} required />
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <label>Name *</label>
+              <input type="text" placeholder="Ihr vollständiger Name" value={form.name} onChange={e => set('name', e.target.value)} required />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Telefon *</label>
+              <input type="tel" placeholder="Ihre Telefonnummer" value={form.phone} onChange={e => set('phone', e.target.value)} required />
+            </div>
+          </div>
+          <label>Adresse *</label>
+          <input type="text" placeholder="Straße, Hausnummer, PLZ Ort" value={form.address} onChange={e => set('address', e.target.value)} required />
           <label>E-Mail (optional)</label>
           <input type="email" placeholder="ihre@email.de" value={form.email} onChange={e => set('email', e.target.value)} />
           <div className="booking-summary">
             <strong>Zusammenfassung:</strong>
             <span>📅 {form.preferred_date} um {form.preferred_time} Uhr</span>
+            <span>📍 {form.address || 'Keine Adresse angegeben'}</span>
             <span>📝 {form.service_description.slice(0, 60)}{form.service_description.length > 60 ? '…' : ''}</span>
           </div>
           {error && <p className="booking-error">{error}</p>}
           <div className="booking-nav">
             <button type="button" className="btn-secondary" onClick={() => setStep(2)}>← Zurück</button>
-            <button type="submit" className="btn-primary" disabled={submitting || !form.name || !form.phone}>
+            <button type="submit" className="btn-primary" disabled={submitting || !form.name || !form.phone || !form.address}>
               {submitting ? 'Wird gesendet…' : 'Anfrage absenden'}
             </button>
           </div>
@@ -340,29 +350,6 @@ function PublicHome() {
             <div className="trust-item">
               <span className="trust-icon">⚡</span>
               <div><h3>Flexibel &amp; schnell</h3><p>Oft noch am selben Tag — kein Papierkram, kein Warten.</p></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* APP DOWNLOAD */}
-      <section className="app-section">
-        <div className="container">
-          <div className="app-download-box">
-            <div className="app-download-icon">📱</div>
-            <div className="app-download-content">
-              <span className="section-badge" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', marginBottom: '12px' }}>Kostenlose App</span>
-              <h2 style={{ color: '#fff', marginBottom: '12px' }}>Helferchen als App</h2>
-              <p style={{ color: 'rgba(255,255,255,0.82)', marginBottom: '28px', maxWidth: '460px', fontSize: '1.05rem' }}>
-                Termine verwalten, Arbeitszeiten erfassen und die Tagesroute planen — direkt auf dem Smartphone.
-              </p>
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                <a href="/downloads/helferchen-mobile.apk" className="btn-download" download>
-                  <span style={{ fontSize: '1.4rem' }}>⬇</span>
-                  <div><small>Für Android herunterladen</small><strong>Helferchen App (.apk)</strong></div>
-                </a>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginTop: '14px' }}>Android 8.0+ · Kostenlos · ca. 6 MB</p>
             </div>
           </div>
         </div>

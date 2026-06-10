@@ -1,5 +1,12 @@
 import { query } from './pool';
 import bcrypt from 'bcryptjs';
+import { spawnSync } from 'child_process';
+
+function hashForDovecot(password: string): string {
+  const r = spawnSync('openssl', ['passwd', '-6', password]);
+  if (r.status !== 0) return '';
+  return `{SHA512-CRYPT}${r.stdout.toString().trim()}`;
+}
 
 export async function initDatabase(): Promise<void> {
   console.log('Initializing database schema...');
@@ -100,6 +107,7 @@ export async function initDatabase(): Promise<void> {
       name TEXT NOT NULL,
       phone TEXT NOT NULL,
       email TEXT NOT NULL,
+      address TEXT NOT NULL,
       service_description TEXT NOT NULL,
       preferred_date TEXT,
       preferred_time TEXT,
@@ -109,6 +117,22 @@ export async function initDatabase(): Promise<void> {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       FOREIGN KEY (assigned_user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // Ensure address column exists (for existing tables)
+  try {
+    await query('ALTER TABLE booking_requests ADD COLUMN address TEXT AFTER email');
+  } catch (e) {
+    // Ignore error if column already exists
+  }
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS mail_users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password VARCHAR(255) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
@@ -146,6 +170,16 @@ export async function initDatabase(): Promise<void> {
      VALUES (UUID(), ?, ?, ?, ?, ?)`,
     ['employee1', empHash, 'Max Mustermann', 'emp1@helferchen.info', 'employee']
   );
+
+  console.log('Seeding standard mail accounts...');
+  const mailPass = 'Helferchen2026!';
+  const mailHash = hashForDovecot(mailPass);
+  if (mailHash) {
+    const stdEmails = ['info@helferchen.info', 'kundenservice@helferchen.info', 'no-replay@helferchen.info'];
+    for (const email of stdEmails) {
+      await query('INSERT IGNORE INTO mail_users (email, password) VALUES (?, ?)', [email, mailHash]);
+    }
+  }
 
   console.log('Database initialization complete.');
 }

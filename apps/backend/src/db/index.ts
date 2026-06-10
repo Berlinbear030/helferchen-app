@@ -77,6 +77,7 @@ export interface BookingRequest {
   name: string;
   phone: string;
   email: string;
+  address: string;
   service_description: string;
   preferred_date: string;
   preferred_time: string;

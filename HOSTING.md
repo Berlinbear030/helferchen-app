@@ -4,12 +4,12 @@ Schritt-für-Schritt-Anleitung zum Deployment der Helferchen-Plattform auf einem
 
 ---
 
-## Hosting-Details (webspace.bz)
+## Hosting-Details (Dogado)
 
 | Eigenschaft | Wert |
 |---|---|
-| **Provider** | webspace.bz (INWX) |
-| **IP-Adresse** | 185.181.105.76 |
+| **Provider** | Dogado |
+| **IP-Adresse** | 85.190.98.5 |
 | **FTP-Server** | ftp.webspace.bz |
 | **FTP-Benutzername** | kd250524ftp1 |
 | **FTP-Pfad** | / |

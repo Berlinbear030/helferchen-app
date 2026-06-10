@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS booking_requests (
     name TEXT NOT NULL,
     phone TEXT NOT NULL,
     email TEXT NOT NULL,
+    address TEXT NOT NULL,
     service_description TEXT NOT NULL,
     preferred_date TEXT,
     preferred_time TEXT,
