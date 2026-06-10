@@ -169,11 +169,9 @@ function PublicHome() {
             </p>
             <div className="hero-cta-row">
               <button className="btn-primary btn-lg" onClick={scrollToBooking}>Jetzt Termin buchen</button>
-              <a href={phoneHref} className="btn-secondary btn-lg">{phoneNumber}</a>
-            </div>
-            <div style={{ marginTop: '16px' }}>
-              <a href="/downloads/helferchen-mobile.apk" className="btn-text" style={{ color: 'var(--text-mid)', fontSize: '0.9rem' }}>
-                📲 Helferchen App für Android herunterladen
+              <a href={phoneHref} className="btn-call btn-lg">
+                <span className="btn-call-label">Anrufen</span>
+                <span className="btn-call-number">{phoneNumber}</span>
               </a>
             </div>
             <p className="hero-hint">Mo–Fr · 9–17 Uhr</p>
@@ -210,7 +208,13 @@ function PublicHome() {
           {!showBooking ? (
             <div style={{ textAlign: 'center' }}>
               <button className="btn-primary btn-xl" onClick={() => setShowBooking(true)}>Termin anfragen</button>
-              <p style={{ marginTop: 16, color: 'var(--text-mid)' }}>Oder rufen Sie uns an: <a href={phoneHref}>{phoneNumber}</a></p>
+              <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                <span style={{ color: 'var(--text-mid)', fontSize: '0.95rem' }}>Oder direkt:</span>
+                <a href={phoneHref} className="btn-call" style={{ fontSize: '0.95rem', padding: '10px 20px' }}>
+                  <span className="btn-call-label">Anrufen</span>
+                  <span className="btn-call-number">{phoneNumber}</span>
+                </a>
+              </div>
             </div>
           ) : (
             <BookingPortal />

@@ -915,3 +915,48 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .btn-download div { display: flex; flex-direction: column; }
 .btn-download small { font-size: 0.72rem; color: rgba(255,255,255,0.7); }
 .btn-download strong { font-size: 0.95rem; font-weight: 700; }
+
+/* ── Call Button ─────────────────────────────────────────────── */
+.btn-call {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.15);
+  border: 2px solid rgba(255,255,255,0.55);
+  color: #fff;
+  padding: 14px 28px;
+  border-radius: 50px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  line-height: 1.2;
+}
+.btn-call:hover {
+  background: rgba(255,255,255,0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.btn-call-label {
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.btn-call-number {
+  font-size: 0.78rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Dark background variant for btn-call (booking section) */
+.booking-section .btn-call {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+.booking-section .btn-call:hover {
+  background: #003d42;
+  border-color: #003d42;
+}

@@ -25,3 +25,9 @@ jobs:
         run: cd apps/website && npm run build
       - name: Copy .htaccess to dist
         run: cp apps/website/public/.htaccess apps/website/dist/.htaccess
+      - name: Upload dist as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helferchen-website-dist
+          path: apps/website/dist/
+          retention-days: 7
