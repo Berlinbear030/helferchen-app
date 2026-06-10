@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../index.css';
 
-const API = 'https://helferchen-api.onrender.com/api';
+const API = '/api';
 
 interface User { id: string; full_name: string; role: string; }
 interface Customer { id: string; first_name: string; last_name: string; address: string; }

@@ -1,4 +1,4 @@
-const API_BASE = 'https://helferchen-api.onrender.com/api';
+const API_BASE = '/api';
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('token');

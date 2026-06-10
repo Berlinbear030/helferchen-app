@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import '../index.css';
 
-const API = 'https://helferchen-api.onrender.com/api';
+const API = '/api';
 
 function BookingPortal() {
   const today = new Date().toISOString().slice(0, 10);
