@@ -99,7 +99,7 @@ export async function initDatabase(): Promise<void> {
       id CHAR(36) NOT NULL,
       name TEXT NOT NULL,
       phone TEXT NOT NULL,
-      email TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL,
       service_description TEXT NOT NULL,
       preferred_date TEXT,
       preferred_time TEXT,
