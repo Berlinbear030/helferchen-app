@@ -1,11 +1,7 @@
 Options -MultiViews
 RewriteEngine On
 
-# API redirect to backend
-RewriteCond %{REQUEST_URI} ^/api/
-RewriteRule ^api/(.*)$ https://api.helferchen.info/api/$1 [R=302,L]
-
-# SPA fallback
+# SPA fallback — API calls go directly to helferchen-api.onrender.com
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.html [L]
