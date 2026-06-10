@@ -19,7 +19,7 @@ interface BookingRequest {
   status: string; assigned_user_id: string | null; notes: string; created_at: string;
 }
 
-type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs';
+type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees';
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
@@ -261,6 +261,144 @@ function TimelogsTab({ timelogs, assignments }: { timelogs: Timelog[]; assignmen
   );
 }
 
+// ── Employees Tab ─────────────────────────────────────────────────────────────
+
+interface Employee { id: string; username: string; full_name: string; email: string; role: string; created_at: string; }
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin', gebietsleiter: 'Gebietsleiter', kundenbetreuer: 'Kundenbetreuer',
+  buchhaltung: 'Buchhaltung', mitarbeiter: 'Mitarbeiter', employee: 'Mitarbeiter',
+};
+const ROLE_COLORS: Record<string, string> = {
+  admin: '#00454A', gebietsleiter: '#7C3AED', kundenbetreuer: '#0369A1',
+  buchhaltung: '#B45309', mitarbeiter: '#374151', employee: '#374151',
+};
+
+function EmployeesTab() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [form, setForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/admin/users`, { headers: authHeaders() });
+      if (r.ok) setEmployees(await r.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true); setMsg('');
+    try {
+      const r = await fetch(`${API}/admin/users`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify(form),
+      });
+      if (r.ok) {
+        setMsg('Mitarbeiter angelegt!');
+        setForm({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
+        setShowForm(false);
+        load();
+      } else {
+        const d = await r.json();
+        setMsg(d.message || 'Fehler beim Anlegen');
+      }
+    } finally { setSaving(false); }
+  };
+
+  const del = async (id: string, name: string) => {
+    if (!confirm(`${name} wirklich löschen?`)) return;
+    await fetch(`${API}/admin/users/${id}`, { method: 'DELETE', headers: authHeaders() });
+    load();
+  };
+
+  if (loading) return <div className="loading-text">Lade Mitarbeiter…</div>;
+
+  return (
+    <div className="employees-tab">
+      <div className="employees-header">
+        <h3>Mitarbeiterverwaltung ({employees.length})</h3>
+        <button className="btn-primary btn-sm" onClick={() => { setShowForm(!showForm); setMsg(''); }}>
+          {showForm ? '× Abbrechen' : '+ Neuer Mitarbeiter'}
+        </button>
+      </div>
+
+      {msg && <div className={`msg-banner ${msg.includes('Fehler') ? 'msg-error' : 'msg-success'}`}>{msg}</div>}
+
+      {showForm && (
+        <form className="employee-form" onSubmit={save}>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Voller Name *</label>
+              <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} required placeholder="Max Mustermann" />
+            </div>
+            <div className="form-group">
+              <label>Benutzername *</label>
+              <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} required placeholder="max.mustermann" />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Passwort *</label>
+              <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required placeholder="Sicheres Passwort" />
+            </div>
+            <div className="form-group">
+              <label>E-Mail</label>
+              <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="max@helferchen.info" />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Rolle *</label>
+              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                <option value="mitarbeiter">Mitarbeiter</option>
+                <option value="kundenbetreuer">Kundenbetreuer</option>
+                <option value="gebietsleiter">Gebietsleiter</option>
+                <option value="buchhaltung">Buchhaltung</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Speichern…' : 'Mitarbeiter anlegen'}</button>
+        </form>
+      )}
+
+      <div className="employees-list">
+        {employees.length === 0 && <p className="empty-state">Keine Mitarbeiter vorhanden.</p>}
+        {employees.map(emp => (
+          <div key={emp.id} className="employee-card">
+            <div className="employee-avatar">{emp.full_name.charAt(0).toUpperCase()}</div>
+            <div className="employee-info">
+              <strong>{emp.full_name}</strong>
+              <span className="employee-username">@{emp.username}</span>
+              {emp.email && <span className="employee-email">{emp.email}</span>}
+            </div>
+            <span className="role-badge" style={{ background: ROLE_COLORS[emp.role] || '#374151' }}>
+              {ROLE_LABELS[emp.role] || emp.role}
+            </span>
+            <button className="btn-danger btn-sm btn-icon" onClick={() => del(emp.id, emp.full_name)} title="Löschen">✕</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="apk-download-box">
+        <span>📲</span>
+        <div>
+          <strong>Helferchen App für Android</strong>
+          <p>Zeiterfassung und Tourenplanung direkt auf dem Smartphone</p>
+        </div>
+        <a href="/downloads/helferchen-mobile.apk" className="btn-primary btn-sm" download>App herunterladen</a>
+      </div>
+    </div>
+  );
+}
+
 // ── Map View ───────────────────────────────────────────────────────────────────
 
 function MapView({ assignments }: { assignments: Assignment[] }) {
@@ -344,6 +482,7 @@ export default function Portal() {
     { id: 'tour', label: '🗺️ Tour' },
     { id: 'booking-requests', label: '📬 Anfragen', adminOnly: true },
     { id: 'timelogs', label: '⏱ Zeiten' },
+    { id: 'employees', label: '👥 Mitarbeiter', adminOnly: true },
   ];
 
   return (
@@ -382,6 +521,7 @@ export default function Portal() {
             )}
             {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab />}
             {activeTab === 'timelogs' && <TimelogsTab timelogs={timelogs} assignments={assignments} />}
+            {activeTab === 'employees' && isAdmin && <EmployeesTab />}
           </>
         )}
       </main>

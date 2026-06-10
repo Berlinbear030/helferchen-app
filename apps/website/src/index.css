@@ -833,3 +833,85 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 
 /* ── Portal Tabs ──────────────────────────────────────────── */
 .portal-logo { font-weight: 800; letter-spacing: 1px; color: var(--color-primary); }
+
+/* ── Employees Tab ─────────────────────────────────────────── */
+.employees-tab { padding: 8px 0; }
+.employees-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.employees-header h3 { font-size: 1.1rem; font-weight: 700; color: var(--color-primary); }
+.employees-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+.employee-card {
+  display: flex; align-items: center; gap: 14px;
+  background: white; border-radius: 12px; padding: 14px 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: box-shadow 0.2s;
+}
+.employee-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+.employee-avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--color-primary); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 1.1rem; flex-shrink: 0;
+}
+.employee-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.employee-info strong { font-size: 0.95rem; color: #111827; }
+.employee-username { font-size: 0.8rem; color: #9CA3AF; }
+.employee-email { font-size: 0.8rem; color: #6B7280; }
+.role-badge {
+  padding: 4px 12px; border-radius: 100px; color: white;
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.btn-icon {
+  width: 32px; height: 32px; padding: 0; display: flex; align-items: center;
+  justify-content: center; border-radius: 8px; flex-shrink: 0; font-size: 0.8rem;
+}
+
+.employee-form {
+  background: #F9FAFB; border-radius: 12px; padding: 20px;
+  margin-bottom: 20px; border: 1px solid #E5E7EB;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.form-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.form-group { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 0.82rem; font-weight: 600; color: #374151; }
+.form-group input, .form-group select {
+  padding: 10px 14px; border: 2px solid #E5E7EB; border-radius: 8px;
+  font-size: 0.9rem; outline: none; transition: border-color 0.15s;
+}
+.form-group input:focus, .form-group select:focus { border-color: var(--color-primary); }
+
+.msg-banner { padding: 10px 16px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; font-size: 0.9rem; }
+.msg-success { background: #D1FAE5; color: #065F46; }
+.msg-error { background: #FEE2E2; color: #991B1B; }
+
+.apk-download-box {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, #005f6b 100%);
+  border-radius: 16px; padding: 20px 24px; margin-top: 24px; color: white;
+  flex-wrap: wrap;
+}
+.apk-download-box > span { font-size: 2rem; }
+.apk-download-box > div { flex: 1; }
+.apk-download-box strong { display: block; font-size: 1rem; margin-bottom: 2px; }
+.apk-download-box p { font-size: 0.82rem; color: rgba(255,255,255,0.75); margin: 0; }
+
+/* ── App Download Section (Public Home) ─────────────────────── */
+.app-section { background: linear-gradient(135deg, var(--navy) 0%, #005f6b 100%); padding: 72px 0; }
+.app-download-box {
+  display: flex; align-items: center; gap: 48px; flex-wrap: wrap;
+}
+.app-download-icon { font-size: 5rem; line-height: 1; }
+.app-download-content { flex: 1; }
+.btn-download {
+  display: inline-flex; align-items: center; gap: 14px;
+  background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.35);
+  color: white; padding: 14px 24px; border-radius: 14px;
+  text-decoration: none; transition: all 0.2s; backdrop-filter: blur(8px);
+  min-width: 240px;
+}
+.btn-download:hover { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.6); transform: translateY(-2px); }
+.btn-download div { display: flex; flex-direction: column; }
+.btn-download small { font-size: 0.72rem; color: rgba(255,255,255,0.7); }
+.btn-download strong { font-size: 0.95rem; font-weight: 700; }

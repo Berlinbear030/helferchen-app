@@ -19,16 +19,24 @@ function Login() {
         body: JSON.stringify({ username, password }),
       });
 
+      if (response.status === 401 || response.status === 403) {
+        setError('Benutzername oder Passwort falsch.');
+        return;
+      }
       if (!response.ok) {
-        throw new Error('Invalid credentials');
+        throw new Error('Server error');
       }
 
       const data = await response.json();
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/portal');
-    } catch (err) {
-      setError('Login failed. Please check your credentials.');
+    } catch (err: any) {
+      if (err?.message === 'Failed to fetch' || err?.name === 'TypeError') {
+        setError('Backend-Server ist noch nicht erreichbar. Der Server wird gerade eingerichtet — bitte in Kürze erneut versuchen.');
+      } else {
+        setError('Anmeldung fehlgeschlagen. Bitte Zugangsdaten prüfen.');
+      }
     }
   };
 

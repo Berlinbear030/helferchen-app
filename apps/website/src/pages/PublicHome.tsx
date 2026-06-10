@@ -341,6 +341,29 @@ function PublicHome() {
         </div>
       </section>
 
+      {/* APP DOWNLOAD */}
+      <section className="app-section">
+        <div className="container">
+          <div className="app-download-box">
+            <div className="app-download-icon">📱</div>
+            <div className="app-download-content">
+              <span className="section-badge" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', marginBottom: '12px' }}>Kostenlose App</span>
+              <h2 style={{ color: '#fff', marginBottom: '12px' }}>Helferchen als App</h2>
+              <p style={{ color: 'rgba(255,255,255,0.82)', marginBottom: '28px', maxWidth: '460px', fontSize: '1.05rem' }}>
+                Termine verwalten, Arbeitszeiten erfassen und die Tagesroute planen — direkt auf dem Smartphone.
+              </p>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                <a href="/downloads/helferchen-mobile.apk" className="btn-download" download>
+                  <span style={{ fontSize: '1.4rem' }}>⬇</span>
+                  <div><small>Für Android herunterladen</small><strong>Helferchen App (.apk)</strong></div>
+                </a>
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginTop: '14px' }}>Android 8.0+ · Kostenlos · ca. 6 MB</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FOOTER */}
       <footer className="footer">
         <div className="footer-inner container">
