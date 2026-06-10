@@ -42,7 +42,7 @@ private val GreenSuccess = Color(0xFF10B981)
 private val RedError = Color(0xFFEF4444)
 
 enum class Screen {
-    Login, Dashboard, AppointmentList, Timer, Report, Signature, PdfShare
+    Login, Dashboard, AppointmentList, Map, Timer, Report, Signature, PdfShare
 }
 
 @Composable
@@ -81,11 +81,13 @@ fun App() {
                 Screen.Login -> LoginScreen(vm) { screen = Screen.Dashboard }
                 Screen.Dashboard -> DashboardScreen(vm,
                     onOpenAppointments = { screen = Screen.AppointmentList },
+                    onOpenMap = { screen = Screen.Map },
                     onLogout = {
                         vm.logout()
                         screen = Screen.Login
                     }
                 )
+                Screen.Map -> MapScreen(vm) { screen = Screen.Dashboard }
                 Screen.AppointmentList -> AppointmentListScreen(vm,
                     onAssignmentSelected = { screen = Screen.Timer },
                     onLogout = {
@@ -197,7 +199,7 @@ fun LoginScreen(vm: AppViewModel, onSuccess: () -> Unit) {
 // ─── Dashboard Screen ─────────────────────────────────────────────────────────
 
 @Composable
-fun DashboardScreen(vm: AppViewModel, onOpenAppointments: () -> Unit, onLogout: () -> Unit) {
+fun DashboardScreen(vm: AppViewModel, onOpenAppointments: () -> Unit, onOpenMap: () -> Unit, onLogout: () -> Unit) {
     val user by vm.user.collectAsState()
     val assignments by vm.assignments.collectAsState()
     val isLoading by vm.isLoading.collectAsState()
@@ -313,6 +315,17 @@ fun DashboardScreen(vm: AppViewModel, onOpenAppointments: () -> Unit, onLogout: 
                 colors = ButtonDefaults.buttonColors(backgroundColor = PrimaryTeal, contentColor = Color.White)
             ) {
                 Text("Alle Aufträge anzeigen", fontSize = 16.sp)
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = onOpenMap,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF1A6B72), contentColor = Color.White)
+            ) {
+                Text("🗺 Karte anzeigen", fontSize = 16.sp)
             }
         }
     }
