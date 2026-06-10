@@ -139,6 +139,23 @@ exports.AssignmentRepo = {
             return index_1.default.assignments.filter(a => a.assigned_user_id === userId).length;
         const res = await (0, pool_1.query)('SELECT COUNT(*) as count FROM assignments WHERE assigned_user_id = ?', [userId]);
         return parseInt(res.rows[0].count);
+    },
+    async findUnassigned() {
+        if (!useDb())
+            return index_1.default.assignments.filter(a => !a.assigned_user_id);
+        const res = await (0, pool_1.query)("SELECT * FROM assignments WHERE assigned_user_id IS NULL OR assigned_user_id = '' ORDER BY scheduled_at DESC");
+        return res.rows;
+    },
+    async reassign(id, userId) {
+        if (!useDb()) {
+            const a = index_1.default.assignments.find(x => x.id === id);
+            if (!a)
+                return false;
+            a.assigned_user_id = userId || '';
+            return true;
+        }
+        const res = await (0, pool_1.query)('UPDATE assignments SET assigned_user_id = ? WHERE id = ?', [userId, id]);
+        return res.rowCount > 0;
     }
 };
 exports.TimelogRepo = {

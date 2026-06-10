@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 class AppViewModel(private val api: ApiClient = ApiClient()) {
+    val apiClient: ApiClient get() = api
     companion object { const val CURRENT_VERSION_CODE = 2 }
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 

@@ -80,4 +80,13 @@ class ApiClient(private val baseUrl: String = "https://helferchen.info") {
     }
 
     fun getPdfUrl(reportId: String): String = "$baseUrl/api/pdf/$reportId?token=${token ?: ""}"
+
+    suspend fun getMapAssignments(): MapAssignmentsResponse =
+        client.get("$baseUrl/api/assignments/map") { auth() }.body()
 }
+
+@kotlinx.serialization.Serializable
+data class MapAssignmentsResponse(
+    val mine: List<com.helferchen.app.model.Assignment>,
+    val unassigned: List<com.helferchen.app.model.Assignment>
+)

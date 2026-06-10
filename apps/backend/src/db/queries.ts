@@ -132,6 +132,21 @@ export const AssignmentRepo = {
     if (!useDb()) return db.assignments.filter(a => a.assigned_user_id === userId).length;
     const res = await query('SELECT COUNT(*) as count FROM assignments WHERE assigned_user_id = ?', [userId]);
     return parseInt(res.rows[0].count);
+  },
+  async findUnassigned(): Promise<Assignment[]> {
+    if (!useDb()) return db.assignments.filter(a => !a.assigned_user_id);
+    const res = await query("SELECT * FROM assignments WHERE assigned_user_id IS NULL OR assigned_user_id = '' ORDER BY scheduled_at DESC");
+    return res.rows;
+  },
+  async reassign(id: string, userId: string | null): Promise<boolean> {
+    if (!useDb()) {
+      const a = db.assignments.find(x => x.id === id);
+      if (!a) return false;
+      a.assigned_user_id = userId || '';
+      return true;
+    }
+    const res = await query('UPDATE assignments SET assigned_user_id = ? WHERE id = ?', [userId, id]);
+    return res.rowCount > 0;
   }
 };
 

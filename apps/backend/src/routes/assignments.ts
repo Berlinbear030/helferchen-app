@@ -41,6 +41,47 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: AuthReques
   res.status(201).json(assignment);
 });
 
+// GET /api/assignments/all — admin sees all assignments with customer + assigned user
+router.get('/all', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+  const assignments = await AssignmentRepo.findAll();
+  const result = await Promise.all(assignments.map(async a => {
+    const customer = await CustomerRepo.findById(a.customer_id);
+    const user = a.assigned_user_id ? await UserRepo.findById(a.assigned_user_id) : null;
+    return { ...a, customer, assigned_user: user ? { id: user.id, full_name: user.full_name } : null };
+  }));
+  res.json(result);
+});
+
+// GET /api/assignments/map — returns mine (green) + unassigned (yellow) for map display
+router.get('/map', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  const [mine, unassigned] = await Promise.all([
+    AssignmentRepo.findByUserId(userId),
+    AssignmentRepo.findUnassigned(),
+  ]);
+  const withCustomer = async (a: any) => {
+    const customer = await CustomerRepo.findById(a.customer_id);
+    return { ...a, customer };
+  };
+  const [mineWithCustomer, unassignedWithCustomer] = await Promise.all([
+    Promise.all(mine.map(withCustomer)),
+    Promise.all(unassigned.map(withCustomer)),
+  ]);
+  res.json({ mine: mineWithCustomer, unassigned: unassignedWithCustomer });
+});
+
+// PATCH /api/assignments/:id — admin can reassign to a different employee
+router.patch('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+  const assignment = await AssignmentRepo.findById(String(req.params.id));
+  if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
+  const { assigned_user_id, title, description, scheduled_at } = req.body;
+  if (assigned_user_id !== undefined) {
+    await AssignmentRepo.reassign(String(req.params.id), assigned_user_id || null);
+  }
+  res.json({ ...assignment, assigned_user_id: assigned_user_id ?? assignment.assigned_user_id });
+});
+
 router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Response) => {
   const assignment = await AssignmentRepo.findById(String(req.params.id));
   if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
