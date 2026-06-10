@@ -19,6 +19,7 @@ const dashboard_1 = __importDefault(require("./routes/dashboard"));
 const cron_1 = __importDefault(require("./routes/cron"));
 const telegram_1 = __importDefault(require("./telegram"));
 const init_1 = require("./db/init");
+const pool_1 = require("./db/pool");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
@@ -41,11 +42,18 @@ app.get('/', (_req, res) => {
 });
 async function start() {
     if (process.env.DATABASE_URL) {
-        try {
-            await (0, init_1.initDatabase)();
+        const connected = await (0, pool_1.testConnection)();
+        if (connected) {
+            try {
+                await (0, init_1.initDatabase)();
+                console.log('Database connected and initialized.');
+            }
+            catch (err) {
+                console.error('Database schema init failed (running with DB):', err);
+            }
         }
-        catch (err) {
-            console.error('Database initialization failed (running without DB):', err);
+        else {
+            console.warn('Database unreachable — running with in-memory fallback.');
         }
     }
     app.listen(port, () => {

@@ -1,27 +1,27 @@
 import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, AuditEntry } from './index';
-import { query } from './pool';
+import { query, dbConnected } from './pool';
 import { randomUUID } from 'crypto';
 
-const useDb = !!process.env.DATABASE_URL;
+const useDb = () => dbConnected;
 
 export const UserRepo = {
   async findByUsername(username: string): Promise<User | null> {
-    if (!useDb) return db.users.find(u => u.username === username) || null;
+    if (!useDb()) return db.users.find(u => u.username === username) || null;
     const res = await query('SELECT * FROM users WHERE username = ?', [username]);
     return res.rows[0] || null;
   },
   async findById(id: string): Promise<User | null> {
-    if (!useDb) return db.users.find(u => u.id === id) || null;
+    if (!useDb()) return db.users.find(u => u.id === id) || null;
     const res = await query('SELECT * FROM users WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async findAll(): Promise<User[]> {
-    if (!useDb) return db.users;
+    if (!useDb()) return db.users;
     const res = await query('SELECT id, username, full_name, email, role, created_at FROM users ORDER BY username ASC');
     return res.rows;
   },
   async create(username: string, password_hash: string, full_name: string, email: string, role: string): Promise<User> {
-    if (!useDb) {
+    if (!useDb()) {
       const u = { id: Date.now().toString(), username, password_hash, full_name, email, role: role as any, created_at: new Date().toISOString() };
       db.users.push(u);
       return u;
@@ -34,7 +34,7 @@ export const UserRepo = {
     return { id, username, password_hash, full_name, email, role: role as any, created_at: new Date().toISOString() };
   },
   async delete(id: string): Promise<boolean> {
-    if (!useDb) {
+    if (!useDb()) {
       const idx = db.users.findIndex(u => u.id === id);
       if (idx === -1) return false;
       db.users.splice(idx, 1);
@@ -44,7 +44,7 @@ export const UserRepo = {
     return res.rowCount > 0;
   },
   async countAll(): Promise<number> {
-    if (!useDb) return db.users.length;
+    if (!useDb()) return db.users.length;
     const res = await query('SELECT COUNT(*) as count FROM users');
     return parseInt(res.rows[0].count);
   }
@@ -52,17 +52,17 @@ export const UserRepo = {
 
 export const CustomerRepo = {
   async findAll(): Promise<Customer[]> {
-    if (!useDb) return db.customers;
+    if (!useDb()) return db.customers;
     const res = await query('SELECT * FROM customers ORDER BY created_at DESC');
     return res.rows;
   },
   async findById(id: string): Promise<Customer | null> {
-    if (!useDb) return db.customers.find(c => c.id === id) || null;
+    if (!useDb()) return db.customers.find(c => c.id === id) || null;
     const res = await query('SELECT * FROM customers WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async create(first_name: string, last_name: string, address: string, phone_number: string, notes: string): Promise<Customer> {
-    if (!useDb) {
+    if (!useDb()) {
       const c = { id: Date.now().toString(), first_name, last_name, address, phone_number, notes, created_at: new Date().toISOString() };
       db.customers.push(c);
       return c;
@@ -78,22 +78,22 @@ export const CustomerRepo = {
 
 export const AssignmentRepo = {
   async findAll(): Promise<Assignment[]> {
-    if (!useDb) return db.assignments;
+    if (!useDb()) return db.assignments;
     const res = await query('SELECT * FROM assignments ORDER BY scheduled_at DESC');
     return res.rows;
   },
   async findByUserId(userId: string): Promise<Assignment[]> {
-    if (!useDb) return db.assignments.filter(a => a.assigned_user_id === userId);
+    if (!useDb()) return db.assignments.filter(a => a.assigned_user_id === userId);
     const res = await query('SELECT * FROM assignments WHERE assigned_user_id = ? ORDER BY scheduled_at DESC', [userId]);
     return res.rows;
   },
   async findById(id: string): Promise<Assignment | null> {
-    if (!useDb) return db.assignments.find(a => a.id === id) || null;
+    if (!useDb()) return db.assignments.find(a => a.id === id) || null;
     const res = await query('SELECT * FROM assignments WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async create(customer_id: string, assigned_user_id: string, title: string, description: string, scheduled_at: string): Promise<Assignment> {
-    if (!useDb) {
+    if (!useDb()) {
       const a = { id: Date.now().toString(), customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending' as const, created_at: new Date().toISOString() };
       db.assignments.push(a);
       return a;
@@ -106,7 +106,7 @@ export const AssignmentRepo = {
     return { id, customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
   },
   async updateStatus(id: string, status: string): Promise<void> {
-    if (!useDb) {
+    if (!useDb()) {
       const a = db.assignments.find(x => x.id === id);
       if (a) a.status = status as any;
       return;
@@ -114,7 +114,7 @@ export const AssignmentRepo = {
     await query('UPDATE assignments SET status = ? WHERE id = ?', [status, id]);
   },
   async delete(id: string): Promise<boolean> {
-    if (!useDb) {
+    if (!useDb()) {
       const idx = db.assignments.findIndex(x => x.id === id);
       if (idx === -1) return false;
       db.assignments.splice(idx, 1);
@@ -124,12 +124,12 @@ export const AssignmentRepo = {
     return res.rowCount > 0;
   },
   async countAll(): Promise<number> {
-    if (!useDb) return db.assignments.length;
+    if (!useDb()) return db.assignments.length;
     const res = await query('SELECT COUNT(*) as count FROM assignments');
     return parseInt(res.rows[0].count);
   },
   async countByUserId(userId: string): Promise<number> {
-    if (!useDb) return db.assignments.filter(a => a.assigned_user_id === userId).length;
+    if (!useDb()) return db.assignments.filter(a => a.assigned_user_id === userId).length;
     const res = await query('SELECT COUNT(*) as count FROM assignments WHERE assigned_user_id = ?', [userId]);
     return parseInt(res.rows[0].count);
   }
@@ -137,12 +137,12 @@ export const AssignmentRepo = {
 
 export const TimelogRepo = {
   async findById(id: string): Promise<Timelog | null> {
-    if (!useDb) return db.timelogs.find(t => t.id === id) || null;
+    if (!useDb()) return db.timelogs.find(t => t.id === id) || null;
     const res = await query('SELECT * FROM time_logs WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async findActive(userId: string, assignmentId: string): Promise<Timelog | null> {
-    if (!useDb) return db.timelogs.find(t => t.user_id === userId && t.assignment_id === assignmentId && !t.end_time) || null;
+    if (!useDb()) return db.timelogs.find(t => t.user_id === userId && t.assignment_id === assignmentId && !t.end_time) || null;
     const res = await query(
       'SELECT * FROM time_logs WHERE user_id = ? AND assignment_id = ? AND end_time IS NULL',
       [userId, assignmentId]
@@ -150,7 +150,7 @@ export const TimelogRepo = {
     return res.rows[0] || null;
   },
   async create(userId: string, assignmentId: string): Promise<Timelog> {
-    if (!useDb) {
+    if (!useDb()) {
       const t = { id: Date.now().toString(), user_id: userId, assignment_id: assignmentId, start_time: new Date().toISOString(), end_time: null, is_signed: false, created_at: new Date().toISOString() };
       db.timelogs.push(t);
       return t;
@@ -164,7 +164,7 @@ export const TimelogRepo = {
     return { id, user_id: userId, assignment_id: assignmentId, start_time, end_time: null, is_signed: false, created_at: new Date().toISOString() };
   },
   async stop(id: string): Promise<Timelog> {
-    if (!useDb) {
+    if (!useDb()) {
       const t = db.timelogs.find(x => x.id === id);
       if (t) t.end_time = new Date().toISOString();
       return t!;
@@ -174,12 +174,12 @@ export const TimelogRepo = {
     return res.rows[0];
   },
   async findByUserId(userId: string): Promise<Timelog[]> {
-    if (!useDb) return db.timelogs.filter(t => t.user_id === userId);
+    if (!useDb()) return db.timelogs.filter(t => t.user_id === userId);
     const res = await query('SELECT * FROM time_logs WHERE user_id = ? ORDER BY start_time DESC', [userId]);
     return res.rows;
   },
   async updateSignedStatus(id: string, is_signed: boolean): Promise<void> {
-    if (!useDb) {
+    if (!useDb()) {
       const t = db.timelogs.find(x => x.id === id);
       if (t) t.is_signed = is_signed;
       return;
@@ -190,7 +190,7 @@ export const TimelogRepo = {
 
 export const ReportRepo = {
   async create(assignment_id: string, timelog_id: string, created_by_user_id: string, notes: string): Promise<Report> {
-    if (!useDb) {
+    if (!useDb()) {
       const r = { id: Date.now().toString(), assignment_id, timelog_id, created_by_user_id, notes, signature_id: null, pdf_generated: false, email_sent: false, created_at: new Date().toISOString() };
       db.reports.push(r);
       return r;
@@ -203,27 +203,27 @@ export const ReportRepo = {
     return { id, assignment_id, timelog_id, created_by_user_id, notes, signature_id: null, pdf_generated: false, email_sent: false, created_at: new Date().toISOString() };
   },
   async findByTimelogId(timelogId: string): Promise<Report | null> {
-    if (!useDb) return db.reports.find(r => r.timelog_id === timelogId) || null;
+    if (!useDb()) return db.reports.find(r => r.timelog_id === timelogId) || null;
     const res = await query('SELECT * FROM reports WHERE timelog_id = ?', [timelogId]);
     return res.rows[0] || null;
   },
   async findById(id: string): Promise<Report | null> {
-    if (!useDb) return db.reports.find(r => r.id === id) || null;
+    if (!useDb()) return db.reports.find(r => r.id === id) || null;
     const res = await query('SELECT * FROM reports WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async findAll(): Promise<Report[]> {
-    if (!useDb) return db.reports;
+    if (!useDb()) return db.reports;
     const res = await query('SELECT * FROM reports ORDER BY created_at DESC');
     return res.rows;
   },
   async findByUserId(userId: string): Promise<Report[]> {
-    if (!useDb) return db.reports.filter(r => r.created_by_user_id === userId);
+    if (!useDb()) return db.reports.filter(r => r.created_by_user_id === userId);
     const res = await query('SELECT * FROM reports WHERE created_by_user_id = ? ORDER BY created_at DESC', [userId]);
     return res.rows;
   },
   async updateSignature(id: string, signature_id: string): Promise<void> {
-    if (!useDb) {
+    if (!useDb()) {
       const r = db.reports.find(x => x.id === id);
       if (r) r.signature_id = signature_id;
       return;
@@ -234,12 +234,12 @@ export const ReportRepo = {
 
 export const SignatureRepo = {
   async findById(id: string): Promise<Signature | null> {
-    if (!useDb) return db.signatures.find(s => s.id === id) || null;
+    if (!useDb()) return db.signatures.find(s => s.id === id) || null;
     const res = await query('SELECT * FROM signatures WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async create(timelog_id: string, image_data: string, signer_name: string): Promise<Signature> {
-    if (!useDb) {
+    if (!useDb()) {
       const s = { id: Date.now().toString(), report_id: '', timelog_id, image_data, signer_name, signed_at: new Date().toISOString() };
       db.signatures.push(s);
       return s;
@@ -255,12 +255,12 @@ export const SignatureRepo = {
 
 export const BookingRequestRepo = {
   async countOpen(): Promise<number> {
-    if (!useDb) return db.bookingRequests.filter(r => r.status === 'open').length;
+    if (!useDb()) return db.bookingRequests.filter(r => r.status === 'open').length;
     const res = await query("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'open'");
     return parseInt(res.rows[0].count);
   },
   async findAll(status?: string): Promise<BookingRequest[]> {
-    if (!useDb) {
+    if (!useDb()) {
       let list = [...db.bookingRequests];
       if (status) list = list.filter(r => r.status === status);
       return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -276,7 +276,7 @@ export const BookingRequestRepo = {
     return res.rows;
   },
   async create(data: Partial<BookingRequest>): Promise<BookingRequest> {
-    if (!useDb) {
+    if (!useDb()) {
       const entry = {
         id: Date.now().toString() + Math.random().toString(36).slice(2),
         name: data.name!,
@@ -313,12 +313,12 @@ export const BookingRequestRepo = {
     };
   },
   async findById(id: string): Promise<BookingRequest | null> {
-    if (!useDb) return db.bookingRequests.find(r => r.id === id) || null;
+    if (!useDb()) return db.bookingRequests.find(r => r.id === id) || null;
     const res = await query('SELECT * FROM booking_requests WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async update(id: string, data: Partial<BookingRequest>): Promise<BookingRequest | null> {
-    if (!useDb) {
+    if (!useDb()) {
       const entry = db.bookingRequests.find(r => r.id === id);
       if (!entry) return null;
       if (data.status) entry.status = data.status;
@@ -349,7 +349,7 @@ export const BookingRequestRepo = {
 
 export const AuditRepo = {
   async create(entity_type: string, entity_id: string, action: string, actor_user_id: string, details: string): Promise<void> {
-    if (!useDb) {
+    if (!useDb()) {
       db.audit.push({
         id: Date.now().toString() + Math.random().toString(36).slice(2),
         entity_type,
@@ -368,7 +368,7 @@ export const AuditRepo = {
     );
   },
   async findAll(params?: { entity_type?: string, entity_id?: string, limit?: number }): Promise<AuditEntry[]> {
-    if (!useDb) {
+    if (!useDb()) {
       let entries = [...db.audit].reverse();
       if (params?.entity_type) entries = entries.filter(e => e.entity_type === params.entity_type);
       if (params?.entity_id) entries = entries.filter(e => e.entity_id === params.entity_id);

@@ -14,6 +14,7 @@ import dashboardRoutes from './routes/dashboard';
 import cronRoutes from './routes/cron';
 import telegramRoutes from './telegram';
 import { initDatabase } from './db/init';
+import { testConnection } from './db/pool';
 
 dotenv.config();
 
@@ -42,10 +43,16 @@ app.get('/', (_req: Request, res: Response) => {
 
 async function start() {
   if (process.env.DATABASE_URL) {
-    try {
-      await initDatabase();
-    } catch (err) {
-      console.error('Database initialization failed (running without DB):', err);
+    const connected = await testConnection();
+    if (connected) {
+      try {
+        await initDatabase();
+        console.log('Database connected and initialized.');
+      } catch (err) {
+        console.error('Database schema init failed (running with DB):', err);
+      }
+    } else {
+      console.warn('Database unreachable — running with in-memory fallback.');
     }
   }
   app.listen(port, () => {

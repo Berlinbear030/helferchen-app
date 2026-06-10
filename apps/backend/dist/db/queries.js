@@ -7,28 +7,28 @@ exports.AuditRepo = exports.BookingRequestRepo = exports.SignatureRepo = exports
 const index_1 = __importDefault(require("./index"));
 const pool_1 = require("./pool");
 const crypto_1 = require("crypto");
-const useDb = !!process.env.DATABASE_URL;
+const useDb = () => pool_1.dbConnected;
 exports.UserRepo = {
     async findByUsername(username) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.users.find(u => u.username === username) || null;
         const res = await (0, pool_1.query)('SELECT * FROM users WHERE username = ?', [username]);
         return res.rows[0] || null;
     },
     async findById(id) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.users.find(u => u.id === id) || null;
         const res = await (0, pool_1.query)('SELECT * FROM users WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
     async findAll() {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.users;
         const res = await (0, pool_1.query)('SELECT id, username, full_name, email, role, created_at FROM users ORDER BY username ASC');
         return res.rows;
     },
     async create(username, password_hash, full_name, email, role) {
-        if (!useDb) {
+        if (!useDb()) {
             const u = { id: Date.now().toString(), username, password_hash, full_name, email, role: role, created_at: new Date().toISOString() };
             index_1.default.users.push(u);
             return u;
@@ -38,7 +38,7 @@ exports.UserRepo = {
         return { id, username, password_hash, full_name, email, role: role, created_at: new Date().toISOString() };
     },
     async delete(id) {
-        if (!useDb) {
+        if (!useDb()) {
             const idx = index_1.default.users.findIndex(u => u.id === id);
             if (idx === -1)
                 return false;
@@ -49,7 +49,7 @@ exports.UserRepo = {
         return res.rowCount > 0;
     },
     async countAll() {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.users.length;
         const res = await (0, pool_1.query)('SELECT COUNT(*) as count FROM users');
         return parseInt(res.rows[0].count);
@@ -57,19 +57,19 @@ exports.UserRepo = {
 };
 exports.CustomerRepo = {
     async findAll() {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.customers;
         const res = await (0, pool_1.query)('SELECT * FROM customers ORDER BY created_at DESC');
         return res.rows;
     },
     async findById(id) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.customers.find(c => c.id === id) || null;
         const res = await (0, pool_1.query)('SELECT * FROM customers WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
     async create(first_name, last_name, address, phone_number, notes) {
-        if (!useDb) {
+        if (!useDb()) {
             const c = { id: Date.now().toString(), first_name, last_name, address, phone_number, notes, created_at: new Date().toISOString() };
             index_1.default.customers.push(c);
             return c;
@@ -81,25 +81,25 @@ exports.CustomerRepo = {
 };
 exports.AssignmentRepo = {
     async findAll() {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.assignments;
         const res = await (0, pool_1.query)('SELECT * FROM assignments ORDER BY scheduled_at DESC');
         return res.rows;
     },
     async findByUserId(userId) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.assignments.filter(a => a.assigned_user_id === userId);
         const res = await (0, pool_1.query)('SELECT * FROM assignments WHERE assigned_user_id = ? ORDER BY scheduled_at DESC', [userId]);
         return res.rows;
     },
     async findById(id) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.assignments.find(a => a.id === id) || null;
         const res = await (0, pool_1.query)('SELECT * FROM assignments WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
     async create(customer_id, assigned_user_id, title, description, scheduled_at) {
-        if (!useDb) {
+        if (!useDb()) {
             const a = { id: Date.now().toString(), customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
             index_1.default.assignments.push(a);
             return a;
@@ -109,7 +109,7 @@ exports.AssignmentRepo = {
         return { id, customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
     },
     async updateStatus(id, status) {
-        if (!useDb) {
+        if (!useDb()) {
             const a = index_1.default.assignments.find(x => x.id === id);
             if (a)
                 a.status = status;
@@ -118,7 +118,7 @@ exports.AssignmentRepo = {
         await (0, pool_1.query)('UPDATE assignments SET status = ? WHERE id = ?', [status, id]);
     },
     async delete(id) {
-        if (!useDb) {
+        if (!useDb()) {
             const idx = index_1.default.assignments.findIndex(x => x.id === id);
             if (idx === -1)
                 return false;
@@ -129,13 +129,13 @@ exports.AssignmentRepo = {
         return res.rowCount > 0;
     },
     async countAll() {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.assignments.length;
         const res = await (0, pool_1.query)('SELECT COUNT(*) as count FROM assignments');
         return parseInt(res.rows[0].count);
     },
     async countByUserId(userId) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.assignments.filter(a => a.assigned_user_id === userId).length;
         const res = await (0, pool_1.query)('SELECT COUNT(*) as count FROM assignments WHERE assigned_user_id = ?', [userId]);
         return parseInt(res.rows[0].count);
@@ -143,19 +143,19 @@ exports.AssignmentRepo = {
 };
 exports.TimelogRepo = {
     async findById(id) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.timelogs.find(t => t.id === id) || null;
         const res = await (0, pool_1.query)('SELECT * FROM time_logs WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
     async findActive(userId, assignmentId) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.timelogs.find(t => t.user_id === userId && t.assignment_id === assignmentId && !t.end_time) || null;
         const res = await (0, pool_1.query)('SELECT * FROM time_logs WHERE user_id = ? AND assignment_id = ? AND end_time IS NULL', [userId, assignmentId]);
         return res.rows[0] || null;
     },
     async create(userId, assignmentId) {
-        if (!useDb) {
+        if (!useDb()) {
             const t = { id: Date.now().toString(), user_id: userId, assignment_id: assignmentId, start_time: new Date().toISOString(), end_time: null, is_signed: false, created_at: new Date().toISOString() };
             index_1.default.timelogs.push(t);
             return t;
@@ -166,7 +166,7 @@ exports.TimelogRepo = {
         return { id, user_id: userId, assignment_id: assignmentId, start_time, end_time: null, is_signed: false, created_at: new Date().toISOString() };
     },
     async stop(id) {
-        if (!useDb) {
+        if (!useDb()) {
             const t = index_1.default.timelogs.find(x => x.id === id);
             if (t)
                 t.end_time = new Date().toISOString();
@@ -177,13 +177,13 @@ exports.TimelogRepo = {
         return res.rows[0];
     },
     async findByUserId(userId) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.timelogs.filter(t => t.user_id === userId);
         const res = await (0, pool_1.query)('SELECT * FROM time_logs WHERE user_id = ? ORDER BY start_time DESC', [userId]);
         return res.rows;
     },
     async updateSignedStatus(id, is_signed) {
-        if (!useDb) {
+        if (!useDb()) {
             const t = index_1.default.timelogs.find(x => x.id === id);
             if (t)
                 t.is_signed = is_signed;
@@ -194,7 +194,7 @@ exports.TimelogRepo = {
 };
 exports.ReportRepo = {
     async create(assignment_id, timelog_id, created_by_user_id, notes) {
-        if (!useDb) {
+        if (!useDb()) {
             const r = { id: Date.now().toString(), assignment_id, timelog_id, created_by_user_id, notes, signature_id: null, pdf_generated: false, email_sent: false, created_at: new Date().toISOString() };
             index_1.default.reports.push(r);
             return r;
@@ -204,31 +204,31 @@ exports.ReportRepo = {
         return { id, assignment_id, timelog_id, created_by_user_id, notes, signature_id: null, pdf_generated: false, email_sent: false, created_at: new Date().toISOString() };
     },
     async findByTimelogId(timelogId) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.reports.find(r => r.timelog_id === timelogId) || null;
         const res = await (0, pool_1.query)('SELECT * FROM reports WHERE timelog_id = ?', [timelogId]);
         return res.rows[0] || null;
     },
     async findById(id) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.reports.find(r => r.id === id) || null;
         const res = await (0, pool_1.query)('SELECT * FROM reports WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
     async findAll() {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.reports;
         const res = await (0, pool_1.query)('SELECT * FROM reports ORDER BY created_at DESC');
         return res.rows;
     },
     async findByUserId(userId) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.reports.filter(r => r.created_by_user_id === userId);
         const res = await (0, pool_1.query)('SELECT * FROM reports WHERE created_by_user_id = ? ORDER BY created_at DESC', [userId]);
         return res.rows;
     },
     async updateSignature(id, signature_id) {
-        if (!useDb) {
+        if (!useDb()) {
             const r = index_1.default.reports.find(x => x.id === id);
             if (r)
                 r.signature_id = signature_id;
@@ -239,13 +239,13 @@ exports.ReportRepo = {
 };
 exports.SignatureRepo = {
     async findById(id) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.signatures.find(s => s.id === id) || null;
         const res = await (0, pool_1.query)('SELECT * FROM signatures WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
     async create(timelog_id, image_data, signer_name) {
-        if (!useDb) {
+        if (!useDb()) {
             const s = { id: Date.now().toString(), report_id: '', timelog_id, image_data, signer_name, signed_at: new Date().toISOString() };
             index_1.default.signatures.push(s);
             return s;
@@ -257,13 +257,13 @@ exports.SignatureRepo = {
 };
 exports.BookingRequestRepo = {
     async countOpen() {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.bookingRequests.filter(r => r.status === 'open').length;
         const res = await (0, pool_1.query)("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'open'");
         return parseInt(res.rows[0].count);
     },
     async findAll(status) {
-        if (!useDb) {
+        if (!useDb()) {
             let list = [...index_1.default.bookingRequests];
             if (status)
                 list = list.filter(r => r.status === status);
@@ -280,7 +280,7 @@ exports.BookingRequestRepo = {
         return res.rows;
     },
     async create(data) {
-        if (!useDb) {
+        if (!useDb()) {
             const entry = {
                 id: Date.now().toString() + Math.random().toString(36).slice(2),
                 name: data.name,
@@ -314,13 +314,13 @@ exports.BookingRequestRepo = {
         };
     },
     async findById(id) {
-        if (!useDb)
+        if (!useDb())
             return index_1.default.bookingRequests.find(r => r.id === id) || null;
         const res = await (0, pool_1.query)('SELECT * FROM booking_requests WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
     async update(id, data) {
-        if (!useDb) {
+        if (!useDb()) {
             const entry = index_1.default.bookingRequests.find(r => r.id === id);
             if (!entry)
                 return null;
@@ -355,7 +355,7 @@ exports.BookingRequestRepo = {
 };
 exports.AuditRepo = {
     async create(entity_type, entity_id, action, actor_user_id, details) {
-        if (!useDb) {
+        if (!useDb()) {
             index_1.default.audit.push({
                 id: Date.now().toString() + Math.random().toString(36).slice(2),
                 entity_type,
@@ -371,7 +371,7 @@ exports.AuditRepo = {
         await (0, pool_1.query)('INSERT INTO audit_logs (id, entity_type, entity_id, action, actor_user_id, details) VALUES (?, ?, ?, ?, ?, ?)', [id, entity_type, entity_id, action, actor_user_id, details]);
     },
     async findAll(params) {
-        if (!useDb) {
+        if (!useDb()) {
             let entries = [...index_1.default.audit].reverse();
             if (params?.entity_type)
                 entries = entries.filter(e => e.entity_type === params.entity_type);
