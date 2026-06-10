@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
-import { ReportRepo } from '../db/queries';
+import { ReportRepo, TimelogRepo } from '../db/queries';
 
 const router = Router();
 
@@ -10,8 +10,6 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   if (!assignment_id || !timelog_id) {
     return res.status(400).json({ message: 'assignment_id and timelog_id are required' });
   }
-
-  const { TimelogRepo } = await import('../db/queries');
 
   // Check if timelog exists and is stopped
   const timelog = await TimelogRepo.findById(String(timelog_id));
