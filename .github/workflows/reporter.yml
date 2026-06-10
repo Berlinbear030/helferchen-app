@@ -1,0 +1,13 @@
+name: Activity Reporter
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Every 6 hours
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Backend Report Generation
+        run: curl -X POST "${{ secrets.BACKEND_URL }}/api/cron/report" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
