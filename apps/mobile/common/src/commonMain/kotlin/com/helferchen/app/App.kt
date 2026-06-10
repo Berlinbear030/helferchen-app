@@ -62,12 +62,17 @@ fun App() {
         Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF9FAFB)) {
             updateInfo?.let { info ->
                 AlertDialog(
-                    onDismissRequest = { },
+                    onDismissRequest = { vm.dismissUpdate() },
                     title = { Text("Update verfügbar") },
                     text = { Text("Eine neue Version (${info.versionName}) von Helferchen ist verfügbar. Bitte laden Sie das Update herunter.") },
                     confirmButton = {
                         Button(onClick = { uriHandler.openUri(info.downloadUrl) }) {
                             Text("Download")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { vm.dismissUpdate() }) {
+                            Text("Später")
                         }
                     }
                 )

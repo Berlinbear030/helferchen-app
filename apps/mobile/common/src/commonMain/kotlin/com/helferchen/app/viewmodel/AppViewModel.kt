@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 class AppViewModel(private val api: ApiClient = ApiClient()) {
+    companion object { const val CURRENT_VERSION_CODE = 2 }
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _user = MutableStateFlow<User?>(null)
@@ -43,12 +44,13 @@ class AppViewModel(private val api: ApiClient = ApiClient()) {
     fun checkForUpdate() {
         scope.launch {
             val info = api.checkUpdate()
-            // current versionCode is 1 (hardcoded for now, or could be passed from platform)
-            if (info != null && info.versionCode > 1) {
+            if (info != null && info.versionCode > CURRENT_VERSION_CODE) {
                 _updateInfo.value = info
             }
         }
     }
+
+    fun dismissUpdate() { _updateInfo.value = null }
 
     fun login(username: String, password: String, onSuccess: () -> Unit) {
         scope.launch {
