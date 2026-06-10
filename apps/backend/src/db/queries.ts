@@ -1,17 +1,18 @@
 import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, AuditEntry } from './index';
 import { query } from './pool';
+import { randomUUID } from 'crypto';
 
 const useDb = !!process.env.DATABASE_URL;
 
 export const UserRepo = {
   async findByUsername(username: string): Promise<User | null> {
     if (!useDb) return db.users.find(u => u.username === username) || null;
-    const res = await query('SELECT * FROM users WHERE username = $1', [username]);
+    const res = await query('SELECT * FROM users WHERE username = ?', [username]);
     return res.rows[0] || null;
   },
   async findById(id: string): Promise<User | null> {
     if (!useDb) return db.users.find(u => u.id === id) || null;
-    const res = await query('SELECT * FROM users WHERE id = $1', [id]);
+    const res = await query('SELECT * FROM users WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async findAll(): Promise<User[]> {
@@ -25,11 +26,12 @@ export const UserRepo = {
       db.users.push(u);
       return u;
     }
-    const res = await query(
-      'INSERT INTO users (username, password_hash, full_name, email, role) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [username, password_hash, full_name, email, role]
+    const id = randomUUID();
+    await query(
+      'INSERT INTO users (id, username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, username, password_hash, full_name, email, role]
     );
-    return res.rows[0];
+    return { id, username, password_hash, full_name, email, role: role as any, created_at: new Date().toISOString() };
   },
   async delete(id: string): Promise<boolean> {
     if (!useDb) {
@@ -38,12 +40,12 @@ export const UserRepo = {
       db.users.splice(idx, 1);
       return true;
     }
-    const res = await query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
-    return (res.rowCount ?? 0) > 0;
+    const res = await query('DELETE FROM users WHERE id = ?', [id]);
+    return res.rowCount > 0;
   },
   async countAll(): Promise<number> {
     if (!useDb) return db.users.length;
-    const res = await query('SELECT COUNT(*) FROM users');
+    const res = await query('SELECT COUNT(*) as count FROM users');
     return parseInt(res.rows[0].count);
   }
 };
@@ -56,7 +58,7 @@ export const CustomerRepo = {
   },
   async findById(id: string): Promise<Customer | null> {
     if (!useDb) return db.customers.find(c => c.id === id) || null;
-    const res = await query('SELECT * FROM customers WHERE id = $1', [id]);
+    const res = await query('SELECT * FROM customers WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async create(first_name: string, last_name: string, address: string, phone_number: string, notes: string): Promise<Customer> {
@@ -65,11 +67,12 @@ export const CustomerRepo = {
       db.customers.push(c);
       return c;
     }
-    const res = await query(
-      'INSERT INTO customers (first_name, last_name, address, phone_number, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [first_name, last_name, address, phone_number, notes]
+    const id = randomUUID();
+    await query(
+      'INSERT INTO customers (id, first_name, last_name, address, phone_number, notes) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, first_name, last_name, address, phone_number, notes]
     );
-    return res.rows[0];
+    return { id, first_name, last_name, address, phone_number, notes, created_at: new Date().toISOString() };
   }
 };
 
@@ -81,12 +84,12 @@ export const AssignmentRepo = {
   },
   async findByUserId(userId: string): Promise<Assignment[]> {
     if (!useDb) return db.assignments.filter(a => a.assigned_user_id === userId);
-    const res = await query('SELECT * FROM assignments WHERE assigned_user_id = $1 ORDER BY scheduled_at DESC', [userId]);
+    const res = await query('SELECT * FROM assignments WHERE assigned_user_id = ? ORDER BY scheduled_at DESC', [userId]);
     return res.rows;
   },
   async findById(id: string): Promise<Assignment | null> {
     if (!useDb) return db.assignments.find(a => a.id === id) || null;
-    const res = await query('SELECT * FROM assignments WHERE id = $1', [id]);
+    const res = await query('SELECT * FROM assignments WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async create(customer_id: string, assigned_user_id: string, title: string, description: string, scheduled_at: string): Promise<Assignment> {
@@ -95,11 +98,12 @@ export const AssignmentRepo = {
       db.assignments.push(a);
       return a;
     }
-    const res = await query(
-      'INSERT INTO assignments (customer_id, assigned_user_id, title, description, scheduled_at) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [customer_id, assigned_user_id, title, description, scheduled_at]
+    const id = randomUUID();
+    await query(
+      'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, customer_id, assigned_user_id, title, description, scheduled_at]
     );
-    return res.rows[0];
+    return { id, customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
   },
   async updateStatus(id: string, status: string): Promise<void> {
     if (!useDb) {
@@ -107,7 +111,7 @@ export const AssignmentRepo = {
       if (a) a.status = status as any;
       return;
     }
-    await query('UPDATE assignments SET status = $1 WHERE id = $2', [status, id]);
+    await query('UPDATE assignments SET status = ? WHERE id = ?', [status, id]);
   },
   async delete(id: string): Promise<boolean> {
     if (!useDb) {
@@ -116,17 +120,17 @@ export const AssignmentRepo = {
       db.assignments.splice(idx, 1);
       return true;
     }
-    const res = await query('DELETE FROM assignments WHERE id = $1 RETURNING id', [id]);
-    return (res.rowCount ?? 0) > 0;
+    const res = await query('DELETE FROM assignments WHERE id = ?', [id]);
+    return res.rowCount > 0;
   },
   async countAll(): Promise<number> {
     if (!useDb) return db.assignments.length;
-    const res = await query('SELECT COUNT(*) FROM assignments');
+    const res = await query('SELECT COUNT(*) as count FROM assignments');
     return parseInt(res.rows[0].count);
   },
   async countByUserId(userId: string): Promise<number> {
     if (!useDb) return db.assignments.filter(a => a.assigned_user_id === userId).length;
-    const res = await query('SELECT COUNT(*) FROM assignments WHERE assigned_user_id = $1', [userId]);
+    const res = await query('SELECT COUNT(*) as count FROM assignments WHERE assigned_user_id = ?', [userId]);
     return parseInt(res.rows[0].count);
   }
 };
@@ -134,13 +138,13 @@ export const AssignmentRepo = {
 export const TimelogRepo = {
   async findById(id: string): Promise<Timelog | null> {
     if (!useDb) return db.timelogs.find(t => t.id === id) || null;
-    const res = await query('SELECT * FROM time_logs WHERE id = $1', [id]);
+    const res = await query('SELECT * FROM time_logs WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async findActive(userId: string, assignmentId: string): Promise<Timelog | null> {
     if (!useDb) return db.timelogs.find(t => t.user_id === userId && t.assignment_id === assignmentId && !t.end_time) || null;
     const res = await query(
-      'SELECT * FROM time_logs WHERE user_id = $1 AND assignment_id = $2 AND end_time IS NULL',
+      'SELECT * FROM time_logs WHERE user_id = ? AND assignment_id = ? AND end_time IS NULL',
       [userId, assignmentId]
     );
     return res.rows[0] || null;
@@ -151,11 +155,13 @@ export const TimelogRepo = {
       db.timelogs.push(t);
       return t;
     }
-    const res = await query(
-      'INSERT INTO time_logs (user_id, assignment_id, start_time) VALUES ($1, $2, CURRENT_TIMESTAMP) RETURNING *',
-      [userId, assignmentId]
+    const id = randomUUID();
+    const start_time = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await query(
+      'INSERT INTO time_logs (id, user_id, assignment_id, start_time) VALUES (?, ?, ?, NOW())',
+      [id, userId, assignmentId]
     );
-    return res.rows[0];
+    return { id, user_id: userId, assignment_id: assignmentId, start_time, end_time: null, is_signed: false, created_at: new Date().toISOString() };
   },
   async stop(id: string): Promise<Timelog> {
     if (!useDb) {
@@ -163,15 +169,13 @@ export const TimelogRepo = {
       if (t) t.end_time = new Date().toISOString();
       return t!;
     }
-    const res = await query(
-      'UPDATE time_logs SET end_time = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
-      [id]
-    );
+    await query('UPDATE time_logs SET end_time = NOW() WHERE id = ?', [id]);
+    const res = await query('SELECT * FROM time_logs WHERE id = ?', [id]);
     return res.rows[0];
   },
   async findByUserId(userId: string): Promise<Timelog[]> {
     if (!useDb) return db.timelogs.filter(t => t.user_id === userId);
-    const res = await query('SELECT * FROM time_logs WHERE user_id = $1 ORDER BY start_time DESC', [userId]);
+    const res = await query('SELECT * FROM time_logs WHERE user_id = ? ORDER BY start_time DESC', [userId]);
     return res.rows;
   },
   async updateSignedStatus(id: string, is_signed: boolean): Promise<void> {
@@ -180,7 +184,7 @@ export const TimelogRepo = {
       if (t) t.is_signed = is_signed;
       return;
     }
-    await query('UPDATE time_logs SET is_signed = $1 WHERE id = $2', [is_signed, id]);
+    await query('UPDATE time_logs SET is_signed = ? WHERE id = ?', [is_signed, id]);
   }
 };
 
@@ -191,20 +195,21 @@ export const ReportRepo = {
       db.reports.push(r);
       return r;
     }
-    const res = await query(
-      'INSERT INTO reports (assignment_id, timelog_id, created_by_user_id, notes) VALUES ($1, $2, $3, $4) RETURNING *',
-      [assignment_id, timelog_id, created_by_user_id, notes]
+    const id = randomUUID();
+    await query(
+      'INSERT INTO reports (id, assignment_id, timelog_id, created_by_user_id, notes) VALUES (?, ?, ?, ?, ?)',
+      [id, assignment_id, timelog_id, created_by_user_id, notes]
     );
-    return res.rows[0];
+    return { id, assignment_id, timelog_id, created_by_user_id, notes, signature_id: null, pdf_generated: false, email_sent: false, created_at: new Date().toISOString() };
   },
   async findByTimelogId(timelogId: string): Promise<Report | null> {
     if (!useDb) return db.reports.find(r => r.timelog_id === timelogId) || null;
-    const res = await query('SELECT * FROM reports WHERE timelog_id = $1', [timelogId]);
+    const res = await query('SELECT * FROM reports WHERE timelog_id = ?', [timelogId]);
     return res.rows[0] || null;
   },
   async findById(id: string): Promise<Report | null> {
     if (!useDb) return db.reports.find(r => r.id === id) || null;
-    const res = await query('SELECT * FROM reports WHERE id = $1', [id]);
+    const res = await query('SELECT * FROM reports WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async findAll(): Promise<Report[]> {
@@ -214,7 +219,7 @@ export const ReportRepo = {
   },
   async findByUserId(userId: string): Promise<Report[]> {
     if (!useDb) return db.reports.filter(r => r.created_by_user_id === userId);
-    const res = await query('SELECT * FROM reports WHERE created_by_user_id = $1 ORDER BY created_at DESC', [userId]);
+    const res = await query('SELECT * FROM reports WHERE created_by_user_id = ? ORDER BY created_at DESC', [userId]);
     return res.rows;
   },
   async updateSignature(id: string, signature_id: string): Promise<void> {
@@ -223,14 +228,14 @@ export const ReportRepo = {
       if (r) r.signature_id = signature_id;
       return;
     }
-    await query('UPDATE reports SET signature_id = $1 WHERE id = $2', [signature_id, id]);
+    await query('UPDATE reports SET signature_id = ? WHERE id = ?', [signature_id, id]);
   }
 };
 
 export const SignatureRepo = {
   async findById(id: string): Promise<Signature | null> {
     if (!useDb) return db.signatures.find(s => s.id === id) || null;
-    const res = await query('SELECT * FROM signatures WHERE id = $1', [id]);
+    const res = await query('SELECT * FROM signatures WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async create(timelog_id: string, image_data: string, signer_name: string): Promise<Signature> {
@@ -239,18 +244,19 @@ export const SignatureRepo = {
       db.signatures.push(s);
       return s;
     }
-    const res = await query(
-      'INSERT INTO signatures (timelog_id, image_data, signer_name) VALUES ($1, $2, $3) RETURNING *',
-      [timelog_id, image_data, signer_name]
+    const id = randomUUID();
+    await query(
+      'INSERT INTO signatures (id, timelog_id, image_data, signer_name) VALUES (?, ?, ?, ?)',
+      [id, timelog_id, image_data, signer_name]
     );
-    return res.rows[0];
+    return { id, report_id: '', timelog_id, image_data, signer_name, signed_at: new Date().toISOString() };
   }
 };
 
 export const BookingRequestRepo = {
   async countOpen(): Promise<number> {
     if (!useDb) return db.bookingRequests.filter(r => r.status === 'open').length;
-    const res = await query("SELECT COUNT(*) FROM booking_requests WHERE status = 'open'");
+    const res = await query("SELECT COUNT(*) as count FROM booking_requests WHERE status = 'open'");
     return parseInt(res.rows[0].count);
   },
   async findAll(status?: string): Promise<BookingRequest[]> {
@@ -262,7 +268,7 @@ export const BookingRequestRepo = {
     let sql = 'SELECT * FROM booking_requests';
     const values: any[] = [];
     if (status) {
-      sql += ' WHERE status = $1';
+      sql += ' WHERE status = ?';
       values.push(status);
     }
     sql += ' ORDER BY created_at DESC';
@@ -287,15 +293,28 @@ export const BookingRequestRepo = {
       db.bookingRequests.push(entry);
       return entry;
     }
-    const res = await query(
-      'INSERT INTO booking_requests (name, phone, email, service_description, preferred_date, preferred_time) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [data.name, data.phone, data.email, data.service_description, data.preferred_date, data.preferred_time]
+    const id = randomUUID();
+    await query(
+      'INSERT INTO booking_requests (id, name, phone, email, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, data.name, data.phone, data.email, data.service_description, data.preferred_date, data.preferred_time]
     );
-    return res.rows[0];
+    return {
+      id,
+      name: data.name!,
+      phone: data.phone!,
+      email: data.email || '',
+      service_description: data.service_description!,
+      preferred_date: data.preferred_date!,
+      preferred_time: data.preferred_time!,
+      status: 'open',
+      assigned_user_id: null,
+      notes: '',
+      created_at: new Date().toISOString(),
+    };
   },
   async findById(id: string): Promise<BookingRequest | null> {
     if (!useDb) return db.bookingRequests.find(r => r.id === id) || null;
-    const res = await query('SELECT * FROM booking_requests WHERE id = $1', [id]);
+    const res = await query('SELECT * FROM booking_requests WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
   async update(id: string, data: Partial<BookingRequest>): Promise<BookingRequest | null> {
@@ -310,24 +329,21 @@ export const BookingRequestRepo = {
     const fields: string[] = [];
     const values: any[] = [];
     if (data.status) {
-      fields.push(`status = $${values.length + 1}`);
+      fields.push('status = ?');
       values.push(data.status);
     }
     if (data.assigned_user_id !== undefined) {
-      fields.push(`assigned_user_id = $${values.length + 1}`);
+      fields.push('assigned_user_id = ?');
       values.push(data.assigned_user_id);
     }
     if (data.notes !== undefined) {
-      fields.push(`notes = $${values.length + 1}`);
+      fields.push('notes = ?');
       values.push(data.notes);
     }
     if (fields.length === 0) return this.findById(id);
     values.push(id);
-    const res = await query(
-      `UPDATE booking_requests SET ${fields.join(', ')} WHERE id = $${values.length} RETURNING *`,
-      values
-    );
-    return res.rows[0];
+    await query(`UPDATE booking_requests SET ${fields.join(', ')} WHERE id = ?`, values);
+    return this.findById(id);
   }
 };
 
@@ -345,9 +361,10 @@ export const AuditRepo = {
       });
       return;
     }
+    const id = randomUUID();
     await query(
-      'INSERT INTO audit_logs (entity_type, entity_id, action, actor_user_id, details) VALUES ($1, $2, $3, $4, $5)',
-      [entity_type, entity_id, action, actor_user_id, details]
+      'INSERT INTO audit_logs (id, entity_type, entity_id, action, actor_user_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, entity_type, entity_id, action, actor_user_id, details]
     );
   },
   async findAll(params?: { entity_type?: string, entity_id?: string, limit?: number }): Promise<AuditEntry[]> {
@@ -362,17 +379,17 @@ export const AuditRepo = {
     const conditions: string[] = [];
     const values: any[] = [];
     if (params?.entity_type) {
-      conditions.push(`entity_type = $${values.length + 1}`);
+      conditions.push('entity_type = ?');
       values.push(params.entity_type);
     }
     if (params?.entity_id) {
-      conditions.push(`entity_id = $${values.length + 1}`);
+      conditions.push('entity_id = ?');
       values.push(params.entity_id);
     }
     if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
     sql += ' ORDER BY created_at DESC';
     if (params?.limit) {
-      sql += ` LIMIT $${values.length + 1}`;
+      sql += ' LIMIT ?';
       values.push(params.limit);
     }
     const res = await query(sql, values);
