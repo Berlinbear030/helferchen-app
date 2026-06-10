@@ -42,7 +42,11 @@ app.get('/', (_req: Request, res: Response) => {
 
 async function start() {
   if (process.env.DATABASE_URL) {
-    await initDatabase();
+    try {
+      await initDatabase();
+    } catch (err) {
+      console.error('Database initialization failed (running without DB):', err);
+    }
   }
   app.listen(port, () => {
     console.log(`Helferchen API running at http://localhost:${port}`);

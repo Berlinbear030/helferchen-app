@@ -9,7 +9,7 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 
-class ApiClient(private val baseUrl: String = "https://api.helferchen.info") {
+class ApiClient(private val baseUrl: String = "https://helferchen-api.onrender.com") {
     var token: String? = null
 
     private val client = HttpClient {
