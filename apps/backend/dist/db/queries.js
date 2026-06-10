@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AuditRepo = exports.BookingRequestRepo = exports.SignatureRepo = exports.ReportRepo = exports.TimelogRepo = exports.AssignmentRepo = exports.CustomerRepo = exports.UserRepo = void 0;
+exports.AuditRepo = exports.RoleRepo = exports.BookingRequestRepo = exports.SignatureRepo = exports.ReportRepo = exports.TimelogRepo = exports.AssignmentRepo = exports.CustomerRepo = exports.UserRepo = void 0;
 const index_1 = __importDefault(require("./index"));
 const pool_1 = require("./pool");
 const crypto_1 = require("crypto");
@@ -105,7 +105,8 @@ exports.AssignmentRepo = {
             return a;
         }
         const id = (0, crypto_1.randomUUID)();
-        await (0, pool_1.query)('INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)', [id, customer_id, assigned_user_id, title, description, scheduled_at]);
+        const formattedDate = scheduled_at.replace('T', ' ').slice(0, 19).padEnd(19, ':00').slice(0, 19);
+        await (0, pool_1.query)('INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)', [id, customer_id, assigned_user_id || null, title, description, formattedDate]);
         return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
     },
     async updateStatus(id, status) {
@@ -303,6 +304,7 @@ exports.BookingRequestRepo = {
                 name: data.name,
                 phone: data.phone,
                 email: data.email || '',
+                address: data.address || '',
                 service_description: data.service_description,
                 preferred_date: data.preferred_date,
                 preferred_time: data.preferred_time,
@@ -315,12 +317,13 @@ exports.BookingRequestRepo = {
             return entry;
         }
         const id = (0, crypto_1.randomUUID)();
-        await (0, pool_1.query)('INSERT INTO booking_requests (id, name, phone, email, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, data.name, data.phone, data.email, data.service_description, data.preferred_date, data.preferred_time]);
+        await (0, pool_1.query)('INSERT INTO booking_requests (id, name, phone, email, address, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, data.name, data.phone, data.email, data.address, data.service_description, data.preferred_date, data.preferred_time]);
         return {
             id,
             name: data.name,
             phone: data.phone,
             email: data.email || '',
+            address: data.address || '',
             service_description: data.service_description,
             preferred_date: data.preferred_date,
             preferred_time: data.preferred_time,
@@ -368,6 +371,40 @@ exports.BookingRequestRepo = {
         values.push(id);
         await (0, pool_1.query)(`UPDATE booking_requests SET ${fields.join(', ')} WHERE id = ?`, values);
         return this.findById(id);
+    }
+};
+exports.RoleRepo = {
+    async findAll() {
+        if (!useDb())
+            return [];
+        const res = await (0, pool_1.query)('SELECT * FROM roles ORDER BY is_system DESC, name ASC');
+        return res.rows;
+    },
+    async findByName(name) {
+        if (!useDb())
+            return null;
+        const res = await (0, pool_1.query)('SELECT * FROM roles WHERE name = ?', [name]);
+        return res.rows[0] || null;
+    },
+    async findById(id) {
+        if (!useDb())
+            return null;
+        const res = await (0, pool_1.query)('SELECT * FROM roles WHERE id = ?', [id]);
+        return res.rows[0] || null;
+    },
+    async create(name, display_name, permissions) {
+        const id = (0, crypto_1.randomUUID)();
+        const permsJson = JSON.stringify(permissions);
+        await (0, pool_1.query)('INSERT INTO roles (id, name, display_name, is_system, permissions) VALUES (?, ?, ?, FALSE, ?)', [id, name, display_name, permsJson]);
+        return { id, name, display_name, is_system: false, permissions: permsJson, created_at: new Date().toISOString() };
+    },
+    async update(id, display_name, permissions) {
+        const res = await (0, pool_1.query)('UPDATE roles SET display_name = ?, permissions = ? WHERE id = ?', [display_name, JSON.stringify(permissions), id]);
+        return res.rowCount > 0;
+    },
+    async delete(id) {
+        const res = await (0, pool_1.query)('DELETE FROM roles WHERE id = ? AND is_system = FALSE', [id]);
+        return res.rowCount > 0;
     }
 };
 exports.AuditRepo = {

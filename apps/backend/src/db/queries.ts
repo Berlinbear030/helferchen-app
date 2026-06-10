@@ -1,4 +1,4 @@
-import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, AuditEntry } from './index';
+import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, AuditEntry, Role } from './index';
 import { query, dbConnected } from './pool';
 import { randomUUID } from 'crypto';
 
@@ -362,6 +362,44 @@ export const BookingRequestRepo = {
     values.push(id);
     await query(`UPDATE booking_requests SET ${fields.join(', ')} WHERE id = ?`, values);
     return this.findById(id);
+  }
+};
+
+export const RoleRepo = {
+  async findAll(): Promise<Role[]> {
+    if (!useDb()) return [];
+    const res = await query('SELECT * FROM roles ORDER BY is_system DESC, name ASC');
+    return res.rows;
+  },
+  async findByName(name: string): Promise<Role | null> {
+    if (!useDb()) return null;
+    const res = await query('SELECT * FROM roles WHERE name = ?', [name]);
+    return res.rows[0] || null;
+  },
+  async findById(id: string): Promise<Role | null> {
+    if (!useDb()) return null;
+    const res = await query('SELECT * FROM roles WHERE id = ?', [id]);
+    return res.rows[0] || null;
+  },
+  async create(name: string, display_name: string, permissions: string[]): Promise<Role> {
+    const id = randomUUID();
+    const permsJson = JSON.stringify(permissions);
+    await query(
+      'INSERT INTO roles (id, name, display_name, is_system, permissions) VALUES (?, ?, ?, FALSE, ?)',
+      [id, name, display_name, permsJson]
+    );
+    return { id, name, display_name, is_system: false, permissions: permsJson, created_at: new Date().toISOString() };
+  },
+  async update(id: string, display_name: string, permissions: string[]): Promise<boolean> {
+    const res = await query(
+      'UPDATE roles SET display_name = ?, permissions = ? WHERE id = ?',
+      [display_name, JSON.stringify(permissions), id]
+    );
+    return res.rowCount > 0;
+  },
+  async delete(id: string): Promise<boolean> {
+    const res = await query('DELETE FROM roles WHERE id = ? AND is_system = FALSE', [id]);
+    return res.rowCount > 0;
   }
 };
 

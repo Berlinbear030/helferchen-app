@@ -6,6 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.initDatabase = initDatabase;
 const pool_1 = require("./pool");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const child_process_1 = require("child_process");
+function hashForDovecot(password) {
+    const r = (0, child_process_1.spawnSync)('openssl', ['passwd', '-6', password]);
+    if (r.status !== 0)
+        return '';
+    return `{SHA512-CRYPT}${r.stdout.toString().trim()}`;
+}
 async function initDatabase() {
     console.log('Initializing database schema...');
     await (0, pool_1.query)(`
@@ -97,7 +104,8 @@ async function initDatabase() {
       id CHAR(36) NOT NULL,
       name TEXT NOT NULL,
       phone TEXT NOT NULL,
-      email TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL,
+      address TEXT NOT NULL,
       service_description TEXT NOT NULL,
       preferred_date TEXT,
       preferred_time TEXT,
@@ -107,6 +115,21 @@ async function initDatabase() {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       FOREIGN KEY (assigned_user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+    // Ensure address column exists (for existing tables)
+    try {
+        await (0, pool_1.query)('ALTER TABLE booking_requests ADD COLUMN address TEXT AFTER email');
+    }
+    catch (e) {
+        // Ignore error if column already exists
+    }
+    await (0, pool_1.query)(`
+    CREATE TABLE IF NOT EXISTS mail_users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password VARCHAR(255) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
     await (0, pool_1.query)(`
@@ -121,6 +144,29 @@ async function initDatabase() {
       PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+    await (0, pool_1.query)(`
+    CREATE TABLE IF NOT EXISTS roles (
+      id CHAR(36) NOT NULL,
+      name VARCHAR(100) UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      is_system BOOLEAN NOT NULL DEFAULT FALSE,
+      permissions TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+    // Seed built-in system roles if they don't exist yet
+    const systemRoles = [
+        { name: 'admin', display_name: 'Administrator', permissions: JSON.stringify(['*']) },
+        { name: 'gebietsleiter', display_name: 'Gebietsleiter', permissions: JSON.stringify(['view_assignments', 'manage_assignments', 'reassign_assignments', 'view_customers', 'manage_customers', 'view_reports', 'view_timelogs', 'view_booking_requests', 'manage_booking_requests']) },
+        { name: 'kundenbetreuer', display_name: 'Kundenbetreuer', permissions: JSON.stringify(['view_assignments', 'manage_assignments', 'view_customers', 'view_reports', 'view_timelogs', 'view_booking_requests']) },
+        { name: 'buchhaltung', display_name: 'Buchhaltung', permissions: JSON.stringify(['view_assignments', 'view_customers', 'view_reports', 'view_timelogs']) },
+        { name: 'mitarbeiter', display_name: 'Mitarbeiter', permissions: JSON.stringify(['view_assignments', 'view_timelogs']) },
+        { name: 'employee', display_name: 'Mitarbeiter (Standard)', permissions: JSON.stringify(['view_assignments', 'view_timelogs']) },
+    ];
+    for (const r of systemRoles) {
+        await (0, pool_1.query)(`INSERT IGNORE INTO roles (id, name, display_name, is_system, permissions) VALUES (UUID(), ?, ?, TRUE, ?)`, [r.name, r.display_name, r.permissions]);
+    }
     console.log('Schema ready. Seeding default users...');
     const adminHash = await bcryptjs_1.default.hash('admin123', 10);
     const boardHash = await bcryptjs_1.default.hash('board2026', 10);
@@ -131,5 +177,14 @@ async function initDatabase() {
      VALUES (UUID(), ?, ?, ?, ?, ?)`, ['board', boardHash, 'Board Member', 'board@helferchen.info', 'admin']);
     await (0, pool_1.query)(`INSERT IGNORE INTO users (id, username, password_hash, full_name, email, role)
      VALUES (UUID(), ?, ?, ?, ?, ?)`, ['employee1', empHash, 'Max Mustermann', 'emp1@helferchen.info', 'employee']);
+    console.log('Seeding standard mail accounts...');
+    const mailPass = 'Helferchen2026!';
+    const mailHash = hashForDovecot(mailPass);
+    if (mailHash) {
+        const stdEmails = ['info@helferchen.info', 'kundenservice@helferchen.info', 'no-replay@helferchen.info'];
+        for (const email of stdEmails) {
+            await (0, pool_1.query)('INSERT IGNORE INTO mail_users (email, password) VALUES (?, ?)', [email, mailHash]);
+        }
+    }
     console.log('Database initialization complete.');
 }

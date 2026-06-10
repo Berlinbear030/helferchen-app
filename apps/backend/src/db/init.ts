@@ -149,6 +149,34 @@ export async function initDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS roles (
+      id CHAR(36) NOT NULL,
+      name VARCHAR(100) UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      is_system BOOLEAN NOT NULL DEFAULT FALSE,
+      permissions TEXT NOT NULL DEFAULT '[]',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // Seed built-in system roles if they don't exist yet
+  const systemRoles = [
+    { name: 'admin', display_name: 'Administrator', permissions: JSON.stringify(['*']) },
+    { name: 'gebietsleiter', display_name: 'Gebietsleiter', permissions: JSON.stringify(['view_assignments','manage_assignments','reassign_assignments','view_customers','manage_customers','view_reports','view_timelogs','view_booking_requests','manage_booking_requests']) },
+    { name: 'kundenbetreuer', display_name: 'Kundenbetreuer', permissions: JSON.stringify(['view_assignments','manage_assignments','view_customers','view_reports','view_timelogs','view_booking_requests']) },
+    { name: 'buchhaltung', display_name: 'Buchhaltung', permissions: JSON.stringify(['view_assignments','view_customers','view_reports','view_timelogs']) },
+    { name: 'mitarbeiter', display_name: 'Mitarbeiter', permissions: JSON.stringify(['view_assignments','view_timelogs']) },
+    { name: 'employee', display_name: 'Mitarbeiter (Standard)', permissions: JSON.stringify(['view_assignments','view_timelogs']) },
+  ];
+  for (const r of systemRoles) {
+    await query(
+      `INSERT IGNORE INTO roles (id, name, display_name, is_system, permissions) VALUES (UUID(), ?, ?, TRUE, ?)`,
+      [r.name, r.display_name, r.permissions]
+    );
+  }
+
   console.log('Schema ready. Seeding default users...');
 
   const adminHash = await bcrypt.hash('admin123', 10);

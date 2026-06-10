@@ -26,7 +26,14 @@ router.get('/my', auth_1.authenticateToken, async (req, res) => {
     res.json(result);
 });
 router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
-    const { customer_id, assigned_user_id, title, description, scheduled_at } = req.body;
+    let { customer_id, assigned_user_id, title, description, scheduled_at, new_customer } = req.body;
+    if (customer_id === 'NEW_CUSTOMER' && new_customer) {
+        const names = new_customer.name.split(' ');
+        const first = names[0];
+        const last = names.slice(1).join(' ') || 'Unbekannt';
+        const customer = await queries_1.CustomerRepo.create(first, last, new_customer.address || '', new_customer.phone || '', '');
+        customer_id = customer.id;
+    }
     if (!customer_id || !title) {
         return res.status(400).json({ message: 'customer_id and title are required' });
     }

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { spawnSync } from 'child_process';
-import { UserRepo, AuditRepo, CustomerRepo, AssignmentRepo, TimelogRepo, ReportRepo, SignatureRepo } from '../db/queries';
+import { UserRepo, AuditRepo, CustomerRepo, AssignmentRepo, TimelogRepo, ReportRepo, SignatureRepo, RoleRepo } from '../db/queries';
 import { query, dbConnected } from '../db/pool';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
 
@@ -148,6 +148,59 @@ router.get('/dashboard', async (req: AuthRequest, res: Response) => {
   };
 
   res.json(stats);
+});
+
+// GET /api/admin/roles — list all roles
+router.get('/roles', async (req: AuthRequest, res: Response) => {
+  const roles = await RoleRepo.findAll();
+  res.json(roles.map(r => ({ ...r, permissions: JSON.parse(r.permissions || '[]') })));
+});
+
+// POST /api/admin/roles — create a custom role
+router.post('/roles', async (req: AuthRequest, res: Response) => {
+  const { name, display_name, permissions } = req.body;
+  if (!name || !display_name) return res.status(400).json({ message: 'name and display_name are required' });
+  const existing = await RoleRepo.findByName(name);
+  if (existing) return res.status(409).json({ message: 'Role name already exists' });
+  const role = await RoleRepo.create(String(name), String(display_name), Array.isArray(permissions) ? permissions : []);
+  await AuditRepo.create('role', role.id, 'created', req.user!.id, `Role ${name} created`);
+  res.status(201).json({ ...role, permissions: JSON.parse(role.permissions) });
+});
+
+// PATCH /api/admin/roles/:id — update role display_name and permissions
+router.patch('/roles/:id', async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { display_name, permissions } = req.body;
+  const role = await RoleRepo.findById(id as string);
+  if (!role) return res.status(404).json({ message: 'Role not found' });
+  if (role.is_system && role.name === 'admin') return res.status(403).json({ message: 'Cannot modify admin role permissions' });
+  const ok = await RoleRepo.update(id as string, display_name || role.display_name, Array.isArray(permissions) ? permissions : JSON.parse(role.permissions || '[]'));
+  if (!ok) return res.status(404).json({ message: 'Role not found' });
+  await AuditRepo.create('role', id as string, 'updated', req.user!.id, `Role ${role.name} updated`);
+  res.json({ message: 'Updated' });
+});
+
+// DELETE /api/admin/roles/:id — delete a custom role
+router.delete('/roles/:id', async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const role = await RoleRepo.findById(id as string);
+  if (!role) return res.status(404).json({ message: 'Role not found' });
+  if (role.is_system) return res.status(403).json({ message: 'Cannot delete system roles' });
+  const ok = await RoleRepo.delete(id as string);
+  if (!ok) return res.status(404).json({ message: 'Role not found or is system role' });
+  await AuditRepo.create('role', id as string, 'deleted', req.user!.id, `Role ${role.name} deleted`);
+  res.status(204).send();
+});
+
+// PATCH /api/admin/users/:id — update user role
+router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
+  const { role } = req.body;
+  if (!role) return res.status(400).json({ message: 'role is required' });
+  const user = await UserRepo.findById(req.params.id as string);
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  await query('UPDATE users SET role = ? WHERE id = ?', [role, req.params.id]);
+  await AuditRepo.create('user', req.params.id as string, 'role_changed', req.user!.id, `Role changed to ${role}`);
+  res.json({ message: 'Updated' });
 });
 
 export default router;

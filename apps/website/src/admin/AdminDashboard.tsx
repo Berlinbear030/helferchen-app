@@ -6,6 +6,7 @@ import Reports from './Reports';
 import AuditTrail from './AuditTrail';
 import ExportPage from './ExportPage';
 import FraudDetection from './FraudDetection';
+import Settings from './Settings';
 import './admin.css';
 
 const NAV = [
@@ -15,6 +16,7 @@ const NAV = [
   { path: 'audit', label: 'Audit-Trail' },
   { path: 'export', label: 'Export' },
   { path: 'fraud', label: 'Betrugserkennung' },
+  { path: 'settings', label: 'Einstellungen' },
 ];
 
 export default function AdminDashboard() {
@@ -70,6 +72,7 @@ export default function AdminDashboard() {
           <Route path="audit" element={<AuditTrail />} />
           <Route path="export" element={<ExportPage />} />
           <Route path="fraud" element={<FraudDetection />} />
+          <Route path="settings" element={<Settings />} />
         </Routes>
       </main>
     </div>

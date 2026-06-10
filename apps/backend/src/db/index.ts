@@ -87,6 +87,15 @@ export interface BookingRequest {
   created_at: string;
 }
 
+export interface Role {
+  id: string;
+  name: string;
+  display_name: string;
+  is_system: boolean;
+  permissions: string; // JSON array string
+  created_at: string;
+}
+
 const adminHash = bcrypt.hashSync('admin123', 10);
 const boardHash = bcrypt.hashSync('board2026', 10);
 const empHash = bcrypt.hashSync('employee123', 10);

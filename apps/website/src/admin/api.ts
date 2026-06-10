@@ -77,11 +77,22 @@ export interface Timelog {
   created_at: string;
 }
 
+export interface Role {
+  id: string;
+  name: string;
+  display_name: string;
+  is_system: boolean;
+  permissions: string[];
+  created_at: string;
+}
+
 export const adminApi = {
   getDashboard: () => apiFetch<DashboardStats>('/admin/dashboard'),
   getUsers: () => apiFetch<User[]>('/admin/users'),
   createUser: (data: { username: string; password: string; role: string; email?: string; full_name?: string }) =>
     apiFetch<User>('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUserRole: (id: string, role: string) =>
+    apiFetch<void>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
   deleteUser: (id: string) =>
     apiFetch<void>(`/admin/users/${id}`, { method: 'DELETE' }),
   getAudit: (params?: { entity_type?: string; entity_id?: string; limit?: number }) => {
@@ -94,4 +105,11 @@ export const adminApi = {
   getExport: () => apiFetch<Record<string, unknown>>('/admin/export'),
   getReports: () => apiFetch<Report[]>('/reports'),
   getTimelogs: () => apiFetch<Timelog[]>('/timelogs/all').catch(() => [] as Timelog[]),
+  getRoles: () => apiFetch<Role[]>('/admin/roles'),
+  createRole: (data: { name: string; display_name: string; permissions: string[] }) =>
+    apiFetch<Role>('/admin/roles', { method: 'POST', body: JSON.stringify(data) }),
+  updateRole: (id: string, data: { display_name: string; permissions: string[] }) =>
+    apiFetch<void>(`/admin/roles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRole: (id: string) =>
+    apiFetch<void>(`/admin/roles/${id}`, { method: 'DELETE' }),
 };
