@@ -15,7 +15,7 @@ interface DashboardStats {
 }
 interface BookingRequest {
   id: string; name: string; phone: string; email: string;
-  service_description: string; preferred_date: string; preferred_time: string;
+  address: string; service_description: string; preferred_date: string; preferred_time: string;
   status: string; assigned_user_id: string | null; notes: string; created_at: string;
 }
 
@@ -213,45 +213,55 @@ function BookingRequestsTab() {
         {opts.map(o => <button key={o.v} className={`filter-btn ${filter === o.v ? 'active' : ''}`} onClick={() => setFilter(o.v)}>{o.l}</button>)}
       </div>
       {loading ? <div className="loading-text">Lade Anfragen…</div> : (
-        requests.length === 0
-          ? <p className="empty-state">Keine {opts.find(o => o.v === filter)?.l.toLowerCase()} Anfragen.</p>
-          : requests.map(r => (
-            <div key={r.id} className="booking-request-card">
-              <div className="booking-request-header">
-                <strong>{r.name}</strong>
-                <span className="status-badge">{opts.find(o => o.v === r.status)?.l || r.status}</span>
+        <>
+          {requests.length === 0
+            ? <p className="empty-state">Keine {opts.find(o => o.v === filter)?.l.toLowerCase()} Anfragen.</p>
+            : requests.map(r => (
+              <div key={r.id} className="booking-request-card">
+                <div className="booking-request-header">
+                  <strong>{r.name}</strong>
+                  <span className="status-badge">{opts.find(o => o.v === r.status)?.l || r.status}</span>
+                </div>
+                <p>📞 {r.phone}{r.email && ` · ✉ ${r.email}`}</p>
+                {r.address && <p>📍 {r.address}</p>}
+                <p>📅 {r.preferred_date} um {r.preferred_time} Uhr</p>
+                <p className="booking-service">📝 {r.service_description}</p>
+                <p style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>Eingegangen: {new Date(r.created_at).toLocaleString('de-DE')}</p>
+                {r.status === 'open' && (
+                  <div className="booking-request-actions">
+                    <button className="btn-success" onClick={() => update(r.id, { status: 'accepted' })}>Annehmen</button>
+                    <button className="btn-danger" onClick={() => update(r.id, { status: 'rejected' })}>Ablehnen</button>
+                  </div>
+                )}
+                {r.status === 'accepted' && (
+                  <div className="booking-request-actions" style={{ alignItems: 'center', gap: '8px' }}>
+                    <select
+                      value={assignSelects[r.id] || ''}
+                      onChange={e => setAssignSelects(s => ({ ...s, [r.id]: e.target.value }))}
+                      style={{ fontSize: '0.9rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #D1D5DB' }}
+                    >
+                      <option value="">– Mitarbeiter wählen –</option>
+                      {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                    </select>
+                    <button
+                      className="btn-primary"
+                      disabled={!assignSelects[r.id]}
+                      onClick={() => update(r.id, { status: 'assigned', assigned_user_id: assignSelects[r.id] })}
+                    >
+                      Zuweisen
+                    </button>
+                  </div>
+                )}
               </div>
-              <p>📞 {r.phone}{r.email && ` · ✉ ${r.email}`}</p>
-              <p>📅 {r.preferred_date} um {r.preferred_time} Uhr</p>
-              <p className="booking-service">📝 {r.service_description}</p>
-              <p style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>Eingegangen: {new Date(r.created_at).toLocaleString('de-DE')}</p>
-              {r.status === 'open' && (
-                <div className="booking-request-actions">
-                  <button className="btn-success" onClick={() => update(r.id, { status: 'accepted' })}>Annehmen</button>
-                  <button className="btn-danger" onClick={() => update(r.id, { status: 'rejected' })}>Ablehnen</button>
-                </div>
-              )}
-              {r.status === 'accepted' && (
-                <div className="booking-request-actions" style={{ alignItems: 'center', gap: '8px' }}>
-                  <select
-                    value={assignSelects[r.id] || ''}
-                    onChange={e => setAssignSelects(s => ({ ...s, [r.id]: e.target.value }))}
-                    style={{ fontSize: '0.9rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #D1D5DB' }}
-                  >
-                    <option value="">– Mitarbeiter wählen –</option>
-                    {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
-                  </select>
-                  <button
-                    className="btn-primary"
-                    disabled={!assignSelects[r.id]}
-                    onClick={() => update(r.id, { status: 'assigned', assigned_user_id: assignSelects[r.id] })}
-                  >
-                    Zuweisen
-                  </button>
-                </div>
-              )}
+            ))
+          }
+          {requests.some(r => r.address) && (
+            <div style={{ marginTop: '24px' }}>
+              <h4 style={{ marginBottom: '4px' }}>Kartenansicht</h4>
+              <BookingRequestsMap requests={requests} />
             </div>
-          ))
+          )}
+        </>
       )}
     </div>
   );
@@ -504,6 +514,67 @@ function OsmMapView({ mine, unassigned }: { mine: MapAssignment[]; unassigned: M
       <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '0.85rem' }}>
         <span>🟡 Nicht zugewiesen ({unassigned.length})</span>
         <span>🟢 Meine Aufträge ({mine.length})</span>
+      </div>
+      <div ref={mapRef} className="map-container" />
+    </div>
+  );
+}
+
+// ── Booking Requests Map ───────────────────────────────────────────────────────
+
+function BookingRequestsMap({ requests }: { requests: BookingRequest[] }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<any>(null);
+  const markers = useRef<any[]>([]);
+  const [status, setStatus] = useState('Karte wird geladen…');
+
+  useEffect(() => {
+    let cancelled = false;
+    loadLeaflet().then(() => {
+      if (cancelled || !mapRef.current) return;
+      const L = (window as any).L;
+      if (!mapInstance.current) {
+        mapInstance.current = L.map(mapRef.current).setView([51.1657, 10.4515], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+          maxZoom: 19,
+        }).addTo(mapInstance.current);
+      }
+      markers.current.forEach(m => m.remove());
+      markers.current = [];
+
+      const withAddress = requests.filter(r => r.address);
+      if (withAddress.length === 0) { setStatus('Keine Adressen zum Anzeigen.'); return; }
+      setStatus(`Geocoding ${withAddress.length} Adressen…`);
+      let done = 0;
+      withAddress.forEach(async (r, i) => {
+        if (i > 0) await new Promise(res => setTimeout(res, i * 1100));
+        const coords = await geocodeNominatim(r.address);
+        done++;
+        if (done === withAddress.length) setStatus('');
+        if (!coords || cancelled || !mapInstance.current) return;
+        const statusColor = r.status === 'open' ? '#f59e0b' : r.status === 'accepted' ? '#3b82f6' : '#6b7280';
+        const marker = (window as any).L.marker(coords, { icon: makePin(statusColor) })
+          .addTo(mapInstance.current)
+          .bindPopup(
+            `<strong>${r.name}</strong><br>` +
+            `📍 ${r.address}<br>` +
+            `📅 ${r.preferred_date} ${r.preferred_time} Uhr<br>` +
+            `📝 ${r.service_description.slice(0, 60)}${r.service_description.length > 60 ? '…' : ''}<br>` +
+            `<small style="color:${statusColor}">${r.status === 'open' ? '🟡 Offen' : r.status === 'accepted' ? '🔵 Angenommen' : r.status}</small>`
+          );
+        markers.current.push(marker);
+      });
+    }).catch(e => setStatus(e.message));
+    return () => { cancelled = true; };
+  }, [requests]);
+
+  return (
+    <div style={{ marginTop: '16px' }}>
+      {status && <p style={{ color: '#666', fontSize: '0.85rem', margin: '4px 0' }}>{status}</p>}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '0.85rem' }}>
+        <span>🟡 Offen</span>
+        <span>🔵 Angenommen</span>
       </div>
       <div ref={mapRef} className="map-container" />
     </div>
