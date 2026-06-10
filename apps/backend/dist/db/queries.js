@@ -100,13 +100,13 @@ exports.AssignmentRepo = {
     },
     async create(customer_id, assigned_user_id, title, description, scheduled_at) {
         if (!useDb()) {
-            const a = { id: Date.now().toString(), customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
+            const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
             index_1.default.assignments.push(a);
             return a;
         }
         const id = (0, crypto_1.randomUUID)();
         await (0, pool_1.query)('INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)', [id, customer_id, assigned_user_id, title, description, scheduled_at]);
-        return { id, customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
+        return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
     },
     async updateStatus(id, status) {
         if (!useDb()) {

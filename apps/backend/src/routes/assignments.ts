@@ -28,12 +28,12 @@ router.get('/my', authenticateToken, async (req: AuthRequest, res: Response) => 
 
 router.post('/', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   const { customer_id, assigned_user_id, title, description, scheduled_at } = req.body;
-  if (!customer_id || !assigned_user_id || !title) {
-    return res.status(400).json({ message: 'customer_id, assigned_user_id, and title are required' });
+  if (!customer_id || !title) {
+    return res.status(400).json({ message: 'customer_id and title are required' });
   }
   const assignment = await AssignmentRepo.create(
     String(customer_id),
-    String(assigned_user_id),
+    assigned_user_id ? String(assigned_user_id) : null,
     String(title),
     String(description || ''),
     String(scheduled_at || new Date().toISOString())

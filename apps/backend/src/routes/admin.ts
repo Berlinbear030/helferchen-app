@@ -1,7 +1,36 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { spawnSync } from 'child_process';
 import { UserRepo, AuditRepo, CustomerRepo, AssignmentRepo, TimelogRepo, ReportRepo, SignatureRepo } from '../db/queries';
+import { query, dbConnected } from '../db/pool';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
+
+const MAIL_DOMAIN = 'helferchen.info';
+
+function normalizeLastName(fullName: string): string {
+  const last = fullName.trim().split(/\s+/).pop() || fullName;
+  return last.toLowerCase()
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9.-]/g, '');
+}
+
+function hashForDovecot(password: string): string {
+  const r = spawnSync('openssl', ['passwd', '-6', password]);
+  if (r.status !== 0) return '';
+  return `{SHA512-CRYPT}${r.stdout.toString().trim()}`;
+}
+
+async function createMailAccount(email: string, password: string): Promise<void> {
+  if (!dbConnected) return;
+  const hash = hashForDovecot(password);
+  if (!hash) return;
+  await query('INSERT IGNORE INTO mail_users (email, password) VALUES (?, ?)', [email, hash]);
+}
+
+async function deleteMailAccount(email: string): Promise<void> {
+  if (!dbConnected) return;
+  await query('DELETE FROM mail_users WHERE email = ?', [email]);
+}
 
 const router = Router();
 
@@ -23,20 +52,33 @@ router.post('/users', async (req: AuthRequest, res: Response) => {
   if (existing) return res.status(409).json({ message: 'Username already exists' });
 
   const password_hash = await bcrypt.hash(password, 10);
-  const user = await UserRepo.create(username, password_hash, full_name || username, email || '', role);
-  
-  await AuditRepo.create('user', user.id, 'created', req.user!.id, `User ${username} created with role ${role}`);
-  res.status(201).json({ id: user.id, username: user.username, role: user.role });
+  const name = full_name || username;
+  const mailLocal = normalizeLastName(name);
+  const mailAddress = `${mailLocal}@${MAIL_DOMAIN}`;
+  const userEmail = email || mailAddress;
+
+  const user = await UserRepo.create(username, password_hash, name, userEmail, role);
+  await createMailAccount(mailAddress, password);
+
+  await AuditRepo.create('user', user.id, 'created', req.user!.id, `User ${username} created with role ${role}, email: ${mailAddress}`);
+  res.status(201).json({ id: user.id, username: user.username, role: user.role, email: userEmail, mail_address: mailAddress });
 });
 
 // DELETE /api/admin/users/:id
 router.delete('/users/:id', async (req: AuthRequest, res: Response) => {
   const userId = req.params.id as string;
   if (userId === req.user!.id) return res.status(400).json({ message: 'Cannot delete yourself' });
-  
+
+  const userToDelete = await UserRepo.findById(userId);
   const success = await UserRepo.delete(userId);
   if (!success) return res.status(404).json({ message: 'User not found' });
-  
+
+  if (userToDelete?.email) {
+    await deleteMailAccount(userToDelete.email);
+    const mailLocal = normalizeLastName(userToDelete.full_name || '');
+    if (mailLocal) await deleteMailAccount(`${mailLocal}@${MAIL_DOMAIN}`);
+  }
+
   await AuditRepo.create('user', userId, 'deleted', req.user!.id, 'User deleted');
   res.status(204).send();
 });

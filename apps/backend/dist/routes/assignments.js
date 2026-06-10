@@ -27,10 +27,10 @@ router.get('/my', auth_1.authenticateToken, async (req, res) => {
 });
 router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
     const { customer_id, assigned_user_id, title, description, scheduled_at } = req.body;
-    if (!customer_id || !assigned_user_id || !title) {
-        return res.status(400).json({ message: 'customer_id, assigned_user_id, and title are required' });
+    if (!customer_id || !title) {
+        return res.status(400).json({ message: 'customer_id and title are required' });
     }
-    const assignment = await queries_1.AssignmentRepo.create(String(customer_id), String(assigned_user_id), String(title), String(description || ''), String(scheduled_at || new Date().toISOString()));
+    const assignment = await queries_1.AssignmentRepo.create(String(customer_id), assigned_user_id ? String(assigned_user_id) : null, String(title), String(description || ''), String(scheduled_at || new Date().toISOString()));
     res.status(201).json(assignment);
 });
 // GET /api/assignments/all — admin sees all assignments with customer + assigned user

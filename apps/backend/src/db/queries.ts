@@ -92,9 +92,9 @@ export const AssignmentRepo = {
     const res = await query('SELECT * FROM assignments WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
-  async create(customer_id: string, assigned_user_id: string, title: string, description: string, scheduled_at: string): Promise<Assignment> {
+  async create(customer_id: string, assigned_user_id: string | null, title: string, description: string, scheduled_at: string): Promise<Assignment> {
     if (!useDb()) {
-      const a = { id: Date.now().toString(), customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending' as const, created_at: new Date().toISOString() };
+      const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending' as const, created_at: new Date().toISOString() };
       db.assignments.push(a);
       return a;
     }
@@ -103,7 +103,7 @@ export const AssignmentRepo = {
       'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)',
       [id, customer_id, assigned_user_id, title, description, scheduled_at]
     );
-    return { id, customer_id, assigned_user_id, title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
+    return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
   },
   async updateStatus(id: string, status: string): Promise<void> {
     if (!useDb()) {

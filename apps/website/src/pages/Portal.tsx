@@ -181,14 +181,20 @@ function TourTab({ assignments }: { assignments: Assignment[] }) {
 
 function BookingRequestsTab() {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('open');
+  const [assignSelects, setAssignSelects] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${API}/booking-requests?status=${filter}`, { headers: authHeaders() });
-      setRequests(await r.json());
+      const [rRes, uRes] = await Promise.all([
+        fetch(`${API}/booking-requests?status=${filter}`, { headers: authHeaders() }),
+        fetch(`${API}/admin/users`, { headers: authHeaders() }),
+      ]);
+      if (rRes.ok) setRequests(await rRes.json());
+      if (uRes.ok) setEmployees(await uRes.json());
     } finally { setLoading(false); }
   }, [filter]);
 
@@ -226,7 +232,23 @@ function BookingRequestsTab() {
                 </div>
               )}
               {r.status === 'accepted' && (
-                <button className="btn-primary" onClick={() => update(r.id, { status: 'assigned' })}>Als zugewiesen markieren</button>
+                <div className="booking-request-actions" style={{ alignItems: 'center', gap: '8px' }}>
+                  <select
+                    value={assignSelects[r.id] || ''}
+                    onChange={e => setAssignSelects(s => ({ ...s, [r.id]: e.target.value }))}
+                    style={{ fontSize: '0.9rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #D1D5DB' }}
+                  >
+                    <option value="">– Mitarbeiter wählen –</option>
+                    {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                  </select>
+                  <button
+                    className="btn-primary"
+                    disabled={!assignSelects[r.id]}
+                    onClick={() => update(r.id, { status: 'assigned', assigned_user_id: assignSelects[r.id] })}
+                  >
+                    Zuweisen
+                  </button>
+                </div>
               )}
             </div>
           ))
@@ -387,14 +409,6 @@ function EmployeesTab() {
         ))}
       </div>
 
-      <div className="apk-download-box">
-        <span>📲</span>
-        <div>
-          <strong>Helferchen App für Android</strong>
-          <p>Zeiterfassung und Tourenplanung direkt auf dem Smartphone</p>
-        </div>
-        <a href="/downloads/helferchen-mobile.apk" className="btn-primary btn-sm" download>App herunterladen</a>
-      </div>
     </div>
   );
 }
@@ -689,9 +703,6 @@ export default function Portal() {
         <div className="portal-header-left">
           <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
           <span className="portal-user">Angemeldet als <strong>{user.full_name}</strong></span>
-          <a href="/downloads/helferchen-mobile.apk" className="btn-secondary btn-sm" style={{ marginLeft: '16px', fontSize: '0.8rem' }}>
-            📲 App laden
-          </a>
         </div>
         <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>Abmelden</button>
       </header>
