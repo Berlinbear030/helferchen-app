@@ -699,6 +699,7 @@ export default function Portal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const deferredPrompt = useRef<any>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -706,6 +707,12 @@ export default function Portal() {
     if (!token || !userData) { navigate('/login'); return; }
     setUser(JSON.parse(userData));
   }, [navigate]);
+
+  useEffect(() => {
+    const handler = (e: Event) => { e.preventDefault(); deferredPrompt.current = e; };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
@@ -723,6 +730,20 @@ export default function Portal() {
 
   useEffect(() => { if (user) loadData(); }, [user, loadData]);
 
+  const handleInstallApp = async () => {
+    if (deferredPrompt.current) {
+      deferredPrompt.current.prompt();
+      await deferredPrompt.current.userChoice;
+      deferredPrompt.current = null;
+    } else {
+      alert('App ist bereits installiert oder öffne diese Seite im Browser und nutze "Zum Startbildschirm hinzufügen".');
+    }
+  };
+
+  const handleOrderMarketing = () => {
+    window.open('mailto:info@helferchen.info?subject=Werbematerial%20bestellen&body=Hallo%2C%0A%0Aich%20m%C3%B6chte%20Werbematerial%20bestellen.%0A%0AAnzahl%20und%20Art%3A%20', '_blank');
+  };
+
   if (!user) return <div className="loading-screen">Laden…</div>;
 
   const isAdmin = user.role === 'admin';
@@ -730,21 +751,39 @@ export default function Portal() {
     { id: 'dashboard', label: '📊 Dashboard' },
     { id: 'appointments', label: '📅 Termine' },
     { id: 'tour', label: '🗺️ Tour' },
-    { id: 'assignments-admin', label: '📋 Aufträge', adminOnly: true },
     { id: 'booking-requests', label: '📬 Anfragen', adminOnly: true },
     { id: 'timelogs', label: '⏱ Zeiten' },
     { id: 'employees', label: '👥 Mitarbeiter', adminOnly: true },
+    { id: 'assignments-admin', label: '🧾 Rechnungen', adminOnly: true },
   ];
 
   return (
     <div className="portal-layout">
-      <header className="portal-header">
-        <div className="portal-header-left">
-          <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
-          <span className="portal-user">Angemeldet als <strong>{user.full_name}</strong></span>
+      <div className="portal-header-wrap">
+        <header className="portal-header">
+          <div className="portal-header-left">
+            <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
+            <span className="portal-user">Angemeldet als <strong>{user.full_name}</strong></span>
+          </div>
+          <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>Abmelden</button>
+        </header>
+
+        <div className="portal-action-bar">
+          <div className="portal-action-left">
+            <button className="btn-action-outline" onClick={handleInstallApp}>
+              <span>📱</span> App laden
+            </button>
+            <button className="btn-action-outline" onClick={handleOrderMarketing}>
+              <span>🖨</span> Werbematerial bestellen
+            </button>
+          </div>
+          {isAdmin && (
+            <button className="btn-action-billing" onClick={() => navigate('/admin/billing')}>
+              Abrechnung
+            </button>
+          )}
         </div>
-        <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>Abmelden</button>
-      </header>
+      </div>
 
       <nav className="portal-tabs">
         {tabs.filter(t => !t.adminOnly || isAdmin).map(t => (
@@ -752,6 +791,11 @@ export default function Portal() {
             {t.label}
           </button>
         ))}
+        {isAdmin && (
+          <button className="tab-btn tab-btn--settings" onClick={() => navigate('/admin')} title="Admin-Einstellungen">
+            ⚙
+          </button>
+        )}
       </nav>
 
       <main className="portal-content">

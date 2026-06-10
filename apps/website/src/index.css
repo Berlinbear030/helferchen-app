@@ -498,7 +498,6 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 .portal-header-left { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .portal-logo { font-size: 1.3rem; font-weight: 900; letter-spacing: -0.5px; }
@@ -517,12 +516,66 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 }
 .btn-logout:hover { background: rgba(255,255,255,0.25); }
 
+.portal-header-wrap {
+  background: var(--navy);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.portal-action-bar {
+  background: rgba(0,0,0,0.15);
+  padding: 8px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.portal-action-left {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-action-outline {
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,0.5);
+  border-radius: 20px;
+  color: rgba(255,255,255,0.9);
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-action-outline:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.8);
+  color: #fff;
+}
+
+.btn-action-billing {
+  background: #dc2626;
+  border: none;
+  border-radius: 20px;
+  color: #fff;
+  padding: 6px 18px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-action-billing:hover { background: #b91c1c; }
+
 .portal-tabs {
   background: var(--white);
   border-bottom: 2px solid #e8edf2;
   display: flex;
   gap: 0;
   padding: 0 24px;
+  align-items: stretch;
 }
 .tab-btn {
   background: none;
@@ -538,6 +591,7 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 }
 .tab-btn:hover { color: var(--navy); }
 .tab-active { color: var(--navy) !important; border-bottom-color: var(--orange) !important; }
+.tab-btn--settings { margin-left: auto; font-size: 1.1rem; padding: 16px 16px; }
 
 .portal-content {
   flex: 1;
