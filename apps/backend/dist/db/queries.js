@@ -12,7 +12,7 @@ exports.UserRepo = {
     async findByUsername(username) {
         if (!useDb())
             return index_1.default.users.find(u => u.username === username) || null;
-        const res = await (0, pool_1.query)('SELECT * FROM users WHERE username = ?', [username]);
+        const res = await (0, pool_1.query)('SELECT * FROM users WHERE username = ? AND deleted_at IS NULL', [username]);
         return res.rows[0] || null;
     },
     async findById(id) {
@@ -24,7 +24,7 @@ exports.UserRepo = {
     async findAll() {
         if (!useDb())
             return index_1.default.users;
-        const res = await (0, pool_1.query)('SELECT id, username, full_name, email, role, address, qualification, permissions, created_at FROM users ORDER BY username ASC');
+        const res = await (0, pool_1.query)('SELECT id, username, full_name, email, role, address, qualification, permissions, created_at FROM users WHERE deleted_at IS NULL ORDER BY username ASC');
         return res.rows;
     },
     async create(username, password_hash, full_name, email, role) {
@@ -45,7 +45,9 @@ exports.UserRepo = {
             index_1.default.users.splice(idx, 1);
             return true;
         }
-        const res = await (0, pool_1.query)('DELETE FROM users WHERE id = ?', [id]);
+        // Soft delete: mark deleted_at instead of hard DELETE to preserve FK references
+        // (assignments, timelogs, reports all reference users.id with RESTRICT)
+        const res = await (0, pool_1.query)('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [id]);
         return res.rowCount > 0;
     },
     async update(id, fields) {
@@ -90,7 +92,7 @@ exports.UserRepo = {
     async countAll() {
         if (!useDb())
             return index_1.default.users.length;
-        const res = await (0, pool_1.query)('SELECT COUNT(*) as count FROM users');
+        const res = await (0, pool_1.query)('SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL');
         return parseInt(res.rows[0].count);
     }
 };

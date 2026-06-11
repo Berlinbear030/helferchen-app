@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
@@ -41,6 +41,14 @@ app.use('/api/telegram', telegramRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });
+});
+
+// Global error handler — catches any unhandled async error from route handlers
+// and returns JSON instead of crashing or hanging the process
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('Unhandled route error:', err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ message: err.message || 'Internal server error' });
 });
 
 async function start() {

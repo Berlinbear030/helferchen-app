@@ -144,7 +144,7 @@ async function initDatabase() {
         }
         catch (e) { }
     }
-    // Migrate users: add address, qualification, and permissions columns
+    // Migrate users: add address, qualification, permissions, and soft-delete columns
     try {
         await (0, pool_1.query)('ALTER TABLE users ADD COLUMN address TEXT');
     }
@@ -155,6 +155,10 @@ async function initDatabase() {
     catch (e) { }
     try {
         await (0, pool_1.query)("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'");
+    }
+    catch (e) { }
+    try {
+        await (0, pool_1.query)('ALTER TABLE users ADD COLUMN deleted_at DATETIME NULL DEFAULT NULL');
     }
     catch (e) { }
     await (0, pool_1.query)(`

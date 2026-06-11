@@ -42,6 +42,13 @@ app.use('/api/telegram', telegram_1.default);
 app.get('/', (_req, res) => {
     res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });
 });
+// Global error handler — catches any unhandled async error from route handlers
+// and returns JSON instead of crashing or hanging the process
+app.use((err, _req, res, _next) => {
+    console.error('Unhandled route error:', err);
+    const status = err.status || err.statusCode || 500;
+    res.status(status).json({ message: err.message || 'Internal server error' });
+});
 async function start() {
     if (process.env.DATABASE_URL) {
         const connected = await (0, pool_1.testConnection)();

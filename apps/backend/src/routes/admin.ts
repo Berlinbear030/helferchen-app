@@ -66,21 +66,39 @@ router.post('/users', async (req: AuthRequest, res: Response) => {
 
 // DELETE /api/admin/users/:id
 router.delete('/users/:id', async (req: AuthRequest, res: Response) => {
-  const userId = req.params.id as string;
-  if (userId === req.user!.id) return res.status(400).json({ message: 'Cannot delete yourself' });
+  try {
+    const userId = req.params.id as string;
+    if (userId === req.user!.id) return res.status(400).json({ message: 'Cannot delete yourself' });
 
-  const userToDelete = await UserRepo.findById(userId);
-  const success = await UserRepo.delete(userId);
-  if (!success) return res.status(404).json({ message: 'User not found' });
+    const userToDelete = await UserRepo.findById(userId);
+    if (!userToDelete) return res.status(404).json({ message: 'User not found' });
+    if ((userToDelete as any).deleted_at) return res.status(404).json({ message: 'User not found' });
 
-  if (userToDelete?.email) {
-    await deleteMailAccount(userToDelete.email);
-    const mailLocal = normalizeLastName(userToDelete.full_name || '');
-    if (mailLocal) await deleteMailAccount(`${mailLocal}@${MAIL_DOMAIN}`);
+    // Unassign this employee from any open assignments (nullable FK — safe to nullify)
+    await query(
+      "UPDATE assignments SET assigned_user_id = NULL WHERE assigned_user_id = ? AND status IN ('pending','in_progress')",
+      [userId]
+    );
+    await query(
+      "UPDATE booking_requests SET assigned_user_id = NULL WHERE assigned_user_id = ?",
+      [userId]
+    );
+
+    const success = await UserRepo.delete(userId);
+    if (!success) return res.status(404).json({ message: 'User not found' });
+
+    if (userToDelete?.email) {
+      await deleteMailAccount(userToDelete.email);
+      const mailLocal = normalizeLastName(userToDelete.full_name || '');
+      if (mailLocal) await deleteMailAccount(`${mailLocal}@${MAIL_DOMAIN}`);
+    }
+
+    await AuditRepo.create('user', userId, 'deleted', req.user!.id, 'User deleted');
+    res.status(204).send();
+  } catch (err: any) {
+    console.error('DELETE /admin/users error:', err);
+    res.status(500).json({ message: 'Fehler beim Löschen des Mitarbeiters', detail: err.message });
   }
-
-  await AuditRepo.create('user', userId, 'deleted', req.user!.id, 'User deleted');
-  res.status(204).send();
 });
 
 // GET /api/admin/audit — full audit trail
@@ -243,34 +261,40 @@ router.get('/users/:id/stats', async (req: AuthRequest, res: Response) => {
 
 // PATCH /api/admin/users/:id — update user (all editable fields)
 router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
-  const { role, password, email, full_name, address, qualification, permissions } = req.body;
-  const user = await UserRepo.findById(req.params.id as string);
-  if (!user) return res.status(404).json({ message: 'User not found' });
+  try {
+    const { role, password, email, full_name, address, qualification, permissions } = req.body;
+    const user = await UserRepo.findById(req.params.id as string);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if ((user as any).deleted_at) return res.status(404).json({ message: 'User not found' });
 
-  const updateFields: Parameters<typeof UserRepo.update>[1] = {};
-  const changes: string[] = [];
+    const updateFields: Parameters<typeof UserRepo.update>[1] = {};
+    const changes: string[] = [];
 
-  if (role !== undefined) { updateFields.role = role; changes.push(`role=${role}`); }
-  if (full_name !== undefined) { updateFields.full_name = full_name; changes.push('full_name updated'); }
-  if (email !== undefined) { updateFields.email = email; changes.push('email updated'); }
-  if (address !== undefined) { updateFields.address = address; changes.push('address updated'); }
-  if (qualification !== undefined) { updateFields.qualification = qualification; changes.push('qualification updated'); }
-  if (permissions !== undefined) {
-    updateFields.permissions = JSON.stringify(Array.isArray(permissions) ? permissions : []);
-    changes.push('permissions updated');
+    if (role !== undefined) { updateFields.role = role; changes.push(`role=${role}`); }
+    if (full_name !== undefined) { updateFields.full_name = full_name; changes.push('full_name updated'); }
+    if (email !== undefined) { updateFields.email = email; changes.push('email updated'); }
+    if (address !== undefined) { updateFields.address = address; changes.push('address updated'); }
+    if (qualification !== undefined) { updateFields.qualification = qualification; changes.push('qualification updated'); }
+    if (permissions !== undefined) {
+      updateFields.permissions = JSON.stringify(Array.isArray(permissions) ? permissions : []);
+      changes.push('permissions updated');
+    }
+    if (password) {
+      updateFields.password_hash = await bcrypt.hash(password, 10);
+      changes.push('password changed');
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
+
+    await UserRepo.update(req.params.id as string, updateFields);
+    await AuditRepo.create('user', req.params.id as string, 'updated', req.user!.id, changes.join(', '));
+    res.json({ message: 'Updated' });
+  } catch (err: any) {
+    console.error('PATCH /admin/users error:', err);
+    res.status(500).json({ message: 'Fehler beim Aktualisieren des Mitarbeiters', detail: err.message });
   }
-  if (password) {
-    updateFields.password_hash = await bcrypt.hash(password, 10);
-    changes.push('password changed');
-  }
-
-  if (Object.keys(updateFields).length === 0) {
-    return res.status(400).json({ message: 'No fields to update' });
-  }
-
-  await UserRepo.update(req.params.id as string, updateFields);
-  await AuditRepo.create('user', req.params.id as string, 'updated', req.user!.id, changes.join(', '));
-  res.json({ message: 'Updated' });
 });
 
 export default router;

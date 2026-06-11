@@ -7,7 +7,7 @@ const useDb = () => dbConnected;
 export const UserRepo = {
   async findByUsername(username: string): Promise<User | null> {
     if (!useDb()) return db.users.find(u => u.username === username) || null;
-    const res = await query('SELECT * FROM users WHERE username = ?', [username]);
+    const res = await query('SELECT * FROM users WHERE username = ? AND deleted_at IS NULL', [username]);
     return res.rows[0] || null;
   },
   async findById(id: string): Promise<User | null> {
@@ -17,7 +17,7 @@ export const UserRepo = {
   },
   async findAll(): Promise<User[]> {
     if (!useDb()) return db.users;
-    const res = await query('SELECT id, username, full_name, email, role, address, qualification, permissions, created_at FROM users ORDER BY username ASC');
+    const res = await query('SELECT id, username, full_name, email, role, address, qualification, permissions, created_at FROM users WHERE deleted_at IS NULL ORDER BY username ASC');
     return res.rows;
   },
   async create(username: string, password_hash: string, full_name: string, email: string, role: string): Promise<User> {
@@ -40,7 +40,9 @@ export const UserRepo = {
       db.users.splice(idx, 1);
       return true;
     }
-    const res = await query('DELETE FROM users WHERE id = ?', [id]);
+    // Soft delete: mark deleted_at instead of hard DELETE to preserve FK references
+    // (assignments, timelogs, reports all reference users.id with RESTRICT)
+    const res = await query('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [id]);
     return res.rowCount > 0;
   },
   async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string; permissions?: string }): Promise<boolean> {
@@ -61,7 +63,7 @@ export const UserRepo = {
   },
   async countAll(): Promise<number> {
     if (!useDb()) return db.users.length;
-    const res = await query('SELECT COUNT(*) as count FROM users');
+    const res = await query('SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL');
     return parseInt(res.rows[0].count);
   }
 };
