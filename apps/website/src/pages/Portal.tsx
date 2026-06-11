@@ -1048,8 +1048,11 @@ export default function Portal() {
 
         <div className="portal-action-bar">
           <div className="portal-action-left">
+            <button className="btn-action-outline" onClick={() => window.open('/app', '_blank')} style={{ background: '#00454A', color: 'white', borderColor: '#00454A' }}>
+              <span>📱</span> App starten
+            </button>
             <button className="btn-action-outline" onClick={handleInstallApp}>
-              <span>📱</span> App laden
+              <span>⬇</span> App installieren
             </button>
             <button className="btn-action-outline" onClick={handleOrderMarketing}>
               <span>🖨</span> Werbematerial bestellen
