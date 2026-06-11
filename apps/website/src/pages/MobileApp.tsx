@@ -1,14 +1,24 @@
+/**
+ * Helferchen Mobile App — iOS-style wizard flow
+ * Pricing: 20€ first 15min, +15€ per additional 15min block (rounded up)
+ */
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 const API = '/api';
+const BG = '#F2F2F7';         // iOS system background
+const CARD = '#FFFFFF';
+const GREEN = '#00454A';
+const GREEN_LIGHT = '#E6F4F3';
+const LABEL = '#3C3C43';
+const SUBLABEL = '#8E8E93';
+const SEPARATOR = '#C6C6C8';
+const DANGER = '#FF3B30';
 
 interface User { id: string; full_name: string; role: string; email?: string; }
 interface Customer { id: string; first_name: string; last_name: string; address: string; phone_number?: string; email?: string; }
 interface Assignment { id: string; title: string; description: string; scheduled_at: string; status: string; customer: Customer; assigned_user_id?: string; hourly_rate?: number; }
 interface Timelog { id: string; assignment_id: string; start_time: string; end_time: string | null; is_signed: boolean; }
 interface Report { id: string; assignment_id: string; timelog_id: string; notes: string; created_at: string; signature_id: string | null; }
-
-// ── Flow state carried through all steps ──────────────────────────────────────
 
 interface FlowState {
   assignment: Assignment;
@@ -17,52 +27,133 @@ interface FlowState {
   reportId: string | null;
   signatureData: string;
   signerName: string;
-  paymentMethod: 'bar' | null;
+  paymentDone: boolean;
   savedWithoutPayment: boolean;
 }
 
-type Screen = 'list' | 'detail' | 'timer' | 'bericht' | 'zusammenfassung' | 'unterschrift' | 'zahlung' | 'abschluss';
+type Screen = 'list' | 'detail' | 'timer' | 'bericht' | 'zusammenfassung' | 'zahlung' | 'abschluss';
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
 }
 
+/** Parse MySQL datetime (UTC, no Z) correctly — fixes the 2h offset bug */
+function utcMs(s: string): number {
+  if (!s) return 0;
+  return new Date(s.endsWith('Z') || s.includes('+') ? s : s.replace(' ', 'T') + 'Z').getTime();
+}
+
 function pad(n: number) { return n < 10 ? '0' + n : String(n); }
 
-function formatClock(iso: string) {
-  const d = new Date(iso);
+function clock(iso: string) {
+  const d = new Date(utcMs(iso));
   return `${pad(d.getHours())}:${pad(d.getMinutes())} Uhr`;
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+function dateLabel(iso: string) {
+  return new Date(utcMs(iso)).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function formatDurationMs(ms: number) {
+function elapsedMs(start: string, end: string | null): number {
+  return (end ? utcMs(end) : Date.now()) - utcMs(start);
+}
+
+function fmtElapsed(ms: number, showHours = true): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
   const s = Math.floor((ms % 60000) / 1000);
-  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  if (showHours && h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
   return `${pad(m)}:${pad(s)}`;
 }
 
 function calcMinutes(start: string, end: string | null): number {
-  const ms = (end ? new Date(end) : new Date()).getTime() - new Date(start).getTime();
-  return Math.ceil(ms / 60000);
+  return Math.max(1, Math.ceil(elapsedMs(start, end) / 60000));
 }
 
-function calcPrice(minutes: number, rate: number): number {
-  return Math.round((minutes / 60) * rate * 100) / 100;
+/** Pricing: 20€ first 15min, +15€ each additional 15min block (rounded up) */
+function calcPrice(minutes: number): number {
+  if (minutes <= 0) return 0;
+  if (minutes <= 15) return 20;
+  return 20 + Math.ceil((minutes - 15) / 15) * 15;
 }
 
-function euroFmt(n: number) {
+function priceBreakdown(minutes: number): string {
+  if (minutes <= 15) return 'Grundgebühr (bis 15 Min)';
+  const extra = Math.ceil((minutes - 15) / 15);
+  return `Grundgebühr + ${extra} × 15 Min`;
+}
+
+function euro(n: number) {
   return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 }
 
+// ── Shared styles ──────────────────────────────────────────────────────────────
+
+const F: React.CSSProperties = { fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif" };
+
+function NavBar({ title, onBack, right }: { title: string; onBack?: () => void; right?: React.ReactNode }) {
+  return (
+    <div style={{ background: 'rgba(242,242,247,0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: `1px solid ${SEPARATOR}`, padding: '0 16px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{ width: '72px' }}>
+        {onBack && <button onClick={onBack} style={{ background: 'none', border: 'none', color: GREEN, fontSize: '1rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: 0, ...F }}>
+          <span style={{ fontSize: '1.4rem', lineHeight: 1, marginTop: '-1px' }}>‹</span> Zurück
+        </button>}
+      </div>
+      <span style={{ fontWeight: 700, fontSize: '1rem', color: '#000', ...F }}>{title}</span>
+      <div style={{ width: '72px', textAlign: 'right' }}>{right}</div>
+    </div>
+  );
+}
+
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return <div style={{ background: CARD, borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', marginBottom: '16px', ...style }}>{children}</div>;
+}
+
+function Row({ label, value, chevron, onClick }: { label: string; value?: string; chevron?: boolean; onClick?: () => void }) {
+  return (
+    <button onClick={onClick} disabled={!onClick} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', width: '100%', background: 'none', border: 'none', cursor: onClick ? 'pointer' : 'default', borderBottom: `1px solid ${SEPARATOR}`, ...F }}>
+      <span style={{ color: LABEL, fontSize: '0.95rem' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {value && <span style={{ color: SUBLABEL, fontSize: '0.9rem' }}>{value}</span>}
+        {chevron && <span style={{ color: SEPARATOR, fontSize: '1.1rem' }}>›</span>}
+      </div>
+    </button>
+  );
+}
+
+function PrimaryBtn({ label, onClick, disabled, style }: { label: React.ReactNode; onClick: () => void; disabled?: boolean; style?: React.CSSProperties }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{ width: '100%', padding: '16px', background: disabled ? '#A0A0A0' : GREEN, color: 'white', border: 'none', borderRadius: '14px', fontSize: '1rem', fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer', transition: 'background 0.15s', ...F, ...style }}>
+      {label}
+    </button>
+  );
+}
+
+function SecondaryBtn({ label, onClick, disabled, style }: { label: React.ReactNode; onClick: () => void; disabled?: boolean; style?: React.CSSProperties }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{ width: '100%', padding: '14px', background: 'white', color: GREEN, border: `1.5px solid ${GREEN}`, borderRadius: '14px', fontSize: '0.95rem', fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', ...F, ...style }}>
+      {label}
+    </button>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <p style={{ margin: '0 0 6px', fontSize: '0.75rem', fontWeight: 600, color: SUBLABEL, textTransform: 'uppercase', letterSpacing: '0.05em', ...F }}>{label}</p>
+      {children}
+    </div>
+  );
+}
+
+const inputSt: React.CSSProperties = { width: '100%', padding: '13px 14px', border: `1.5px solid ${SEPARATOR}`, borderRadius: '12px', fontSize: '1rem', fontFamily: 'inherit', boxSizing: 'border-box', background: 'white', outline: 'none' };
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 
-function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
-  const [user, setUser] = useState('');
+function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
+  const [uname, setUname] = useState('');
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -70,29 +161,30 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(''); setBusy(true);
     try {
-      const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass }) });
+      const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: uname, password: pass }) });
       if (!r.ok) { setErr('Benutzername oder Passwort falsch.'); return; }
       const d = await r.json();
-      localStorage.setItem('token', d.token);
-      localStorage.setItem('user', JSON.stringify(d.user));
+      localStorage.setItem('token', d.token); localStorage.setItem('user', JSON.stringify(d.user));
       onLogin(d.user);
-    } catch { setErr('Verbindungsfehler.'); } finally { setBusy(false); }
+    } catch { setErr('Verbindungsfehler. Bitte erneut versuchen.'); } finally { setBusy(false); }
   };
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#00454A', padding: '24px' }}>
-      <div style={{ width: '100%', maxWidth: '360px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <img src="/logo.png" alt="Helferchen" style={{ height: '60px', filter: 'brightness(0) invert(1)', marginBottom: '16px' }} />
-          <h1 style={{ color: 'white', fontSize: '1.6rem', margin: 0, fontWeight: 700 }}>Helferchen</h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', margin: '8px 0 0', fontSize: '0.95rem' }}>Mitarbeiter-App</p>
+    <div style={{ minHeight: '100dvh', background: GREEN, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', ...F }}>
+      <div style={{ width: '100%', maxWidth: '380px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+          <div style={{ width: '80px', height: '80px', background: 'rgba(255,255,255,0.15)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <img src="/logo.png" alt="Helferchen" style={{ height: '50px', filter: 'brightness(0) invert(1)' }} />
+          </div>
+          <h1 style={{ color: 'white', fontSize: '1.8rem', margin: '0 0 6px', fontWeight: 800 }}>Helferchen</h1>
+          <p style={{ color: 'rgba(255,255,255,0.65)', margin: 0, fontSize: '1rem' }}>Mitarbeiter-App</p>
         </div>
-        <div style={{ background: 'white', borderRadius: '20px', padding: '28px 24px' }}>
-          {err && <div style={{ background: '#FEF2F2', color: '#DC2626', padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', fontSize: '0.9rem' }}>{err}</div>}
+        <div style={{ background: 'white', borderRadius: '24px', padding: '32px 24px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+          {err && <div style={{ background: '#FFF0F0', color: DANGER, padding: '12px 14px', borderRadius: '12px', marginBottom: '16px', fontSize: '0.9rem', fontWeight: 500 }}>{err}</div>}
           <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <input type="text" placeholder="Benutzername" value={user} onChange={e => setUser(e.target.value)} required style={iStyle} />
-            <input type="password" placeholder="Passwort" value={pass} onChange={e => setPass(e.target.value)} required style={iStyle} />
-            <button type="submit" disabled={busy} style={{ ...btnPrimary, marginTop: '4px', padding: '14px', fontSize: '1rem', borderRadius: '12px' }}>
+            <input type="text" placeholder="Benutzername" value={uname} onChange={e => setUname(e.target.value)} required style={inputSt} autoCapitalize="none" autoCorrect="off" />
+            <input type="password" placeholder="Passwort" value={pass} onChange={e => setPass(e.target.value)} required style={inputSt} />
+            <button type="submit" disabled={busy} style={{ padding: '15px', background: GREEN, color: 'white', border: 'none', borderRadius: '14px', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', marginTop: '4px', ...F }}>
               {busy ? 'Anmelden…' : 'Anmelden'}
             </button>
           </form>
@@ -102,7 +194,43 @@ function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
   );
 }
 
-// ── Assignment List ────────────────────────────────────────────────────────────
+// ── Date Scroller ─────────────────────────────────────────────────────────────
+
+function DateScroller({ selected, onChange }: { selected: string; onChange: (d: string) => void }) {
+  const today = new Date();
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(today); d.setDate(d.getDate() - 7 + i);
+    return d.toISOString().slice(0, 10);
+  });
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current?.querySelector(`[data-selected="true"]`) as HTMLElement;
+    el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [selected]);
+  return (
+    <div ref={scrollRef} style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '12px 16px', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
+      {days.map(d => {
+        const dt = new Date(d + 'T00:00:00');
+        const isSelected = d === selected;
+        const isToday = d === today.toISOString().slice(0, 10);
+        return (
+          <button key={d} data-selected={isSelected} onClick={() => onChange(d)}
+            style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 10px', borderRadius: '14px', border: 'none', cursor: 'pointer', background: isSelected ? GREEN : 'white', boxShadow: isSelected ? 'none' : '0 1px 4px rgba(0,0,0,0.08)', minWidth: '48px', ...F }}>
+            <span style={{ fontSize: '0.7rem', color: isSelected ? 'rgba(255,255,255,0.75)' : SUBLABEL, fontWeight: 500, textTransform: 'uppercase' }}>
+              {dt.toLocaleDateString('de-DE', { weekday: 'short' })}
+            </span>
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: isSelected ? 'white' : (isToday ? GREEN : LABEL), lineHeight: 1.2 }}>
+              {dt.getDate()}
+            </span>
+            {isToday && <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: isSelected ? 'rgba(255,255,255,0.6)' : GREEN, marginTop: '2px' }} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── List Screen ───────────────────────────────────────────────────────────────
 
 function ListScreen({ user, onSelect }: { user: User; onSelect: (a: Assignment) => void }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -110,189 +238,154 @@ function ListScreen({ user, onSelect }: { user: User; onSelect: (a: Assignment) 
   const [loading, setLoading] = useState(true);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 10));
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [aRes, tRes] = await Promise.all([
-      fetch(`${API}/assignments/my`, { headers: authHeaders() }),
-      fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
-    ]);
-    if (aRes.ok) setAssignments(await aRes.json());
-    if (tRes.ok) setTimelogs(await tRes.json());
-    setLoading(false);
+  useEffect(() => {
+    (async () => {
+      const [aR, tR] = await Promise.all([
+        fetch(`${API}/assignments/my`, { headers: authHeaders() }),
+        fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
+      ]);
+      if (aR.ok) setAssignments(await aR.json());
+      if (tR.ok) setTimelogs(await tR.json());
+      setLoading(false);
+    })();
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
-  const filtered = assignments.filter(a => {
-    if (!filterDate) return true;
-    return a.scheduled_at && a.scheduled_at.startsWith(filterDate);
-  });
-
-  const today = new Date().toISOString().slice(0, 10);
-  const isToday = filterDate === today;
-
-  const statusColor = (s: string) => ({ pending: '#6B7280', in_progress: '#F59E0B', completed: '#10B981' })[s] || '#6B7280';
+  const filtered = assignments.filter(a => a.scheduled_at?.startsWith(filterDate));
+  const statusColor = (s: string) => ({ pending: '#8E8E93', in_progress: '#FF9500', completed: '#34C759' })[s] || '#8E8E93';
   const statusLabel = (s: string) => ({ pending: 'Ausstehend', in_progress: 'In Bearbeitung', completed: 'Abgeschlossen' })[s] || s;
 
   return (
-    <div style={screenWrap}>
-      <div style={{ padding: '16px 16px 8px', background: 'white', borderBottom: '1px solid #F3F4F6' }}>
-        <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ ...iStyle, fontSize: '0.9rem', padding: '8px 12px' }} />
-        {!isToday && <button onClick={() => setFilterDate(today)} style={{ display: 'block', width: '100%', marginTop: '8px', padding: '6px', background: 'transparent', border: 'none', color: '#00454A', fontSize: '0.85rem', cursor: 'pointer' }}>← Heute</button>}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: BG }}>
+      <div style={{ background: GREEN, paddingTop: 'env(safe-area-inset-top)', paddingBottom: '0' }}>
+        <div style={{ padding: '16px 16px 0', color: 'white' }}>
+          <p style={{ margin: '0 0 2px', fontSize: '0.8rem', opacity: 0.7, ...F }}>Guten Tag,</p>
+          <h2 style={{ margin: '0 0 14px', fontSize: '1.5rem', fontWeight: 800, ...F }}>{user.full_name}</h2>
+        </div>
+        <DateScroller selected={filterDate} onChange={setFilterDate} />
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', WebkitOverflowScrolling: 'touch' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9CA3AF' }}>Lädt…</div>
+          <div style={{ textAlign: 'center', padding: '80px 0', color: SUBLABEL, ...F }}>Lädt…</div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0' }}>
-            <p style={{ fontSize: '2.5rem', margin: '0 0 12px' }}>📭</p>
-            <p style={{ color: '#9CA3AF', fontSize: '0.95rem' }}>Keine Aufträge für {isToday ? 'heute' : 'diesen Tag'}.</p>
+          <div style={{ textAlign: 'center', padding: '80px 0' }}>
+            <p style={{ fontSize: '3rem', margin: '0 0 16px' }}>📭</p>
+            <p style={{ color: SUBLABEL, ...F }}>Keine Aufträge für diesen Tag.</p>
           </div>
         ) : (
-          filtered.map(a => {
-            const runningLog = timelogs.find(t => t.assignment_id === a.id && !t.end_time);
-            return (
-              <button key={a.id} onClick={() => onSelect(a)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'white', border: 'none', borderRadius: '16px', padding: '18px', marginBottom: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: statusColor(a.status), borderRadius: '16px 0 0 16px' }} />
-                <div style={{ marginLeft: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <strong style={{ fontSize: '1.05rem', color: '#111827', flex: 1, paddingRight: '8px' }}>{a.title}</strong>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: statusColor(a.status), whiteSpace: 'nowrap' }}>{statusLabel(a.status)}</span>
+          <Card>
+            {filtered.map((a, i) => {
+              const running = timelogs.find(t => t.assignment_id === a.id && !t.end_time);
+              return (
+                <button key={a.id} onClick={() => onSelect(a)}
+                  style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: i < filtered.length - 1 ? `1px solid ${SEPARATOR}` : 'none', textAlign: 'left', ...F }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: statusColor(a.status), marginRight: '12px', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: '0 0 3px', fontWeight: 600, fontSize: '0.98rem', color: LABEL, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.title}</p>
+                    <p style={{ margin: 0, fontSize: '0.83rem', color: SUBLABEL }}>
+                      {clock(a.scheduled_at)} · {a.customer?.first_name} {a.customer?.last_name}
+                      {running ? ' · ⏱ läuft' : ''}
+                    </p>
                   </div>
-                  <p style={{ margin: '3px 0', fontSize: '0.85rem', color: '#6B7280' }}>⏰ {formatClock(a.scheduled_at)}</p>
-                  {a.customer && <p style={{ margin: '3px 0', fontSize: '0.85rem', color: '#374151' }}>👤 {a.customer.first_name} {a.customer.last_name}</p>}
-                  {a.customer?.address && <p style={{ margin: '3px 0', fontSize: '0.85rem', color: '#6B7280' }}>📍 {a.customer.address}</p>}
-                  {runningLog && <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#F59E0B', fontWeight: 600 }}>⏱ Timer läuft</p>}
-                </div>
-                <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: '#D1D5DB', fontSize: '1.2rem' }}>›</span>
-              </button>
-            );
-          })
+                  <span style={{ color: SEPARATOR, fontSize: '1.2rem', marginLeft: '8px' }}>›</span>
+                </button>
+              );
+            })}
+          </Card>
         )}
       </div>
     </div>
   );
 }
 
-// ── Assignment Detail + Timer Start ───────────────────────────────────────────
+// ── Detail Screen ─────────────────────────────────────────────────────────────
 
-function DetailScreen({ flow, onBack, onStartTimer, onContinue }: {
-  flow: FlowState;
-  onBack: () => void;
-  onStartTimer: (timelog: Timelog) => void;
-  onContinue: (timelog: Timelog) => void;
+function DetailScreen({ flow, onBack, onStart, onResume }: {
+  flow: FlowState; onBack: () => void;
+  onStart: (tl: Timelog) => void; onResume: (tl: Timelog) => void;
 }) {
   const [timelogs, setTimelogs] = useState<Timelog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const { assignment } = flow;
 
-  const load = useCallback(async () => {
-    const r = await fetch(`${API}/timelogs/my`, { headers: authHeaders() });
-    if (r.ok) setTimelogs(await r.json());
-    setLoading(false);
+  useEffect(() => {
+    fetch(`${API}/timelogs/my`, { headers: authHeaders() }).then(r => r.ok ? r.json() : []).then(setTimelogs);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const mine = timelogs.filter(t => t.assignment_id === assignment.id);
+  const running = mine.find(t => !t.end_time);
 
-  const assignmentTimelogs = timelogs.filter(t => t.assignment_id === assignment.id);
-  const running = assignmentTimelogs.find(t => !t.end_time);
-  const stopped = assignmentTimelogs.filter(t => t.end_time);
-
-  const startTimer = async () => {
+  const start = async () => {
     setBusy(true); setErr('');
     const r = await fetch(`${API}/timelogs/start`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ assignment_id: assignment.id }) });
     if (r.ok) {
-      const timelog = await r.json();
-      if (assignment.status === 'pending') {
-        await fetch(`${API}/assignments/${assignment.id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: 'in_progress' }) });
-      }
-      onStartTimer(timelog);
-    } else { const d = await r.json(); setErr(d.message || 'Fehler beim Starten.'); }
+      const tl = await r.json();
+      if (assignment.status === 'pending') await fetch(`${API}/assignments/${assignment.id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: 'in_progress' }) });
+      onStart(tl);
+    } else { const d = await r.json(); setErr(d.message || 'Fehler'); }
     setBusy(false);
   };
 
-  const continueWithTimelog = (t: Timelog) => {
-    if (!t.end_time) { onContinue(t); } // resume running timer
-  };
-
   return (
-    <div style={screenWrap}>
-      <div style={headerBar}>
-        <button onClick={onBack} style={backBtn}>‹</button>
-        <span style={{ fontWeight: 700, fontSize: '1rem' }}>{assignment.title}</span>
-        <span style={{ width: '40px' }} />
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        {err && <div style={errBox}>{err}</div>}
-        <div style={card}>
-          <h3 style={cardTitle}>Auftrag</h3>
-          <p style={detail}><span style={detailLabel}>Service</span>{assignment.title}</p>
-          {assignment.description && <p style={detail}><span style={detailLabel}>Beschreibung</span>{assignment.description}</p>}
-          <p style={detail}><span style={detailLabel}>Termin</span>{formatDate(assignment.scheduled_at)}, {formatClock(assignment.scheduled_at)}</p>
-          <p style={detail}><span style={detailLabel}>Stundensatz</span>{euroFmt(assignment.hourly_rate ?? 65)}/Std.</p>
-        </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: BG, overflow: 'hidden' }}>
+      <NavBar title={assignment.title} onBack={onBack} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 24px', WebkitOverflowScrolling: 'touch' }}>
+        {err && <div style={{ background: '#FFF0F0', color: DANGER, padding: '12px 14px', borderRadius: '12px', marginBottom: '16px', fontSize: '0.9rem', ...F }}>{err}</div>}
+
+        <Card>
+          <div style={{ padding: '4px 0' }}>
+            <Row label="Termin" value={`${dateLabel(assignment.scheduled_at)}, ${clock(assignment.scheduled_at)}`} />
+            <Row label="Service" value={assignment.title} />
+            {assignment.description && <Row label="Beschreibung" value={assignment.description} />}
+            <Row label="Stundensatz" value="(Pauschal: 20€ / 15min)"/>
+          </div>
+        </Card>
 
         {assignment.customer && (
-          <div style={card}>
-            <h3 style={cardTitle}>Kunde</h3>
-            <p style={detail}><span style={detailLabel}>Name</span>{assignment.customer.first_name} {assignment.customer.last_name}</p>
-            <p style={detail}><span style={detailLabel}>Adresse</span>{assignment.customer.address}</p>
-            {assignment.customer.phone_number && <p style={detail}><span style={detailLabel}>Telefon</span>{assignment.customer.phone_number}</p>}
-            <a href={`https://maps.google.com/?q=${encodeURIComponent(assignment.customer.address)}`} target="_blank" rel="noreferrer"
-              style={{ display: 'inline-block', marginTop: '8px', color: '#00454A', fontSize: '0.85rem', fontWeight: 600 }}>
-              📍 In Maps öffnen ↗
-            </a>
-          </div>
-        )}
-
-        {!loading && stopped.length > 0 && (
-          <div style={card}>
-            <h3 style={cardTitle}>Vorherige Zeiteinträge</h3>
-            {stopped.map(t => (
-              <p key={t.id} style={{ margin: '4px 0', fontSize: '0.85rem', color: '#6B7280' }}>
-                {formatClock(t.start_time)} – {t.end_time ? formatClock(t.end_time) : '?'} ({calcMinutes(t.start_time, t.end_time)} Min)
-              </p>
-            ))}
-          </div>
+          <Card>
+            <div style={{ padding: '4px 0' }}>
+              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${SEPARATOR}` }}>
+                <p style={{ margin: '0 0 2px', fontWeight: 700, color: LABEL, fontSize: '1rem', ...F }}>{assignment.customer.first_name} {assignment.customer.last_name}</p>
+                <p style={{ margin: 0, color: SUBLABEL, fontSize: '0.88rem', ...F }}>{assignment.customer.address}</p>
+              </div>
+              {assignment.customer.phone_number && <Row label="Telefon" value={assignment.customer.phone_number} />}
+              <button onClick={() => window.open(`https://maps.google.com/?q=${encodeURIComponent(assignment.customer.address)}`, '_blank')}
+                style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '13px 16px', background: 'none', border: 'none', cursor: 'pointer', color: GREEN, fontSize: '0.95rem', fontWeight: 600, ...F }}>
+                📍 In Maps öffnen ↗
+              </button>
+            </div>
+          </Card>
         )}
 
         {running && (
-          <div style={{ ...card, background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
-            <p style={{ margin: 0, color: '#065F46', fontWeight: 600 }}>⏱ Timer läuft gerade</p>
-            <button style={{ ...btnPrimary, marginTop: '12px', width: '100%' }} onClick={() => continueWithTimelog(running)}>
-              Zum laufenden Timer →
-            </button>
+          <div style={{ background: '#E9F9EE', border: '1px solid #34C759', borderRadius: '16px', padding: '16px', marginBottom: '16px' }}>
+            <p style={{ margin: '0 0 10px', color: '#1C7B37', fontWeight: 700, ...F }}>⏱ Timer läuft gerade</p>
+            <PrimaryBtn label="Zum laufenden Timer →" onClick={() => onResume(running)} />
           </div>
         )}
       </div>
-
       {!running && (
-        <div style={bottomBar}>
-          <button style={{ ...btnPrimary, width: '100%', padding: '16px', fontSize: '1.05rem', borderRadius: '14px' }} onClick={startTimer} disabled={busy}>
-            {busy ? 'Startet…' : '⏱ Timer starten'}
-          </button>
+        <div style={{ padding: '16px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', background: 'white', borderTop: `1px solid ${SEPARATOR}` }}>
+          <PrimaryBtn label={busy ? 'Startet…' : '⏱ Timer starten'} onClick={start} disabled={busy} />
         </div>
       )}
     </div>
   );
 }
 
-// ── Timer Running Screen ───────────────────────────────────────────────────────
+// ── Timer Screen ──────────────────────────────────────────────────────────────
 
 function TimerScreen({ flow, onBack, onStop }: {
-  flow: FlowState;
-  onBack: () => void;
-  onStop: (timelog: Timelog) => void;
+  flow: FlowState; onBack: () => void; onStop: (tl: Timelog) => void;
 }) {
   const { assignment, timelog } = flow;
-  const [elapsed, setElapsed] = useState(0);
+  const [ms, setMs] = useState(timelog ? elapsedMs(timelog.start_time, null) : 0);
   const [stopping, setStopping] = useState(false);
 
   useEffect(() => {
     if (!timelog) return;
-    const tick = () => setElapsed(Date.now() - new Date(timelog.start_time).getTime());
+    const tick = () => setMs(elapsedMs(timelog.start_time, null));
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
@@ -302,47 +395,49 @@ function TimerScreen({ flow, onBack, onStop }: {
     if (!timelog) return;
     setStopping(true);
     const r = await fetch(`${API}/timelogs/stop`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ timelog_id: timelog.id }) });
-    if (r.ok) {
-      const stopped = await r.json();
-      onStop(stopped);
-    }
+    if (r.ok) onStop(await r.json());
     setStopping(false);
   };
 
-  const h = Math.floor(elapsed / 3600000);
-  const m = Math.floor((elapsed % 3600000) / 60000);
-  const s = Math.floor((elapsed % 60000) / 1000);
+  const mins = Math.floor(ms / 60000);
+  const price = calcPrice(mins);
 
   return (
-    <div style={{ ...screenWrap, background: '#00454A' }}>
-      <div style={{ ...headerBar, background: '#00454A', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <button onClick={onBack} style={{ ...backBtn, color: 'rgba(255,255,255,0.7)', background: 'rgba(255,255,255,0.1)' }}>‹</button>
-        <span style={{ fontWeight: 700, fontSize: '1rem', color: 'white' }}>Timer</span>
-        <span style={{ width: '40px' }} />
+    <div style={{ minHeight: '100dvh', background: GREEN, display: 'flex', flexDirection: 'column', ...F, paddingTop: 'env(safe-area-inset-top)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px 0' }}>
+        <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: '50%', width: '40px', height: '40px', fontSize: '1.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+        <span style={{ flex: 1, textAlign: 'center', color: 'white', fontWeight: 700, fontSize: '1rem' }}>Timer läuft</span>
+        <div style={{ width: '40px' }} />
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', margin: '0 0 8px', textAlign: 'center' }}>{assignment.title}</p>
-        {assignment.customer && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 48px', textAlign: 'center' }}>👤 {assignment.customer.first_name} {assignment.customer.last_name}</p>}
+        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', margin: '0 0 4px' }}>{assignment.title}</p>
+        {assignment.customer && <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.9rem', margin: '0 0 56px' }}>👤 {assignment.customer.first_name} {assignment.customer.last_name}</p>}
 
-        <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '24px', padding: '40px 48px', textAlign: 'center', marginBottom: '48px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: '4px' }}>
-            {h > 0 && <>
-              <span style={{ fontSize: '4rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pad(h)}</span>
-              <span style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.2, padding: '0 2px' }}>:</span>
+        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '2px' }}>
+            {Math.floor(ms / 3600000) > 0 && <>
+              <span style={{ fontSize: '5rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-2px' }}>{pad(Math.floor(ms / 3600000))}</span>
+              <span style={{ fontSize: '2.5rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.15, marginBottom: '4px' }}>:</span>
             </>}
-            <span style={{ fontSize: '4rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pad(m)}</span>
-            <span style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.2, padding: '0 2px' }}>:</span>
-            <span style={{ fontSize: '4rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pad(s)}</span>
+            <span style={{ fontSize: '5rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-2px' }}>{pad(Math.floor((ms % 3600000) / 60000))}</span>
+            <span style={{ fontSize: '2.5rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.15, marginBottom: '4px' }}>:</span>
+            <span style={{ fontSize: '5rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-2px' }}>{pad(Math.floor((ms % 60000) / 1000))}</span>
           </div>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '16px 0 0', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            {timelog ? `Gestartet ${formatClock(timelog.start_time)}` : ''}
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '12px 0 0', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            {timelog ? `Gestartet um ${clock(timelog.start_time)}` : ''}
           </p>
+        </div>
+
+        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px 32px', textAlign: 'center', marginBottom: '56px' }}>
+          <p style={{ margin: '0 0 4px', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Bisherige Kosten</p>
+          <p style={{ margin: 0, color: 'white', fontSize: '2rem', fontWeight: 800 }}>{euro(price)}</p>
+          <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>{mins} Min · {priceBreakdown(mins)}</p>
         </div>
       </div>
 
-      <div style={{ padding: '16px 24px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
-        <button style={{ width: '100%', padding: '16px', background: '#EF4444', color: 'white', border: 'none', borderRadius: '14px', fontSize: '1.05rem', fontWeight: 700, cursor: 'pointer' }} onClick={stop} disabled={stopping}>
+      <div style={{ padding: '16px 24px', paddingBottom: 'max(28px, env(safe-area-inset-bottom))' }}>
+        <button onClick={stop} disabled={stopping} style={{ width: '100%', padding: '18px', background: DANGER, color: 'white', border: 'none', borderRadius: '16px', fontSize: '1.05rem', fontWeight: 700, cursor: 'pointer', ...F }}>
           {stopping ? 'Stoppt…' : '⏹ Timer stoppen'}
         </button>
       </div>
@@ -353,218 +448,227 @@ function TimerScreen({ flow, onBack, onStop }: {
 // ── Bericht Screen ─────────────────────────────────────────────────────────────
 
 function BerichtScreen({ flow, onBack, onNext }: {
-  flow: FlowState;
-  onBack: () => void;
-  onNext: (notes: string) => void;
+  flow: FlowState; onBack: () => void; onNext: (notes: string) => void;
 }) {
   const [notes, setNotes] = useState(flow.notes);
   const { assignment, timelog } = flow;
-
-  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
-  const rate = assignment.hourly_rate ?? 65;
-  const price = calcPrice(minutes, rate);
+  const mins = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const price = calcPrice(mins);
 
   return (
-    <div style={screenWrap}>
-      <div style={headerBar}>
-        <button onClick={onBack} style={backBtn}>‹</button>
-        <span style={{ fontWeight: 700, fontSize: '1rem' }}>Bericht schreiben</span>
-        <span style={{ width: '40px' }} />
-      </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: BG, overflow: 'hidden' }}>
+      <NavBar title="Bericht" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 24px', WebkitOverflowScrolling: 'touch' }}>
+        <Card>
+          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${SEPARATOR}` }}>
+            <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '1.05rem', color: LABEL, ...F }}>{assignment.customer?.first_name} {assignment.customer?.last_name}</p>
+            <p style={{ margin: 0, color: SUBLABEL, fontSize: '0.88rem', ...F }}>{assignment.customer?.address}</p>
+          </div>
+          {timelog && (
+            <div style={{ padding: '13px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: LABEL, fontSize: '0.95rem', ...F }}>Arbeitszeit</span>
+              <span style={{ color: SUBLABEL, fontWeight: 600, fontSize: '0.9rem', ...F }}>
+                {clock(timelog.start_time)} – {timelog.end_time ? clock(timelog.end_time) : '?'} ({mins} Min)
+              </span>
+            </div>
+          )}
+        </Card>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        <div style={{ ...card, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Card>
+          <div style={{ padding: '16px' }}>
+            <Field label="Was wurde erledigt?">
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={6}
+                placeholder="Beschreibung der Arbeiten, verwendete Materialien, besondere Vorkommnisse…"
+                style={{ ...inputSt, resize: 'vertical', minHeight: '130px', lineHeight: 1.55 }}
+                autoFocus
+              />
+            </Field>
+          </div>
+        </Card>
+
+        <Card style={{ background: GREEN_LIGHT }}>
+          <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ margin: 0, fontWeight: 700, color: '#065F46', fontSize: '1rem' }}>{assignment.customer?.first_name} {assignment.customer?.last_name}</p>
-              <p style={{ margin: '4px 0 0', color: '#047857', fontSize: '0.85rem' }}>{assignment.customer?.address}</p>
+              <p style={{ margin: '0 0 3px', color: '#004A4A', fontWeight: 600, fontSize: '0.9rem', ...F }}>Gesamtbetrag</p>
+              <p style={{ margin: 0, color: SUBLABEL, fontSize: '0.78rem', ...F }}>{priceBreakdown(mins)}</p>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              {timelog && <p style={{ margin: 0, color: '#047857', fontWeight: 700, fontSize: '1.1rem' }}>{minutes} Min</p>}
-              {timelog && <p style={{ margin: '2px 0 0', color: '#059669', fontSize: '0.8rem' }}>{formatClock(timelog.start_time)} – {timelog.end_time ? formatClock(timelog.end_time) : '?'}</p>}
-            </div>
+            <span style={{ fontSize: '1.5rem', fontWeight: 800, color: GREEN, ...F }}>{euro(price)}</span>
           </div>
-        </div>
-
-        <div style={card}>
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: '10px', color: '#374151' }}>Was wurde erledigt?</label>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Beschreibung der erledigten Arbeiten, besondere Vorkommnisse, verwendete Materialien…"
-            rows={6}
-            style={{ ...iStyle, resize: 'vertical', minHeight: '140px', fontFamily: 'inherit', lineHeight: 1.5 }}
-            autoFocus
-          />
-        </div>
-
-        <div style={{ ...card, background: '#F9FAFB' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#6B7280', fontSize: '0.9rem' }}>Voraussichtliche Kosten</span>
-            <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#111827' }}>{euroFmt(price)}</span>
-          </div>
-          <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#9CA3AF' }}>{minutes} Min × {euroFmt(rate)}/Std.</p>
-        </div>
+        </Card>
       </div>
+      <div style={{ padding: '16px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', background: 'white', borderTop: `1px solid ${SEPARATOR}` }}>
+        <PrimaryBtn label="Weiter zur Zusammenfassung →" onClick={() => { if (notes.trim()) onNext(notes); }} disabled={!notes.trim()} />
+      </div>
+    </div>
+  );
+}
 
-      <div style={bottomBar}>
-        <button
-          style={{ ...btnPrimary, width: '100%', padding: '16px', fontSize: '1.05rem', borderRadius: '14px', opacity: notes.trim() ? 1 : 0.5 }}
-          onClick={() => { if (notes.trim()) onNext(notes); }}
-          disabled={!notes.trim()}
-        >
-          Weiter zur Zusammenfassung →
+// ── Signature Canvas ───────────────────────────────────────────────────────────
+
+function SigCanvas({ onSave }: { onSave: (url: string) => void }) {
+  const cv = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const [has, setHas] = useState(false);
+
+  const getXY = (e: React.TouchEvent | React.MouseEvent, c: HTMLCanvasElement) => {
+    const r = c.getBoundingClientRect();
+    const sx = c.width / r.width, sy = c.height / r.height;
+    if ('touches' in e) return { x: (e.touches[0].clientX - r.left) * sx, y: (e.touches[0].clientY - r.top) * sy };
+    const m = e as React.MouseEvent; return { x: (m.clientX - r.left) * sx, y: (m.clientY - r.top) * sy };
+  };
+  const startDraw = (e: React.TouchEvent | React.MouseEvent) => { e.preventDefault(); const c = cv.current!; c.getContext('2d')!.beginPath(); c.getContext('2d')!.moveTo(...Object.values(getXY(e, c)) as [number, number]); drawing.current = true; };
+  const draw = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault(); if (!drawing.current) return;
+    const c = cv.current!; const ctx = c.getContext('2d')!;
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#000';
+    const p = getXY(e, c); ctx.lineTo(p.x, p.y); ctx.stroke(); setHas(true);
+  };
+  const stopDraw = () => { drawing.current = false; };
+  const clear = () => { cv.current!.getContext('2d')!.clearRect(0, 0, 640, 200); setHas(false); };
+
+  return (
+    <div>
+      <canvas ref={cv} width={640} height={200}
+        style={{ width: '100%', height: '120px', border: `1.5px dashed ${SEPARATOR}`, borderRadius: '12px', background: '#FAFAFA', touchAction: 'none', cursor: 'crosshair', display: 'block' }}
+        onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+        onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+      />
+      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+        <button style={{ flex: 1, padding: '10px', background: 'white', border: `1px solid ${SEPARATOR}`, borderRadius: '10px', color: LABEL, fontSize: '0.9rem', cursor: 'pointer', ...F }} onClick={clear}>Löschen</button>
+        <button style={{ flex: 2, padding: '10px', background: has ? GREEN : '#ccc', color: 'white', border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: has ? 'pointer' : 'not-allowed', ...F }} disabled={!has}
+          onClick={() => has && onSave(cv.current!.toDataURL('image/png'))}>
+          ✓ Unterschrift übernehmen
         </button>
       </div>
     </div>
   );
 }
 
-// ── Zusammenfassung + Unterschrift ────────────────────────────────────────────
+// ── Zusammenfassung Screen ─────────────────────────────────────────────────────
 
-function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const [has, setHas] = useState(false);
-
-  const pos = (e: React.TouchEvent | React.MouseEvent, c: HTMLCanvasElement) => {
-    const r = c.getBoundingClientRect();
-    const sx = c.width / r.width, sy = c.height / r.height;
-    if ('touches' in e) return { x: (e.touches[0].clientX - r.left) * sx, y: (e.touches[0].clientY - r.top) * sy };
-    return { x: ((e as React.MouseEvent).clientX - r.left) * sx, y: ((e as React.MouseEvent).clientY - r.top) * sy };
-  };
-
-  const start = (e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault();
-    const c = ref.current!; const ctx = c.getContext('2d')!;
-    const p = pos(e, c); ctx.beginPath(); ctx.moveTo(p.x, p.y);
-    drawing.current = true;
-  };
-  const move = (e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault();
-    if (!drawing.current) return;
-    const c = ref.current!; const ctx = c.getContext('2d')!;
-    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#111827';
-    const p = pos(e, c); ctx.lineTo(p.x, p.y); ctx.stroke();
-    setHas(true);
-  };
-  const stop = () => { drawing.current = false; };
-
-  const clear = () => { ref.current!.getContext('2d')!.clearRect(0, 0, 640, 200); setHas(false); };
-  const save = () => { if (has) onSave(ref.current!.toDataURL('image/png')); };
-
-  return (
-    <div>
-      <canvas ref={ref} width={640} height={200}
-        style={{ width: '100%', height: '130px', border: '2px dashed #D1D5DB', borderRadius: '12px', background: 'white', touchAction: 'none', cursor: 'crosshair', display: 'block' }}
-        onMouseDown={start} onMouseMove={move} onMouseUp={stop} onMouseLeave={stop}
-        onTouchStart={start} onTouchMove={move} onTouchEnd={stop}
-      />
-      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-        <button style={{ ...btnOutline, flex: 1, padding: '10px' }} onClick={clear}>✕ Löschen</button>
-        <button style={{ ...btnPrimary, flex: 2, padding: '10px' }} onClick={save} disabled={!has}>✓ Unterschrift bestätigen</button>
-      </div>
-    </div>
-  );
-}
-
-function ZusammenfassungScreen({ flow, onBack, onSign }: {
-  flow: FlowState;
-  onBack: () => void;
-  onSign: (signerName: string, sigData: string, reportId: string) => void;
+function ZusammenfassungScreen({ flow, onBack, onSigned }: {
+  flow: FlowState; onBack: () => void;
+  onSigned: (signerName: string, sigData: string, reportId: string) => void;
 }) {
   const { assignment, timelog, notes } = flow;
-  const [signerName, setSignerName] = useState(assignment.customer ? `${assignment.customer.first_name} ${assignment.customer.last_name}` : '');
-  const [sigData, setSigData] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
+  const [signerName, setSigner] = useState(assignment.customer ? `${assignment.customer.first_name} ${assignment.customer.last_name}` : '');
+  const [sigData, setSigData] = useState(flow.signatureData);
   const [reportId, setReportId] = useState(flow.reportId);
+  const [saving, setSaving] = useState(false);
+  const [creatingReport, setCreatingReport] = useState(!flow.reportId);
+  const [err, setErr] = useState('');
 
-  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
-  const rate = assignment.hourly_rate ?? 65;
-  const price = calcPrice(minutes, rate);
+  const mins = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const price = calcPrice(mins);
 
+  // Ensure report exists
   useEffect(() => {
     if (reportId || !timelog?.end_time) return;
     (async () => {
+      setCreatingReport(true);
       const r = await fetch(`${API}/reports`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ assignment_id: assignment.id, timelog_id: timelog.id, notes }) });
-      if (r.ok) { const d = await r.json(); setReportId(d.id); }
+      if (r.ok) { setReportId((await r.json()).id); }
+      else if (r.status === 409) {
+        // Already exists — fetch it
+        const all = await fetch(`${API}/reports/my`, { headers: authHeaders() });
+        if (all.ok) {
+          const list: Report[] = await all.json();
+          const found = list.find(x => x.timelog_id === timelog.id);
+          if (found) setReportId(found.id);
+        }
+      }
+      setCreatingReport(false);
     })();
   }, []);
 
   const handleSign = async () => {
-    if (!sigData || !signerName.trim() || !reportId) { setErr('Bitte Name und Unterschrift eingeben.'); return; }
+    if (!sigData || !signerName.trim()) { setErr('Bitte Unterschrift und Name eintragen.'); return; }
+    if (!reportId) { setErr('Bericht wird noch erstellt, bitte kurz warten…'); return; }
     setSaving(true); setErr('');
     const r = await fetch(`${API}/signatures`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ report_id: reportId, image_data: sigData, signer_name: signerName }) });
-    if (r.ok) { onSign(signerName, sigData, reportId); }
+    if (r.ok) { onSigned(signerName, sigData, reportId); }
     else { const d = await r.json(); setErr(d.message || 'Fehler beim Speichern.'); }
     setSaving(false);
   };
 
   return (
-    <div style={screenWrap}>
-      <div style={headerBar}>
-        <button onClick={onBack} style={backBtn}>‹</button>
-        <span style={{ fontWeight: 700, fontSize: '1rem' }}>Zusammenfassung</span>
-        <span style={{ width: '40px' }} />
-      </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: BG, overflow: 'hidden' }}>
+      <NavBar title="Zusammenfassung" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 24px', WebkitOverflowScrolling: 'touch' }}>
+        {err && <div style={{ background: '#FFF0F0', color: DANGER, padding: '12px 14px', borderRadius: '12px', marginBottom: '14px', fontSize: '0.9rem', ...F }}>{err}</div>}
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        {err && <div style={errBox}>{err}</div>}
-
-        <div style={{ ...card, border: '2px solid #00454A' }}>
-          <p style={{ margin: '0 0 4px', fontSize: '0.75rem', color: '#00454A', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Helferchen Arbeitsnachweis</p>
-          <h2 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: '#111827' }}>{assignment.title}</h2>
-
-          <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '14px', marginBottom: '14px' }}>
-            <p style={{ margin: '0 0 2px', fontWeight: 600, color: '#374151' }}>{assignment.customer?.first_name} {assignment.customer?.last_name}</p>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: '#6B7280' }}>{assignment.customer?.address}</p>
+        {/* Invoice card */}
+        <div style={{ background: 'white', borderRadius: '20px', padding: '20px', marginBottom: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
+            <div style={{ width: '36px', height: '36px', background: GREEN, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img src="/logo.png" alt="" style={{ height: '22px', filter: 'brightness(0) invert(1)' }} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: '1rem', color: LABEL, ...F }}>Helferchen</p>
+              <p style={{ margin: 0, color: SUBLABEL, fontSize: '0.78rem', ...F }}>Arbeitsnachweis</p>
+            </div>
           </div>
 
-          {timelog && (
-            <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '14px', marginBottom: '14px' }}>
-              <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: '#6B7280' }}>Arbeitszeit</p>
-              <p style={{ margin: 0, fontWeight: 600, color: '#111827', fontSize: '1rem' }}>
-                {formatClock(timelog.start_time)} – {timelog.end_time ? formatClock(timelog.end_time) : '?'} ({minutes} Min)
-              </p>
+          <div style={{ borderTop: `1px solid ${BG}`, paddingTop: '14px', marginBottom: '14px' }}>
+            <p style={{ margin: '0 0 3px', fontWeight: 700, fontSize: '1.05rem', color: LABEL, ...F }}>{assignment.customer?.first_name} {assignment.customer?.last_name}</p>
+            <p style={{ margin: 0, color: SUBLABEL, fontSize: '0.88rem', ...F }}>{assignment.customer?.address}</p>
+          </div>
+
+          <div style={{ background: BG, borderRadius: '12px', padding: '12px 14px', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontSize: '0.85rem', color: SUBLABEL, ...F }}>Service</span>
+              <span style={{ fontSize: '0.85rem', color: LABEL, fontWeight: 500, ...F }}>{assignment.title}</span>
             </div>
-          )}
+            {timelog && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.85rem', color: SUBLABEL, ...F }}>Arbeitszeit</span>
+                <span style={{ fontSize: '0.85rem', color: LABEL, fontWeight: 500, ...F }}>
+                  {clock(timelog.start_time)} – {timelog.end_time ? clock(timelog.end_time) : '?'} ({mins} Min)
+                </span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.85rem', color: SUBLABEL, ...F }}>Abrechnung</span>
+              <span style={{ fontSize: '0.85rem', color: LABEL, fontWeight: 500, ...F }}>{priceBreakdown(mins)}</span>
+            </div>
+          </div>
 
           {notes && (
-            <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '14px', marginBottom: '14px' }}>
-              <p style={{ margin: '0 0 6px', fontSize: '0.85rem', color: '#6B7280' }}>Bericht</p>
-              <p style={{ margin: 0, color: '#374151', fontSize: '0.9rem', lineHeight: 1.5 }}>{notes}</p>
+            <div style={{ borderTop: `1px solid ${BG}`, paddingTop: '12px', marginBottom: '14px' }}>
+              <p style={{ margin: '0 0 6px', fontSize: '0.75rem', color: SUBLABEL, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', ...F }}>Bericht</p>
+              <p style={{ margin: 0, color: LABEL, fontSize: '0.9rem', lineHeight: 1.55, ...F }}>{notes}</p>
             </div>
           )}
 
-          <div style={{ borderTop: '2px solid #111827', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 700, fontSize: '1rem', color: '#111827' }}>Gesamtkosten</span>
-            <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#00454A' }}>{euroFmt(price)}</span>
+          <div style={{ borderTop: `2px solid ${LABEL}`, paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, fontSize: '1.05rem', color: LABEL, ...F }}>Gesamtbetrag</span>
+            <span style={{ fontWeight: 800, fontSize: '1.8rem', color: GREEN, ...F }}>{euro(price)}</span>
           </div>
-          <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#9CA3AF', textAlign: 'right' }}>{minutes} Min × {euroFmt(rate)}/Std.</p>
         </div>
 
-        <div style={card}>
-          <h3 style={cardTitle}>Unterschrift des Kunden</h3>
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#374151', marginBottom: '6px', fontWeight: 500 }}>Name des Unterzeichners</label>
-            <input type="text" value={signerName} onChange={e => setSignerName(e.target.value)} style={iStyle} />
+        {/* Signature */}
+        <Card>
+          <div style={{ padding: '16px' }}>
+            <p style={{ margin: '0 0 14px', fontWeight: 700, color: LABEL, ...F }}>Unterschrift des Kunden</p>
+            <Field label="Name">
+              <input type="text" value={signerName} onChange={e => setSigner(e.target.value)} placeholder="Vor- und Nachname" style={inputSt} />
+            </Field>
+            <SigCanvas onSave={d => setSigData(d)} />
+            {sigData && (
+              <div style={{ marginTop: '12px', padding: '10px', background: BG, borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ color: '#34C759', fontSize: '1.2rem' }}>✓</span>
+                <img src={sigData} alt="Unterschrift" style={{ height: '40px' }} />
+              </div>
+            )}
           </div>
-          <SignatureCanvas onSave={d => setSigData(d)} />
-          {sigData && (
-            <div style={{ marginTop: '10px' }}>
-              <p style={{ fontSize: '0.75rem', color: '#9CA3AF', margin: '0 0 6px' }}>Unterschrift gespeichert:</p>
-              <img src={sigData} alt="Unterschrift" style={{ maxWidth: '160px', border: '1px solid #E5E7EB', borderRadius: '8px' }} />
-            </div>
-          )}
-        </div>
+        </Card>
       </div>
-
-      <div style={bottomBar}>
-        <button style={{ ...btnPrimary, width: '100%', padding: '16px', fontSize: '1.05rem', borderRadius: '14px', opacity: sigData && signerName.trim() ? 1 : 0.5 }}
-          onClick={handleSign} disabled={saving || !sigData || !signerName.trim()}>
-          {saving ? 'Speichert…' : 'Weiter zur Zahlung →'}
-        </button>
+      <div style={{ padding: '16px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))', background: 'white', borderTop: `1px solid ${SEPARATOR}` }}>
+        <PrimaryBtn
+          label={saving ? 'Speichert…' : creatingReport ? 'Bericht wird erstellt…' : 'Weiter zur Zahlung →'}
+          onClick={handleSign}
+          disabled={saving || creatingReport || !sigData || !signerName.trim()}
+        />
       </div>
     </div>
   );
@@ -573,79 +677,79 @@ function ZusammenfassungScreen({ flow, onBack, onSign }: {
 // ── Zahlung Screen ─────────────────────────────────────────────────────────────
 
 function ZahlungScreen({ flow, onBack, onDone }: {
-  flow: FlowState;
-  onBack: () => void;
-  onDone: (method: 'bar' | 'saved') => void;
+  flow: FlowState; onBack: () => void; onDone: (method: 'bar' | 'saved') => void;
 }) {
   const { assignment, timelog } = flow;
-  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
-  const rate = assignment.hourly_rate ?? 65;
-  const price = calcPrice(minutes, rate);
-  const [busy, setBusy] = useState(false);
-  const [downloadDone, setDownloadDone] = useState(false);
+  const mins = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const price = calcPrice(mins);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailDone, setEmailDone] = useState(false);
 
   const downloadPdf = () => {
-    if (flow.reportId) window.open(`${API}/pdf/${flow.reportId}`, '_blank');
-    setDownloadDone(true);
+    if (!flow.reportId) return;
+    const a = document.createElement('a');
+    a.href = `${API}/pdf/${flow.reportId}`;
+    a.setAttribute('download', `bericht.pdf`);
+    a.setAttribute('target', '_blank');
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  const sendEmail = async () => {
-    const email = assignment.customer?.email;
-    if (!email && !flow.reportId) return;
-    const addr = email || prompt('E-Mail-Adresse des Kunden:');
-    if (!addr) return;
-    setBusy(true);
-    await fetch(`${API}/pdf/${flow.reportId}/email`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ to: addr }) });
-    setBusy(false);
-    alert('✅ PDF per E-Mail gesendet!');
+  const emailPdf = async () => {
+    const email = assignment.customer?.email || prompt('E-Mail-Adresse des Kunden:');
+    if (!email || !flow.reportId) return;
+    setEmailBusy(true);
+    await fetch(`${API}/pdf/${flow.reportId}/email`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ to: email }) });
+    setEmailBusy(false); setEmailDone(true);
   };
 
   return (
-    <div style={screenWrap}>
-      <div style={headerBar}>
-        <button onClick={onBack} style={backBtn}>‹</button>
-        <span style={{ fontWeight: 700, fontSize: '1rem' }}>Zahlung</span>
-        <span style={{ width: '40px' }} />
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        <div style={{ textAlign: 'center', padding: '8px 0 24px' }}>
-          <p style={{ fontSize: '2.5rem', margin: '0 0 8px' }}>💶</p>
-          <p style={{ fontSize: '0.9rem', color: '#6B7280', margin: '0 0 4px' }}>Offener Betrag</p>
-          <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#111827', margin: 0 }}>{euroFmt(price)}</p>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: BG, overflow: 'hidden' }}>
+      <NavBar title="Zahlung" onBack={onBack} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 24px', WebkitOverflowScrolling: 'touch' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ width: '72px', height: '72px', background: GREEN_LIGHT, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <span style={{ fontSize: '2rem' }}>💶</span>
+          </div>
+          <p style={{ margin: '0 0 6px', color: SUBLABEL, fontSize: '0.9rem', ...F }}>Offener Betrag</p>
+          <p style={{ margin: 0, fontSize: '2.8rem', fontWeight: 800, color: LABEL, ...F }}>{euro(price)}</p>
+          <p style={{ margin: '6px 0 0', color: SUBLABEL, fontSize: '0.82rem', ...F }}>{mins} Min · {priceBreakdown(mins)}</p>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-          <button style={{ ...btnPrimary, padding: '20px', fontSize: '1.1rem', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
-            onClick={() => onDone('bar')}>
-            <span style={{ fontSize: '1.5rem' }}>💵</span>
-            <span>Bar bezahlt</span>
+          <button onClick={() => onDone('bar')} style={{ padding: '20px 24px', background: GREEN, color: 'white', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', ...F }}>
+            <span style={{ fontSize: '2rem' }}>💵</span>
+            <div style={{ textAlign: 'left' }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem' }}>Bar bezahlt</p>
+              <p style={{ margin: 0, fontSize: '0.82rem', opacity: 0.75 }}>Auftrag wird abgeschlossen</p>
+            </div>
           </button>
 
-          <button disabled style={{ padding: '20px', fontSize: '1.1rem', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', border: '2px solid #E5E7EB', background: '#F9FAFB', color: '#9CA3AF', cursor: 'not-allowed' }}>
-            <span style={{ fontSize: '1.5rem' }}>💳</span>
-            <span>Kartenzahlung (demnächst)</span>
+          <button disabled style={{ padding: '20px 24px', background: '#F2F2F7', color: '#C7C7CC', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'not-allowed', ...F }}>
+            <span style={{ fontSize: '2rem', opacity: 0.4 }}>💳</span>
+            <div style={{ textAlign: 'left' }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem' }}>Mit Karte</p>
+              <p style={{ margin: 0, fontSize: '0.82rem' }}>Demnächst verfügbar</p>
+            </div>
           </button>
 
-          <button style={{ ...btnOutline, padding: '16px', fontSize: '0.95rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-            onClick={() => onDone('saved')}>
-            <span>💾</span>
-            <span>Zwischenspeichern (Kunde zahlt später)</span>
+          <button onClick={() => onDone('saved')} style={{ padding: '18px 24px', background: 'white', color: LABEL, border: `1.5px solid ${SEPARATOR}`, borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', ...F }}>
+            <span style={{ fontSize: '2rem' }}>💾</span>
+            <div style={{ textAlign: 'left' }}>
+              <p style={{ margin: 0, fontWeight: 600, fontSize: '0.98rem' }}>Zwischenspeichern</p>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: SUBLABEL }}>Kunde zahlt später</p>
+            </div>
           </button>
         </div>
 
-        <div style={card}>
-          <h3 style={cardTitle}>Quittung senden</h3>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button style={{ ...btnOutline, flex: 1, padding: '12px', fontSize: '0.85rem' }} onClick={downloadPdf}>
-              📄 PDF herunterladen
-            </button>
-            <button style={{ ...btnOutline, flex: 1, padding: '12px', fontSize: '0.85rem' }} onClick={sendEmail} disabled={busy}>
-              {busy ? '…' : '📧 Per E-Mail'}
-            </button>
+        <Card>
+          <div style={{ padding: '14px 16px' }}>
+            <p style={{ margin: '0 0 12px', fontWeight: 700, color: LABEL, ...F }}>Quittung senden</p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <SecondaryBtn label="📄 PDF" onClick={downloadPdf} style={{ flex: 1 }} />
+              <SecondaryBtn label={emailDone ? '✓ Gesendet' : emailBusy ? '…' : '📧 E-Mail'} onClick={emailPdf} disabled={emailBusy || emailDone} style={{ flex: 1 }} />
+            </div>
           </div>
-          {downloadDone && <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#10B981', textAlign: 'center' }}>✓ PDF geöffnet</p>}
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -653,21 +757,21 @@ function ZahlungScreen({ flow, onBack, onDone }: {
 
 // ── Abschluss Screen ───────────────────────────────────────────────────────────
 
-function AbschlussScreen({ flow, onNewJob }: { flow: FlowState; onNewJob: () => void }) {
+function AbschlussScreen({ flow, onReset }: { flow: FlowState; onReset: () => void }) {
   const { assignment, timelog } = flow;
-  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
-  const price = calcPrice(minutes, assignment.hourly_rate ?? 65);
+  const mins = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const price = calcPrice(mins);
 
   return (
-    <div style={{ ...screenWrap, alignItems: 'center', justifyContent: 'center', background: '#00454A' }}>
-      <div style={{ textAlign: 'center', padding: '40px 24px', maxWidth: '360px' }}>
-        <div style={{ fontSize: '4rem', margin: '0 0 24px' }}>✅</div>
-        <h2 style={{ color: 'white', fontSize: '1.6rem', margin: '0 0 12px' }}>Auftrag abgeschlossen!</h2>
-        <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 8px' }}>{assignment.title}</p>
-        <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 32px', fontSize: '0.9rem' }}>
-          {flow.savedWithoutPayment ? '💾 Auftrag gespeichert — Zahlung ausstehend' : `💵 Bar bezahlt · ${euroFmt(price)}`}
+    <div style={{ minHeight: '100dvh', background: GREEN, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', ...F, paddingTop: 'env(safe-area-inset-top)' }}>
+      <div style={{ textAlign: 'center', maxWidth: '360px' }}>
+        <div style={{ fontSize: '5rem', marginBottom: '24px' }}>✅</div>
+        <h2 style={{ color: 'white', fontSize: '1.8rem', fontWeight: 800, margin: '0 0 12px' }}>Fertig!</h2>
+        <p style={{ color: 'rgba(255,255,255,0.8)', margin: '0 0 6px', fontSize: '1.05rem' }}>{assignment.title}</p>
+        <p style={{ color: 'rgba(255,255,255,0.65)', margin: '0 0 40px', fontSize: '0.9rem' }}>
+          {flow.savedWithoutPayment ? '💾 Gespeichert · Zahlung ausstehend' : `💵 Bar bezahlt · ${euro(price)}`}
         </p>
-        <button style={{ ...btnPrimary, padding: '16px 32px', fontSize: '1rem', background: 'white', color: '#00454A', borderRadius: '14px' }} onClick={onNewJob}>
+        <button onClick={onReset} style={{ padding: '16px 40px', background: 'white', color: GREEN, border: 'none', borderRadius: '16px', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', ...F }}>
           Zurück zu Aufträgen
         </button>
       </div>
@@ -675,9 +779,9 @@ function AbschlussScreen({ flow, onNewJob }: { flow: FlowState; onNewJob: () => 
   );
 }
 
-// ── Main App ───────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
-function MobileApp() {
+export default function MobileApp() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [screen, setScreen] = useState<Screen>('list');
@@ -693,102 +797,65 @@ function MobileApp() {
       .finally(() => setChecking(false));
   }, []);
 
+  const upd = useCallback((patch: Partial<FlowState>) => setFlow(f => f ? { ...f, ...patch } : f), []);
+  const reset = () => { setFlow(null); setScreen('list'); };
   const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setUser(null); };
 
-  const resetFlow = () => { setFlow(null); setScreen('list'); };
-
   if (checking) return (
-    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#00454A' }}>
-      <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem' }}>Laden…</p>
+    <div style={{ minHeight: '100dvh', background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: 'rgba(255,255,255,0.6)', ...F }}>Laden…</p>
     </div>
   );
 
   if (!user) return <LoginScreen onLogin={u => setUser(u)} />;
 
-  // Screens without header (full-screen)
-  if (screen === 'timer' && flow) {
-    return <TimerScreen flow={flow} onBack={() => setScreen('detail')}
-      onStop={stopped => { setFlow(f => f ? { ...f, timelog: stopped } : f); setScreen('bericht'); }} />;
-  }
-
-  if (screen === 'abschluss' && flow) {
-    return <AbschlussScreen flow={flow} onNewJob={resetFlow} />;
-  }
+  // Full-screen screens
+  if (screen === 'timer' && flow) return (
+    <TimerScreen flow={flow} onBack={() => setScreen('detail')}
+      onStop={tl => { upd({ timelog: tl }); setScreen('bericht'); }} />
+  );
+  if (screen === 'abschluss' && flow) return <AbschlussScreen flow={flow} onReset={reset} />;
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: '#F9FAFB', maxWidth: '520px', margin: '0 auto' }}>
-      <header style={{ background: '#00454A', color: 'white', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 'max(12px, env(safe-area-inset-top))', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="/logo.png" alt="" style={{ height: '26px', filter: 'brightness(0) invert(1)' }} />
-          <div>
-            <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700 }}>Helferchen App</p>
-            <p style={{ margin: 0, fontSize: '0.72rem', opacity: 0.7 }}>{user.full_name}</p>
-          </div>
+    <div style={{ minHeight: '100dvh', maxWidth: '520px', margin: '0 auto', display: 'flex', flexDirection: 'column', background: BG, ...F }}>
+      {/* App header — only on list screen */}
+      {screen === 'list' && (
+        <div style={{ background: GREEN, paddingTop: 'env(safe-area-inset-top)', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', padding: `env(safe-area-inset-top) 16px 0` }}>
+          <button onClick={logout} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '7px 14px', borderRadius: '20px', fontSize: '0.82rem', cursor: 'pointer', ...F }}>
+            Abmelden
+          </button>
         </div>
-        <button onClick={logout} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '5px 10px', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer' }}>
-          Abmelden
-        </button>
-      </header>
+      )}
 
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {screen === 'list' && (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {screen === 'list' && flow === null && (
           <ListScreen user={user} onSelect={a => {
-            setFlow({ assignment: a, timelog: null, notes: '', reportId: null, signatureData: '', signerName: '', paymentMethod: null, savedWithoutPayment: false });
+            setFlow({ assignment: a, timelog: null, notes: '', reportId: null, signatureData: '', signerName: '', paymentDone: false, savedWithoutPayment: false });
             setScreen('detail');
           }} />
         )}
-
         {screen === 'detail' && flow && (
-          <DetailScreen flow={flow} onBack={resetFlow}
-            onStartTimer={tl => { setFlow(f => f ? { ...f, timelog: tl } : f); setScreen('timer'); }}
-            onContinue={tl => { setFlow(f => f ? { ...f, timelog: tl } : f); setScreen('timer'); }}
-          />
+          <DetailScreen flow={flow} onBack={reset}
+            onStart={tl => { upd({ timelog: tl }); setScreen('timer'); }}
+            onResume={tl => { upd({ timelog: tl }); setScreen('timer'); }} />
         )}
-
         {screen === 'bericht' && flow && (
           <BerichtScreen flow={flow} onBack={() => setScreen('detail')}
-            onNext={notes => { setFlow(f => f ? { ...f, notes } : f); setScreen('zusammenfassung'); }}
-          />
+            onNext={notes => { upd({ notes }); setScreen('zusammenfassung'); }} />
         )}
-
         {screen === 'zusammenfassung' && flow && (
           <ZusammenfassungScreen flow={flow} onBack={() => setScreen('bericht')}
-            onSign={(signerName, sigData, reportId) => {
-              setFlow(f => f ? { ...f, signerName, signatureData: sigData, reportId } : f);
-              setScreen('zahlung');
-            }}
-          />
+            onSigned={(signerName, sigData, reportId) => { upd({ signerName, signatureData: sigData, reportId }); setScreen('zahlung'); }} />
         )}
-
         {screen === 'zahlung' && flow && (
           <ZahlungScreen flow={flow} onBack={() => setScreen('zusammenfassung')}
             onDone={method => {
-              if (method === 'bar') {
-                fetch(`${API}/assignments/${flow.assignment.id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: 'completed' }) });
-              }
-              setFlow(f => f ? { ...f, paymentMethod: method === 'bar' ? 'bar' : null, savedWithoutPayment: method === 'saved' } : f);
+              if (method === 'bar') fetch(`${API}/assignments/${flow.assignment.id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: 'completed' }) });
+              upd({ paymentDone: method === 'bar', savedWithoutPayment: method === 'saved' });
               setScreen('abschluss');
-            }}
-          />
+            }} />
         )}
       </div>
     </div>
   );
 }
-
-// ── Shared Styles ──────────────────────────────────────────────────────────────
-
-const screenWrap: React.CSSProperties = { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' };
-const headerBar: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'white', borderBottom: '1px solid #F3F4F6', flexShrink: 0 };
-const backBtn: React.CSSProperties = { width: '40px', height: '40px', border: 'none', background: '#F3F4F6', borderRadius: '50%', fontSize: '1.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', fontWeight: 300 };
-const bottomBar: React.CSSProperties = { padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))', background: 'white', borderTop: '1px solid #F3F4F6', flexShrink: 0 };
-const card: React.CSSProperties = { background: 'white', borderRadius: '16px', padding: '18px', marginBottom: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' };
-const cardTitle: React.CSSProperties = { margin: '0 0 14px', fontSize: '0.95rem', fontWeight: 700, color: '#111827' };
-const detail: React.CSSProperties = { display: 'flex', flexDirection: 'column', margin: '0 0 10px' };
-const detailLabel: React.CSSProperties = { fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' };
-const errBox: React.CSSProperties = { background: '#FEF2F2', color: '#DC2626', padding: '10px 14px', borderRadius: '10px', marginBottom: '14px', fontSize: '0.88rem' };
-const iStyle: React.CSSProperties = { width: '100%', padding: '12px 14px', border: '1.5px solid #E5E7EB', borderRadius: '10px', fontSize: '1rem', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', background: 'white' };
-const btnPrimary: React.CSSProperties = { background: '#00454A', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 20px', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer' };
-const btnOutline: React.CSSProperties = { background: 'white', color: '#374151', border: '1.5px solid #E5E7EB', borderRadius: '10px', padding: '12px 20px', fontSize: '0.95rem', fontWeight: 500, cursor: 'pointer' };
-
-export default MobileApp;
