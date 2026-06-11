@@ -5,9 +5,10 @@ import '../index.css';
 const API = '/api';
 
 interface User { id: string; full_name: string; role: string; }
-interface Customer { id: string; first_name: string; last_name: string; address: string; }
+interface Customer { id: string; first_name: string; last_name: string; address: string; phone_number?: string; email?: string; }
 interface Assignment { id: string; title: string; description: string; scheduled_at: string; status: string; customer: Customer; assigned_user_id?: string; assigned_user?: { id: string; full_name: string } | null; }
 interface Timelog { id: string; assignment_id: string; start_time: string; end_time: string | null; is_signed: boolean; }
+interface Report { id: string; assignment_id: string; timelog_id: string; notes: string; signature_id: string | null; created_at: string; }
 interface DashboardStats {
   today_appointments: number; open_assignments: number; completed_today: number;
   daily_revenue: number; monthly_revenue: number; open_booking_requests: number;
@@ -19,7 +20,7 @@ interface BookingRequest {
   status: string; assigned_user_id: string | null; notes: string; created_at: string;
 }
 
-type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees' | 'assignments-admin';
+type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees' | 'assignments-admin' | 'kunden';
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
@@ -107,6 +108,9 @@ function DashboardTab({ user }: { user: User }) {
 
 function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]; onRefresh: () => void }) {
   const [refreshing, setRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
+
   const handleStatus = async (id: string, status: string) => {
     await fetch(`${API}/assignments/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }) });
     onRefresh();
@@ -116,15 +120,47 @@ function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]
     await onRefresh();
     setRefreshing(false);
   };
+
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+  const monthAgo = new Date(now); monthAgo.setDate(1);
+
+  const filtered = assignments
+    .filter(a => statusFilter === 'all' || a.status === statusFilter)
+    .filter(a => {
+      if (timeFilter === 'all') return true;
+      if (timeFilter === 'today') return a.scheduled_at.startsWith(todayStr);
+      const d = new Date(a.scheduled_at);
+      if (timeFilter === 'week') return d >= weekAgo;
+      if (timeFilter === 'month') return d >= monthAgo;
+      return true;
+    });
+
+  const filterRowSt: React.CSSProperties = { display: 'flex', gap: '6px', flexWrap: 'wrap' };
+  const fbtn = (active: boolean): React.CSSProperties => ({ padding: '5px 12px', border: '1px solid #D1D5DB', borderRadius: '16px', cursor: 'pointer', fontSize: '0.85rem', background: active ? '#00454A' : 'white', color: active ? 'white' : '#374151', fontWeight: active ? 700 : 400 });
+
   return (
     <div className="appointments-list">
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={filterRowSt}>
+            {[['all','Alle'],['pending','Ausstehend'],['in_progress','In Bearbeitung'],['completed','Abgeschlossen']].map(([v,l]) => (
+              <button key={v} style={fbtn(statusFilter === v)} onClick={() => setStatusFilter(v)}>{l}</button>
+            ))}
+          </div>
+          <div style={filterRowSt}>
+            {[['all','Alle Zeiten'],['today','Heute'],['week','Diese Woche'],['month','Dieser Monat']].map(([v,l]) => (
+              <button key={v} style={fbtn(timeFilter === v)} onClick={() => setTimeFilter(v)}>{l}</button>
+            ))}
+          </div>
+        </div>
         <button className="btn-action-outline" style={{ color: '#00454A', borderColor: '#00454A' }} onClick={handleManualRefresh} disabled={refreshing}>
           {refreshing ? '⌛ Lädt...' : '🔄 Aktualisieren'}
         </button>
       </div>
-      {assignments.length === 0 && <p className="empty-state">Keine Termine zugewiesen.</p>}
-      {assignments.map(a => (
+      {filtered.length === 0 && <p className="empty-state">Keine Termine für diesen Filter.</p>}
+      {filtered.map(a => (
         <div key={a.id} className={`appointment-card status-${a.status}`} style={{ borderLeft: '4px solid #00454A', padding: '16px', marginBottom: '16px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
           <div className="appointment-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
             <strong style={{ fontSize: '1.1rem' }}>{a.title}</strong>
@@ -717,6 +753,9 @@ function AssignmentsAdminTab() {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [form, setForm] = useState<any>({ customer_id: '', assigned_user_id: '', title: '', description: '', scheduled_at: '' });
   const [saving, setSaving] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
+  const [searchQ, setSearchQ] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -791,14 +830,48 @@ function AssignmentsAdminTab() {
 
   if (loading) return <div className="loading-text">Lade Aufträge…</div>;
 
+  const now2 = new Date();
+  const todayStr2 = now2.toISOString().slice(0, 10);
+  const weekAgo2 = new Date(now2); weekAgo2.setDate(now2.getDate() - 7);
+  const monthStart2 = new Date(now2.getFullYear(), now2.getMonth(), 1);
+  const fbtn2 = (active: boolean): React.CSSProperties => ({ padding: '5px 12px', border: '1px solid #D1D5DB', borderRadius: '16px', cursor: 'pointer', fontSize: '0.82rem', background: active ? '#00454A' : 'white', color: active ? 'white' : '#374151', fontWeight: active ? 700 : 400 });
+
+  const filteredAssignments = assignments
+    .filter(a => statusFilter === 'all' || a.status === statusFilter)
+    .filter(a => {
+      if (timeFilter === 'all') return true;
+      if (timeFilter === 'today') return a.scheduled_at.startsWith(todayStr2);
+      const d = new Date(a.scheduled_at);
+      if (timeFilter === 'week') return d >= weekAgo2;
+      if (timeFilter === 'month') return d >= monthStart2;
+      return true;
+    })
+    .filter(a => !searchQ || `${a.title} ${a.customer?.first_name} ${a.customer?.last_name} ${a.customer?.address}`.toLowerCase().includes(searchQ.toLowerCase()));
+
   return (
     <div className="assignments-admin-layout" style={{ display: 'flex', gap: '24px' }}>
       <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <h3 style={{ margin: 0 }}>Auftragsübersicht ({assignments.length})</h3>
-          <button className="btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
-            {showCreate ? '× Abbrechen' : '+ Neuer Auftrag'}
-          </button>
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <h3 style={{ margin: 0 }}>Auftragsübersicht ({filteredAssignments.length}/{assignments.length})</h3>
+            <button className="btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
+              {showCreate ? '× Abbrechen' : '+ Neuer Auftrag'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <input type="search" placeholder="🔍 Suchen nach Titel, Kunde, Adresse…" value={searchQ} onChange={e => setSearchQ(e.target.value)}
+              style={{ padding: '7px 12px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.88rem', width: '100%', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {[['all','Alle'],['pending','Ausstehend'],['in_progress','In Bearbeitung'],['completed','Abgeschlossen'],['cancelled','Abgebrochen']].map(([v,l]) => (
+                <button key={v} style={fbtn2(statusFilter === v)} onClick={() => setStatusFilter(v)}>{l}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {[['all','Alle Zeiten'],['today','Heute'],['week','Diese Woche'],['month','Dieser Monat']].map(([v,l]) => (
+                <button key={v} style={fbtn2(timeFilter === v)} onClick={() => setTimeFilter(v)}>{l}</button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {msg && <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: 12 }}>{msg}</div>}
@@ -873,8 +946,8 @@ function AssignmentsAdminTab() {
             </tr>
           </thead>
           <tbody>
-            {assignments.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: '#9CA3AF', padding: '24px' }}>Keine Aufträge vorhanden.</td></tr>}
-            {assignments.map(a => (
+            {filteredAssignments.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: '#9CA3AF', padding: '24px' }}>Keine Aufträge für diesen Filter.</td></tr>}
+            {filteredAssignments.map(a => (
               <tr key={a.id} style={{ borderBottom: '1px solid #eee' }}>
                 <td style={{ padding: '12px' }}>
                   <div style={{ fontWeight: '700', color: '#00454A' }}>{a.title}</div>
@@ -946,6 +1019,170 @@ function AssignmentsAdminTab() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── PDF download helper (auth-aware) ──────────────────────────────────────────
+
+async function downloadReportPdf(reportId: string) {
+  const r = await fetch(`/api/pdf/${reportId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+  if (!r.ok) { alert('PDF konnte nicht geladen werden (' + r.status + ')'); return; }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'helferchen-bericht.pdf';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
+}
+
+// ── Kunden Tab ─────────────────────────────────────────────────────────────────
+
+function KundenTab() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Customer | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  useEffect(() => {
+    (async () => {
+      const [cR, aR, rR] = await Promise.all([
+        fetch(`${API}/customers`, { headers: authHeaders() }),
+        fetch(`${API}/assignments/all`, { headers: authHeaders() }),
+        fetch(`${API}/reports`, { headers: authHeaders() }),
+      ]);
+      if (cR.ok) setCustomers(await cR.json());
+      if (aR.ok) setAssignments(await aR.json());
+      if (rR.ok) setReports(await rR.json());
+      setLoading(false);
+    })();
+  }, []);
+
+  const getReport = (aid: string) => reports.find(r => r.assignment_id === aid);
+  const customerAssignments = (cid: string) => assignments.filter(a => a.customer?.id === cid);
+  const openInvoiceCount = (cid: string) => customerAssignments(cid).filter(a => {
+    if (a.status !== 'completed') return false;
+    const rep = getReport(a.id);
+    return rep && !rep.signature_id;
+  }).length;
+
+  const fbtn3 = (active: boolean): React.CSSProperties => ({ padding: '5px 12px', border: '1px solid #D1D5DB', borderRadius: '16px', cursor: 'pointer', fontSize: '0.82rem', background: active ? '#00454A' : 'white', color: active ? 'white' : '#374151', fontWeight: active ? 700 : 400 });
+
+  const filtered = customers.filter(c => {
+    const q = search.toLowerCase();
+    return !q || `${c.first_name} ${c.last_name} ${c.address}`.toLowerCase().includes(q);
+  });
+
+  if (loading) return <div className="loading-text">Lade Kunden…</div>;
+
+  const detailAssignments = selected
+    ? customerAssignments(selected.id).filter(a => statusFilter === 'all' || a.status === statusFilter).sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
+    : [];
+
+  return (
+    <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+      {/* List */}
+      <div style={{ width: selected ? '340px' : '100%', flexShrink: 0 }}>
+        <div style={{ marginBottom: '14px', display: 'flex', gap: '10px' }}>
+          <input type="search" placeholder="🔍 Kunde suchen…" value={search} onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem' }} />
+        </div>
+        <table className="admin-table" style={{ width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ padding: '10px 12px', textAlign: 'left' }}>Kunde</th>
+              {!selected && <th style={{ padding: '10px 12px', textAlign: 'left' }}>Adresse</th>}
+              <th style={{ padding: '10px 12px', textAlign: 'center' }}>Aufträge</th>
+              <th style={{ padding: '10px 12px', textAlign: 'center' }}>Offen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && <tr><td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: '#9CA3AF' }}>Keine Kunden gefunden.</td></tr>}
+            {filtered.map(c => {
+              const cas = customerAssignments(c.id);
+              const open = openInvoiceCount(c.id);
+              const isSel = selected?.id === c.id;
+              return (
+                <tr key={c.id} onClick={() => setSelected(isSel ? null : c)}
+                  style={{ cursor: 'pointer', background: isSel ? '#F0FDF4' : undefined, borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '12px' }}>
+                    <div style={{ fontWeight: 700 }}>{c.first_name} {c.last_name}</div>
+                    {c.phone_number && <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>📞 {c.phone_number}</div>}
+                    {selected && <div style={{ fontSize: '0.78rem', color: '#9CA3AF', marginTop: '2px' }}>{c.address}</div>}
+                  </td>
+                  {!selected && <td style={{ padding: '12px', fontSize: '0.88rem', color: '#374151' }}>{c.address}</td>}
+                  <td style={{ padding: '12px', textAlign: 'center', color: '#374151' }}>{cas.length}</td>
+                  <td style={{ padding: '12px', textAlign: 'center' }}>
+                    {open > 0 ? <span style={{ background: '#EF4444', color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 700 }}>{open}</span> : <span style={{ color: '#9CA3AF' }}>—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Detail panel */}
+      {selected && (
+        <div style={{ flex: 1, background: '#F9FAFB', borderRadius: '10px', padding: '20px', border: '1px solid #E5E7EB', minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <div>
+              <h3 style={{ margin: '0 0 4px' }}>{selected.first_name} {selected.last_name}</h3>
+              <p style={{ margin: '0 0 2px', color: '#6B7280', fontSize: '0.88rem' }}>📍 {selected.address}</p>
+              {selected.phone_number && <p style={{ margin: 0, color: '#6B7280', fontSize: '0.88rem' }}>📞 {selected.phone_number}</p>}
+            </div>
+            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: '1.6rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>×</button>
+          </div>
+
+          {/* Filters inside detail */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            {[['all','Alle'],['pending','Ausstehend'],['in_progress','In Bearbeitung'],['completed','Abgeschlossen']].map(([v,l]) => (
+              <button key={v} style={fbtn3(statusFilter === v)} onClick={() => setStatusFilter(v)}>{l}</button>
+            ))}
+          </div>
+
+          {detailAssignments.length === 0 ? (
+            <p style={{ color: '#9CA3AF' }}>Keine Aufträge für diesen Filter.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {detailAssignments.map(a => {
+                const rep = getReport(a.id);
+                const borderColor = a.status === 'completed' ? '#22C55E' : a.status === 'in_progress' ? '#F59E0B' : '#D1D5DB';
+                return (
+                  <div key={a.id} style={{ background: 'white', borderRadius: '8px', padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', borderLeft: `4px solid ${borderColor}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
+                      <strong style={{ fontSize: '0.97rem' }}>{a.title}</strong>
+                      <span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span>
+                    </div>
+                    <p style={{ margin: '0 0 4px', color: '#6B7280', fontSize: '0.82rem' }}>
+                      📅 {new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })} Uhr
+                      {a.assigned_user && ` · 👤 ${a.assigned_user.full_name}`}
+                    </p>
+                    {rep ? (
+                      <div style={{ background: '#F3F4F6', borderRadius: '6px', padding: '10px', marginTop: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: rep.notes ? '6px' : 0 }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: rep.signature_id ? '#16A34A' : '#DC2626' }}>
+                            {rep.signature_id ? '✅ Bezahlt / Unterschrieben' : '❗ Offene Rechnung'}
+                          </span>
+                          <button onClick={() => downloadReportPdf(rep.id)}
+                            style={{ fontSize: '0.78rem', padding: '3px 10px', background: '#00454A', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                            📄 PDF herunterladen
+                          </button>
+                        </div>
+                        {rep.notes && <p style={{ margin: 0, fontSize: '0.82rem', color: '#374151', lineHeight: 1.45 }}>{rep.notes.length > 120 ? rep.notes.slice(0, 120) + '…' : rep.notes}</p>}
+                      </div>
+                    ) : (
+                      <p style={{ margin: '8px 0 0', color: '#9CA3AF', fontSize: '0.8rem' }}>Kein Bericht vorhanden.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1031,6 +1268,7 @@ export default function Portal() {
     { id: 'timelogs', label: '⏱ Zeiten' },
     { id: 'employees', label: '👥 Mitarbeiter', adminOnly: true },
     { id: 'assignments-admin', label: '🧾 Rechnungen', adminOnly: true },
+    { id: 'kunden', label: '👥 Kunden', adminOnly: true },
   ];
 
   return (
@@ -1041,26 +1279,26 @@ export default function Portal() {
             <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
             <span className="portal-user">Angemeldet als <strong>{user?.full_name}</strong></span>
           </div>
-          <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }} style={{ backgroundColor: '#dc2626', color: 'white', fontWeight: 'bold' }}>
-            Abmelden
-          </button>
         </header>
 
         <div className="portal-action-bar">
           <div className="portal-action-left">
-            <button className="btn-action-outline" onClick={() => window.open('/app', '_blank')} style={{ background: '#00454A', color: 'white', borderColor: '#00454A' }}>
-              <span>📱</span> App starten
+            <button className="btn-action-outline" onClick={() => window.open('/app', '_blank')}>
+              App starten
             </button>
             <button className="btn-action-outline" onClick={handleInstallApp}>
-              <span>⬇</span> App installieren
+              App installieren
             </button>
             <button className="btn-action-outline" onClick={handleOrderMarketing}>
-              <span>🖨</span> Werbematerial bestellen
+              Werbematerial bestellen
+            </button>
+            <button className="btn-action-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>
+              &#x2192; Abmelden
             </button>
           </div>
           {isAdmin && (
-            <button className="btn-action-billing" onClick={() => navigate('/admin/billing')}>
-              Abrechnung
+            <button className="btn-action-settings" onClick={() => navigate('/admin')} title="Admin-Einstellungen">
+              ⚙
             </button>
           )}
         </div>
@@ -1072,11 +1310,6 @@ export default function Portal() {
             {t.label}
           </button>
         ))}
-        {isAdmin && (
-          <button className="tab-btn tab-btn--settings" onClick={() => navigate('/admin')} title="Admin-Einstellungen">
-            ⚙
-          </button>
-        )}
       </nav>
 
       <main className="portal-content">
@@ -1096,6 +1329,7 @@ export default function Portal() {
             {activeTab === 'timelogs' && <TimelogsTab timelogs={timelogs} assignments={assignments} />}
             {activeTab === 'employees' && isAdmin && <EmployeesTab />}
             {activeTab === 'assignments-admin' && isAdmin && <AssignmentsAdminTab />}
+            {activeTab === 'kunden' && isAdmin && <KundenTab />}
           </>
         )}
       </main>
