@@ -7,8 +7,6 @@ set -e
 VPS="85.190.98.5"
 ROOT_PASS="${1:-}"
 REPO_DIR="/opt/helferchen"
-GITHUB_TOKEN="${GITHUB_TOKEN:-}" # Should be set in environment
-REPO_URL="https://${GITHUB_TOKEN}@github.com/Berlinbear030/helferchen-app.git"
 
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15"
 SSHPASS_BIN="/home/linuxbrew/.linuxbrew/bin/sshpass"
@@ -37,14 +35,17 @@ FLUSH PRIVILEGES;
 \"
 MYSQL_EOF"
 
-echo "=== 4. Cloning/updating repo on VPS ==="
-eval "$SSH_CMD << 'GIT_EOF'
-if [ -d $REPO_DIR/.git ]; then
-  cd $REPO_DIR && git pull origin master
+echo "=== 4. Transferring files to VPS ==="
+# Ensure target directory exists
+eval "$SSH_CMD 'mkdir -p $REPO_DIR'"
+
+# Use rsync if available for better performance, else fallback to scp
+if command -v rsync > /dev/null 2>&1; then
+  rsync -avz --exclude 'node_modules' --exclude '.git' --exclude '.github' --exclude 'apps/*/dist' -e "ssh -i ~/.ssh/helferchen_vps" . root@$VPS:$REPO_DIR
 else
-  git clone $REPO_URL $REPO_DIR
+  # Fallback to scp (slower and less precise with excludes)
+  $SCP_CMD -r . root@$VPS:$REPO_DIR
 fi
-GIT_EOF"
 
 echo "=== 5. Installing/building backend ==="
 eval "$SSH_CMD << 'BACKEND_EOF'
@@ -65,13 +66,18 @@ DB_PASS=HelferDB2026!
 DB_NAME=helferchen
 JWT_SECRET=$(openssl rand -hex 32)
 NODE_ENV=production
+SMTP_HOST=localhost
+SMTP_PORT=25
+SMTP_SECURE=false
+SMTP_FROM=noreply@helferchen.info
+TELEGRAM_BOT_TOKEN=8652428094:AAFLv4DkINSWa3TBhYq50IQP1zTpqK_Aaac
 ENV_EOF'"
 
 echo "=== 7. Setting up PM2 ==="
 eval "$SSH_CMD << 'PM2_EOF'
 which pm2 || npm install -g pm2
 pm2 describe helferchen-backend > /dev/null 2>&1 \
-  && pm2 restart helferchen-backend \
+  && pm2 restart helferchen-backend --update-env \
   || pm2 start $REPO_DIR/apps/backend/dist/index.js --name helferchen-backend
 pm2 save
 PM2_EOF"

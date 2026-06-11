@@ -1,93 +1,75 @@
-import nodemailer from 'nodemailer';
-
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.sendBookingConfirmation = sendBookingConfirmation;
+exports.sendShopOrderEmail = sendShopOrderEmail;
+const nodemailer_1 = __importDefault(require("nodemailer"));
 function createTransporter() {
-  const host = process.env.SMTP_HOST;
-  if (!host) return null;
-  const isLocalhost = host === 'localhost' || host === '127.0.0.1';
-  return nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    ignoreTLS: isLocalhost,
-    auth: process.env.SMTP_USER ? {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    } : undefined,
-  });
-}
-
-export async function sendBookingConfirmation(booking: {
-  name: string;
-  email: string;
-  preferred_date: string;
-  preferred_time: string;
-  service_description: string;
-  street?: string;
-  house_number?: string;
-  zip?: string;
-  city?: string;
-  address?: string;
-}): Promise<boolean> {
-  if (!booking.email) return false;
-  const transporter = createTransporter();
-  if (!transporter) return false;
-
-  const fullAddress = booking.street
-    ? `${booking.street} ${booking.house_number}, ${booking.zip} ${booking.city}`
-    : booking.address || '';
-
-  try {
-    await transporter.sendMail({
-      from: `"Helferchen" <no-reply@helferchen.info>`,
-      to: booking.email,
-      subject: `Buchungsbestätigung – ${booking.preferred_date}`,
-      html: bookingConfirmationHtml({ ...booking, fullAddress }),
-      text: `Hallo ${booking.name},\n\nwir haben Ihre Anfrage erhalten und melden uns bald.\n\nTermin: ${booking.preferred_date} um ${booking.preferred_time} Uhr\nAdresse: ${fullAddress}\nLeistung: ${booking.service_description}\n\nMit freundlichen Grüßen\nIhr Helferchen-Team`,
+    const host = process.env.SMTP_HOST;
+    if (!host)
+        return null;
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+    return nodemailer_1.default.createTransport({
+        host,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: process.env.SMTP_SECURE === 'true',
+        ignoreTLS: isLocalhost,
+        auth: process.env.SMTP_USER ? {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+        } : undefined,
     });
-    return true;
-  } catch (err) {
-    console.error('Booking confirmation email failed:', err);
-    return false;
-  }
 }
-
-export async function sendShopOrderEmail(order: {
-  customerName: string;
-  customerEmail: string;
-  items: { name: string; quantity: number; price: number }[];
-  total: number;
-  shopEmail: string;
-}): Promise<boolean> {
-  const transporter = createTransporter();
-  if (!transporter) return false;
-
-  const itemsList = order.items
-    .map(i => `  • ${i.name} × ${i.quantity} = ${(i.price * i.quantity).toFixed(2)} €`)
-    .join('\n');
-
-  try {
-    await transporter.sendMail({
-      from: `"Helferchen Shop" <no-reply@helferchen.info>`,
-      to: order.shopEmail,
-      subject: `Neue Shop-Bestellung von ${order.customerName}`,
-      html: shopOrderHtml(order),
-      text: `Neue Bestellung von ${order.customerName} (${order.customerEmail})\n\n${itemsList}\n\nGesamt: ${order.total.toFixed(2)} €`,
-    });
-    return true;
-  } catch (err) {
-    console.error('Shop order email failed:', err);
-    return false;
-  }
+async function sendBookingConfirmation(booking) {
+    if (!booking.email)
+        return false;
+    const transporter = createTransporter();
+    if (!transporter)
+        return false;
+    const fullAddress = booking.street
+        ? `${booking.street} ${booking.house_number}, ${booking.zip} ${booking.city}`
+        : booking.address || '';
+    try {
+        await transporter.sendMail({
+            from: `"Helferchen" <no-reply@helferchen.info>`,
+            to: booking.email,
+            subject: `Buchungsbestätigung – ${booking.preferred_date}`,
+            html: bookingConfirmationHtml({ ...booking, fullAddress }),
+            text: `Hallo ${booking.name},\n\nwir haben Ihre Anfrage erhalten und melden uns bald.\n\nTermin: ${booking.preferred_date} um ${booking.preferred_time} Uhr\nAdresse: ${fullAddress}\nLeistung: ${booking.service_description}\n\nMit freundlichen Grüßen\nIhr Helferchen-Team`,
+        });
+        return true;
+    }
+    catch (err) {
+        console.error('Booking confirmation email failed:', err);
+        return false;
+    }
 }
-
-function bookingConfirmationHtml(b: {
-  name: string;
-  preferred_date: string;
-  preferred_time: string;
-  service_description: string;
-  fullAddress: string;
-}) {
-  return `<!DOCTYPE html>
+async function sendShopOrderEmail(order) {
+    const transporter = createTransporter();
+    if (!transporter)
+        return false;
+    const itemsList = order.items
+        .map(i => `  • ${i.name} × ${i.quantity} = ${(i.price * i.quantity).toFixed(2)} €`)
+        .join('\n');
+    try {
+        await transporter.sendMail({
+            from: `"Helferchen Shop" <no-reply@helferchen.info>`,
+            to: order.shopEmail,
+            subject: `Neue Shop-Bestellung von ${order.customerName}`,
+            html: shopOrderHtml(order),
+            text: `Neue Bestellung von ${order.customerName} (${order.customerEmail})\n\n${itemsList}\n\nGesamt: ${order.total.toFixed(2)} €`,
+        });
+        return true;
+    }
+    catch (err) {
+        console.error('Shop order email failed:', err);
+        return false;
+    }
+}
+function bookingConfirmationHtml(b) {
+    return `<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8">
@@ -150,21 +132,14 @@ function bookingConfirmationHtml(b: {
 </body>
 </html>`;
 }
-
-function shopOrderHtml(order: {
-  customerName: string;
-  customerEmail: string;
-  items: { name: string; quantity: number; price: number }[];
-  total: number;
-}) {
-  const rows = order.items.map(i => `
+function shopOrderHtml(order) {
+    const rows = order.items.map(i => `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;">${escapeHtml(i.name)}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;text-align:center;">${i.quantity}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;text-align:right;">${(i.price * i.quantity).toFixed(2)} €</td>
     </tr>`).join('');
-
-  return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="de">
 <head><meta charset="UTF-8"><title>Neue Bestellung</title></head>
 <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif;">
@@ -202,12 +177,11 @@ function shopOrderHtml(order: {
 </body>
 </html>`;
 }
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function escapeHtml(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
