@@ -19,7 +19,11 @@ function createPool(): mysql.Pool | null {
       database: url.pathname.slice(1),
       waitForConnections: true,
       connectionLimit: 10,
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 30000,
       timezone: '+00:00',
+      connectTimeout: 10000,
     });
   }
   return null;
@@ -31,12 +35,27 @@ export const query = async (text: string, params?: any[]): Promise<{ rows: any[]
   if (!pool || !dbConnected) {
     throw new Error('Database not available');
   }
-  const [result] = await pool.query(text, params);
-  if (Array.isArray(result)) {
-    return { rows: result as any[], rowCount: (result as any[]).length };
+  try {
+    const [result] = await pool.query(text, params);
+    if (Array.isArray(result)) {
+      return { rows: result as any[], rowCount: (result as any[]).length };
+    }
+    const header = result as mysql.ResultSetHeader;
+    return { rows: [], rowCount: header.affectedRows };
+  } catch (err: any) {
+    // On fatal connection errors, mark as disconnected and re-probe
+    if (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNREFUSED') {
+      dbConnected = false;
+      console.error('DB connection lost, attempting reconnect…');
+      const ok = await testConnection();
+      if (!ok) throw new Error('Database not available');
+      const [result] = await pool.query(text, params);
+      if (Array.isArray(result)) return { rows: result as any[], rowCount: (result as any[]).length };
+      const header = result as mysql.ResultSetHeader;
+      return { rows: [], rowCount: header.affectedRows };
+    }
+    throw err;
   }
-  const header = result as mysql.ResultSetHeader;
-  return { rows: [], rowCount: header.affectedRows };
 };
 
 export async function testConnection(): Promise<boolean> {

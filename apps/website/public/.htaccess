@@ -1,7 +1,7 @@
 Options -MultiViews
 RewriteEngine On
 
-# SPA fallback — API calls go directly to helferchen-api.onrender.com
+# SPA fallback — all routes handled by React app, API proxied via VPS
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.html [L]

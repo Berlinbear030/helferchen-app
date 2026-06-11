@@ -78,12 +78,27 @@ export interface BookingRequest {
   phone: string;
   email: string;
   address: string;
+  street?: string;
+  house_number?: string;
+  zip?: string;
+  city?: string;
   service_description: string;
   preferred_date: string;
   preferred_time: string;
   status: 'open' | 'accepted' | 'rejected' | 'assigned';
   assigned_user_id: string | null;
   notes: string;
+  created_at: string;
+}
+
+export interface ShopArticle {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+  stock: number;
+  active: boolean;
   created_at: string;
 }
 

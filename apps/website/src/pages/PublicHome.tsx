@@ -13,7 +13,10 @@ function BookingPortal() {
     name: '',
     phone: '',
     email: '',
-    address: '',
+    street: '',
+    house_number: '',
+    zip: '',
+    city: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -47,7 +50,7 @@ function BookingPortal() {
         <div className="booking-success-icon">✓</div>
         <h3>Anfrage eingegangen!</h3>
         <p>Wir melden uns innerhalb von 24 Stunden bei Ihnen.</p>
-        <button className="btn-primary" onClick={() => { setSubmitted(false); setStep(1); setForm({ preferred_date: '', preferred_time: '', service_description: '', name: '', phone: '', email: '', address: '' }); }}>
+        <button className="btn-primary" onClick={() => { setSubmitted(false); setStep(1); setForm({ preferred_date: '', preferred_time: '', service_description: '', name: '', phone: '', email: '', street: '', house_number: '', zip: '', city: '' }); }}>
           Weitere Anfrage
         </button>
       </div>
@@ -116,19 +119,34 @@ function BookingPortal() {
             </div>
           </div>
           <label>Adresse *</label>
-          <input type="text" placeholder="Straße, Hausnummer, PLZ Ort" value={form.address} onChange={e => set('address', e.target.value)} required />
-          <label>E-Mail (optional)</label>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 3 }}>
+              <input type="text" placeholder="Straße" value={form.street} onChange={e => set('street', e.target.value)} required />
+            </div>
+            <div style={{ flex: 1 }}>
+              <input type="text" placeholder="Nr." value={form.house_number} onChange={e => set('house_number', e.target.value)} required />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <input type="text" placeholder="PLZ" value={form.zip} onChange={e => set('zip', e.target.value)} required pattern="[0-9]{5}" title="5-stellige Postleitzahl" maxLength={5} />
+            </div>
+            <div style={{ flex: 3 }}>
+              <input type="text" placeholder="Ort" value={form.city} onChange={e => set('city', e.target.value)} required />
+            </div>
+          </div>
+          <label style={{ marginTop: '12px' }}>E-Mail (optional, für Bestätigungsmail)</label>
           <input type="email" placeholder="ihre@email.de" value={form.email} onChange={e => set('email', e.target.value)} />
           <div className="booking-summary">
             <strong>Zusammenfassung:</strong>
             <span>📅 {form.preferred_date} um {form.preferred_time} Uhr</span>
-            <span>📍 {form.address || 'Keine Adresse angegeben'}</span>
+            <span>📍 {form.street ? `${form.street} ${form.house_number}, ${form.zip} ${form.city}` : 'Keine Adresse angegeben'}</span>
             <span>📝 {form.service_description.slice(0, 60)}{form.service_description.length > 60 ? '…' : ''}</span>
           </div>
           {error && <p className="booking-error">{error}</p>}
           <div className="booking-nav">
             <button type="button" className="btn-secondary" onClick={() => setStep(2)}>← Zurück</button>
-            <button type="submit" className="btn-primary" disabled={submitting || !form.name || !form.phone || !form.address}>
+            <button type="submit" className="btn-primary" disabled={submitting || !form.name || !form.phone || !form.street || !form.zip || !form.city}>
               {submitting ? 'Wird gesendet…' : 'Anfrage absenden'}
             </button>
           </div>

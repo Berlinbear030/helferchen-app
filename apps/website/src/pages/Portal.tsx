@@ -94,6 +94,7 @@ function DashboardTab({ user }: { user: User }) {
               </div>
               {a.customer && <p className="appointment-customer">{a.customer.first_name} {a.customer.last_name} — {a.customer.address}</p>}
               <p className="appointment-time">{new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+              {a.description && <p className="appointment-desc" style={{ fontSize: '0.85rem', color: '#6B7280', margin: '4px 0' }}>📝 {a.description}</p>}
             </div>
           ))}
         </div>
@@ -105,25 +106,43 @@ function DashboardTab({ user }: { user: User }) {
 // ── Appointments Tab ───────────────────────────────────────────────────────────
 
 function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]; onRefresh: () => void }) {
+  const [refreshing, setRefreshing] = useState(false);
   const handleStatus = async (id: string, status: string) => {
     await fetch(`${API}/assignments/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }) });
     onRefresh();
   };
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+  };
   return (
     <div className="appointments-list">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+        <button className="btn-action-outline" style={{ color: '#00454A', borderColor: '#00454A' }} onClick={handleManualRefresh} disabled={refreshing}>
+          {refreshing ? '⌛ Lädt...' : '🔄 Aktualisieren'}
+        </button>
+      </div>
       {assignments.length === 0 && <p className="empty-state">Keine Termine zugewiesen.</p>}
       {assignments.map(a => (
-        <div key={a.id} className={`appointment-card status-${a.status}`}>
-          <div className="appointment-header">
-            <strong>{a.title}</strong>
-            <span className="status-badge">{statusLabel(a.status)}</span>
+        <div key={a.id} className={`appointment-card status-${a.status}`} style={{ borderLeft: '4px solid #00454A', padding: '16px', marginBottom: '16px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+          <div className="appointment-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <strong style={{ fontSize: '1.1rem' }}>{a.title}</strong>
+            <span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span>
           </div>
-          <p className="appointment-customer">{a.customer?.first_name} {a.customer?.last_name} — {a.customer?.address}</p>
-          <p className="appointment-time">{new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-          {a.description && <p className="appointment-desc">{a.description}</p>}
-          <div className="appointment-actions">
-            {a.status === 'pending' && <button className="btn-primary" onClick={() => handleStatus(a.id, 'in_progress')}>Starten</button>}
-            {a.status === 'in_progress' && <button className="btn-success" onClick={() => handleStatus(a.id, 'completed')}>Abschließen</button>}
+          <div className="appointment-details" style={{ marginBottom: '12px' }}>
+            <p style={{ margin: '4px 0', fontSize: '0.95rem' }}>📍 <strong>{a.customer?.address || 'Keine Adresse'}</strong></p>
+            <p style={{ margin: '4px 0', color: '#4B5563' }}>👤 {a.customer?.first_name} {a.customer?.last_name}</p>
+            <p style={{ margin: '4px 0', color: '#4B5563' }}>📅 {new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })} Uhr</p>
+          </div>
+          {a.description && (
+            <p className="appointment-desc" style={{ padding: '8px', background: '#f8fafc', borderRadius: '4px', fontSize: '0.85rem', color: '#374151', marginBottom: '12px' }}>
+              📝 {a.description}
+            </p>
+          )}
+          <div className="appointment-actions" style={{ display: 'flex', gap: '8px' }}>
+            {a.status === 'pending' && <button className="btn-primary" onClick={() => handleStatus(a.id, 'in_progress')}>▶ Starten</button>}
+            {a.status === 'in_progress' && <button className="btn-success" onClick={() => handleStatus(a.id, 'completed')}>✓ Abschließen</button>}
           </div>
         </div>
       ))}
@@ -133,23 +152,39 @@ function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]
 
 // ── Tour Planning Tab ──────────────────────────────────────────────────────────
 
-function TourTab({ assignments }: { assignments: Assignment[] }) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+function TourTab({ assignments, unassigned, selectedDate, setSelectedDate, user }: { 
+  assignments: Assignment[]; 
+  unassigned: Assignment[];
+  selectedDate: string;
+  setSelectedDate: (d: string) => void;
+  user: User;
+}) {
   const dayAssignments = assignments
-    .filter(a => a.scheduled_at.startsWith(selectedDate))
+    .filter(a => a.scheduled_at && a.scheduled_at.includes(selectedDate))
+    .filter(a => user.role === 'admin' || a.assigned_user_id === user.id)
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+
+  const dayUnassigned = unassigned
+    .filter(a => a.scheduled_at && a.scheduled_at.includes(selectedDate))
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
 
   return (
     <div className="tour-tab">
       <div className="tour-header">
-        <h3>Tagesroute planen</h3>
+        <div className="tour-header-main">
+          <h3>Tagesroute planen</h3>
+          <p className="tour-date-display">{new Date(selectedDate).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</p>
+        </div>
         <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="date-picker" />
       </div>
-      {dayAssignments.length === 0 ? (
-        <p className="empty-state">Keine Termine für diesen Tag.</p>
-      ) : (
-        <>
-          <p className="tour-summary">{dayAssignments.length} Termin(e) · chronologische Reihenfolge</p>
+
+      <section className="tour-section">
+        <h4 className="tour-section-title">
+          {user.role === 'admin' ? `🟢 Alle Termine (${dayAssignments.length})` : `🟢 Meine Termine (${dayAssignments.length})`}
+        </h4>
+        {dayAssignments.length === 0 ? (
+          <p className="empty-state">Keine eigenen Termine für diesen Tag.</p>
+        ) : (
           <div className="tour-route">
             {dayAssignments.map((a, i) => (
               <div key={a.id} className="tour-stop">
@@ -171,7 +206,34 @@ function TourTab({ assignments }: { assignments: Assignment[] }) {
               </div>
             ))}
           </div>
-        </>
+        )}
+      </section>
+
+      {dayUnassigned.length > 0 && (
+        <section className="tour-section" style={{ marginTop: '24px' }}>
+          <h4 className="tour-section-title">🟡 Offene Aufträge ({dayUnassigned.length})</h4>
+          <div className="tour-route">
+            {dayUnassigned.map((a, i) => (
+              <div key={a.id} className="tour-stop unassigned">
+                <div className="tour-stop-num" style={{ background: '#eab308' }}>?</div>
+                <div className="tour-stop-body">
+                  <div className="tour-stop-time">{new Date(a.scheduled_at).toLocaleTimeString('de-DE', { timeStyle: 'short' })} Uhr</div>
+                  <strong>{a.title}</strong>
+                  {a.customer && (
+                    <>
+                      <p>{a.customer.first_name} {a.customer.last_name}</p>
+                      <p className="tour-address">📍 {a.customer.address}</p>
+                      <a href={`https://maps.google.com/?q=${encodeURIComponent(a.customer.address)}`} target="_blank" rel="noreferrer" className="btn-secondary btn-sm">
+                        In Maps öffnen
+                      </a>
+                    </>
+                  )}
+                  <span className="status-badge status-pending">Nicht zugewiesen</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
@@ -233,22 +295,30 @@ function BookingRequestsTab() {
                     <button className="btn-danger" onClick={() => update(r.id, { status: 'rejected' })}>Ablehnen</button>
                   </div>
                 )}
-                {r.status === 'accepted' && (
-                  <div className="booking-request-actions" style={{ alignItems: 'center', gap: '8px' }}>
-                    <select
-                      value={assignSelects[r.id] || ''}
-                      onChange={e => setAssignSelects(s => ({ ...s, [r.id]: e.target.value }))}
-                      style={{ fontSize: '0.9rem', padding: '4px 8px', borderRadius: '6px', border: '1px solid #D1D5DB' }}
-                    >
-                      <option value="">– Mitarbeiter wählen –</option>
-                      {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
-                    </select>
+                {r.status !== 'rejected' && (
+                  <div className="booking-request-actions" style={{ alignItems: 'flex-end', gap: '8px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eee' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: '0.75rem', color: '#6B7280', display: 'block', marginBottom: '4px' }}>
+                        {r.assigned_user_id 
+                          ? <span>✅ Zugewiesen an: <strong>{employees.find(e => e.id === r.assigned_user_id)?.full_name || 'Mitarbeiter'}</strong></span>
+                          : 'Mitarbeiter zuweisen:'}
+                      </label>
+                      <select
+                        value={assignSelects[r.id] || r.assigned_user_id || ''}
+                        onChange={e => setAssignSelects(s => ({ ...s, [r.id]: e.target.value }))}
+                        style={{ width: '100%', fontSize: '0.9rem', padding: '8px', borderRadius: '6px', border: '1px solid #D1D5DB', background: '#fff' }}
+                      >
+                        <option value="">– Mitarbeiter wählen –</option>
+                        {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                      </select>
+                    </div>
                     <button
                       className="btn-primary"
-                      disabled={!assignSelects[r.id]}
-                      onClick={() => update(r.id, { status: 'assigned', assigned_user_id: assignSelects[r.id] })}
+                      style={{ padding: '8px 16px', height: '38px' }}
+                      disabled={!assignSelects[r.id] && !r.assigned_user_id}
+                      onClick={() => update(r.id, { status: 'assigned', assigned_user_id: assignSelects[r.id] || r.assigned_user_id })}
                     >
-                      Zuweisen
+                      {r.status === 'assigned' ? 'Zuweisung ändern' : 'Zuweisen'}
                     </button>
                   </div>
                 )}
@@ -454,17 +524,22 @@ function makePin(color: string) {
   });
 }
 
+const geoCache: Record<string, [number, number]> = {};
+
 async function geocodeNominatim(address: string): Promise<[number, number] | null> {
+  if (geoCache[address]) return geoCache[address];
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
     const r = await fetch(url, { headers: { 'Accept-Language': 'de' } });
     const data = await r.json();
     if (!data[0]) return null;
-    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    const res: [number, number] = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    geoCache[address] = res;
+    return res;
   } catch { return null; }
 }
 
-function OsmMapView({ mine, unassigned }: { mine: MapAssignment[]; unassigned: MapAssignment[] }) {
+function OsmMapView({ mine, unassigned, filterDate }: { mine: MapAssignment[]; unassigned: MapAssignment[]; filterDate?: string }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const markers = useRef<any[]>([]);
@@ -476,7 +551,7 @@ function OsmMapView({ mine, unassigned }: { mine: MapAssignment[]; unassigned: M
       if (cancelled || !mapRef.current) return;
       const L = (window as any).L;
       if (!mapInstance.current) {
-        mapInstance.current = L.map(mapRef.current).setView([51.1657, 10.4515], 7);
+        mapInstance.current = L.map(mapRef.current).setView([51.1657, 10.4515], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
           maxZoom: 19,
@@ -485,35 +560,84 @@ function OsmMapView({ mine, unassigned }: { mine: MapAssignment[]; unassigned: M
       markers.current.forEach(m => m.remove());
       markers.current = [];
 
-      const all: Array<{ a: MapAssignment; color: string }> = [
-        ...mine.map(a => ({ a, color: '#22c55e' })),
-        ...unassigned.map(a => ({ a, color: '#eab308' })),
-      ];
-      setStatus(`Geocoding ${all.length} Adressen…`);
+      let mineFiltered = mine;
+      let unassignedFiltered = unassigned;
+
+      if (filterDate) {
+        mineFiltered = mine.filter(a => a.scheduled_at?.includes(filterDate));
+        unassignedFiltered = unassigned.filter(a => a.scheduled_at?.includes(filterDate));
+      }
+
+      const all: Array<{ a: MapAssignment; color: string }> = [];
+      
+      mineFiltered.forEach(a => {
+        all.push({ a, color: a.assigned_user_id ? '#22c55e' : '#eab308' });
+      });
+
+      unassignedFiltered.forEach(a => {
+        if (!all.some(item => item.a.id === a.id)) {
+          all.push({ a, color: '#eab308' });
+        }
+      });
+      
+      if (all.length === 0) {
+        setStatus('Keine Aufträge zum Anzeigen auf der Karte für diesen Tag.');
+        return;
+      }
+
+      setStatus(`Lade ${all.length} Standorte…`);
+      
+      // Separate into cached and non-cached to speed up
+      const cached = all.filter(item => item.a.customer?.address && geoCache[item.a.customer.address]);
+      const needsGeocode = all.filter(item => item.a.customer?.address && !geoCache[item.a.customer.address]);
+
+      // Add cached immediately
+      cached.forEach(({ a, color }) => {
+        const coords = geoCache[a.customer.address];
+        const marker = L.marker(coords, { icon: makePin(color) })
+          .addTo(mapInstance.current)
+          .bindPopup(`<strong>${a.title}</strong><br>${a.customer.address}<br><small>${color === '#22c55e' ? '🟢 Zugewiesen' : '🟡 Nicht zugewiesen'}</small>`);
+        markers.current.push(marker);
+      });
+
+      if (needsGeocode.length === 0) {
+        setStatus('');
+        if (cached.length > 0 && cached.length < 5) mapInstance.current.setView(geoCache[cached[0].a.customer.address], 12);
+        return;
+      }
+
+      // Process non-cached with delay
       let done = 0;
-      all.forEach(async ({ a, color }, i) => {
-        const address = a.customer?.address;
-        if (!address) { done++; if (done === all.length) setStatus(''); return; }
-        if (i > 0) await new Promise(r => setTimeout(r, i * 1100));
+      needsGeocode.forEach(async ({ a, color }, i) => {
+        const address = a.customer.address;
+        await new Promise(r => setTimeout(r, i * 1100)); // Respect Nominatim 1s limit
+        
         const coords = await geocodeNominatim(address);
         done++;
-        if (done === all.length) setStatus('');
+        if (done >= needsGeocode.length) setStatus('');
+        
         if (!coords || cancelled || !mapInstance.current) return;
-        const marker = (window as any).L.marker(coords, { icon: makePin(color) })
+        
+        const marker = L.marker(coords, { icon: makePin(color) })
           .addTo(mapInstance.current)
           .bindPopup(`<strong>${a.title}</strong><br>${address}<br><small>${color === '#22c55e' ? '🟢 Zugewiesen' : '🟡 Nicht zugewiesen'}</small>`);
         markers.current.push(marker);
+        
+        if (cached.length === 0 && i === 0) {
+          mapInstance.current.setView(coords, 12);
+        }
       });
     }).catch(e => setStatus(e.message));
     return () => { cancelled = true; };
-  }, [mine, unassigned]);
+  }, [mine, unassigned, filterDate]);
 
   return (
     <div>
       {status && <p style={{ color: '#666', fontSize: '0.85rem', margin: '4px 0' }}>{status}</p>}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '0.85rem' }}>
-        <span>🟡 Nicht zugewiesen ({unassigned.length})</span>
-        <span>🟢 Meine Aufträge ({mine.length})</span>
+        <span>🟡 Offen ({unassigned.length})</span>
+        <span>🟢 Zugewiesen ({mine.length})</span>
+        {filterDate && <span style={{ fontWeight: 'bold', color: '#00454A' }}>📅 Filter: {filterDate}</span>}
       </div>
       <div ref={mapRef} className="map-container" />
     </div>
@@ -639,14 +763,30 @@ function AssignmentsAdminTab() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    const payload = { ...form };
+    // Normalize both NEW_CUSTOMER variants to the same value expected by backend
+    if (payload.customer_id === 'NEW_CUSTOMER_DIRECT') {
+      payload.customer_id = 'NEW_CUSTOMER';
+    }
     try {
       const r = await fetch(`${API}/assignments`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
-      if (r.ok) { setMsg('Auftrag erstellt!'); setShowCreate(false); load(); }
-      else { const d = await r.json(); setMsg(d.message || 'Fehler'); }
-    } finally { setSaving(false); }
+      if (r.ok) {
+        setMsg('✅ Auftrag erstellt!');
+        setShowCreate(false);
+        setForm({ customer_id: '', assigned_user_id: '', title: '', description: '', scheduled_at: '' });
+        load();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setMsg('❌ Fehler: ' + (d.message || 'Auftrag konnte nicht gespeichert werden.'));
+      }
+    } catch {
+      setMsg('❌ Netzwerkfehler. Bitte Verbindung prüfen.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <div className="loading-text">Lade Aufträge…</div>;
@@ -661,7 +801,7 @@ function AssignmentsAdminTab() {
           </button>
         </div>
 
-        {msg && <div className="msg-banner msg-success" style={{ marginBottom: 12 }}>{msg}</div>}
+        {msg && <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: 12 }}>{msg}</div>}
 
         {showCreate && (
           <form className="employee-form" onSubmit={create} style={{ marginBottom: 24, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
@@ -680,12 +820,27 @@ function AssignmentsAdminTab() {
                 <label>Kunde *</label>
                 <select required value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}>
                   <option value="">– Kunde wählen –</option>
+                  <option value="NEW_CUSTOMER_DIRECT">🆕 Neuer Kunde (direkt anlegen)</option>
                   {form.customer_id === 'NEW_CUSTOMER' && <option value="NEW_CUSTOMER">🆕 Neu: {form.new_customer?.name}</option>}
                   {customers.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name} – {c.address}</option>)}
                 </select>
-                {form.customer_id === 'NEW_CUSTOMER' && (
-                  <div style={{ fontSize: '0.75rem', color: '#059669', marginTop: '4px' }}>
-                    Kunde wird beim Speichern automatisch angelegt.
+                {(form.customer_id === 'NEW_CUSTOMER' || form.customer_id === 'NEW_CUSTOMER_DIRECT') && (
+                  <div style={{ marginTop: '8px', padding: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#059669', marginBottom: '6px', fontWeight: '600' }}>
+                      Neuen Kunden anlegen:
+                    </div>
+                    {form.customer_id === 'NEW_CUSTOMER_DIRECT' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <input placeholder="Name (Vor- und Nachname) *" required value={form.new_customer?.name || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, name: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
+                        <input placeholder="Telefon *" required value={form.new_customer?.phone || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, phone: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
+                        <input placeholder="Adresse *" required value={form.new_customer?.address || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, address: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.75rem', color: '#374151' }}>
+                        {form.new_customer?.name} · {form.new_customer?.phone}
+                        <br />Adresse: {form.new_customer?.address}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -705,29 +860,64 @@ function AssignmentsAdminTab() {
           </form>
         )}
 
-        <table className="admin-table" style={{ width: '100%' }}>
+        <table className="admin-table" style={{ width: '100%', tableLayout: 'auto' }}>
           <thead>
             <tr>
-              <th>Titel</th>
-              <th>Kunde</th>
-              <th>Termin</th>
-              <th>Status</th>
-              <th>Zugewiesen an</th>
+              <th style={{ textAlign: 'left', padding: '12px' }}>Titel / Auftrag</th>
+              <th style={{ textAlign: 'left', padding: '12px' }}>Kunde</th>
+              <th style={{ textAlign: 'left', padding: '12px' }}>📍 Adresse</th>
+              <th style={{ textAlign: 'left', padding: '12px' }}>📝 Arbeiten / Details</th>
+              <th style={{ textAlign: 'left', padding: '12px' }}>📅 Termin</th>
+              <th style={{ textAlign: 'left', padding: '12px' }}>Status</th>
+              <th style={{ textAlign: 'left', padding: '12px' }}>Zuweisung</th>
             </tr>
           </thead>
           <tbody>
-            {assignments.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', color: '#9CA3AF' }}>Keine Aufträge vorhanden.</td></tr>}
+            {assignments.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: '#9CA3AF', padding: '24px' }}>Keine Aufträge vorhanden.</td></tr>}
             {assignments.map(a => (
-              <tr key={a.id}>
-                <td><strong>{a.title}</strong>{a.description && <div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{a.description}</div>}</td>
-                <td>{a.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '–'}<div style={{ fontSize: '0.8rem', color: '#6B7280' }}>{a.customer?.address}</div></td>
-                <td style={{ whiteSpace: 'nowrap' }}>{a.scheduled_at ? new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–'}</td>
-                <td><span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span></td>
-                <td>
+              <tr key={a.id} style={{ borderBottom: '1px solid #eee' }}>
+                <td style={{ padding: '12px' }}>
+                  <div style={{ fontWeight: '700', color: '#00454A' }}>{a.title}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#9CA3AF' }}>ID: {a.id.slice(0, 8)}</div>
+                </td>
+                <td style={{ padding: '12px' }}>
+                  {a.customer ? (
+                    <div>
+                      <div style={{ fontWeight: '600' }}>{a.customer.first_name} {a.customer.last_name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>📞 {a.customer.phone_number}</div>
+                    </div>
+                  ) : '–'}
+                </td>
+                <td style={{ padding: '12px' }}>
+                  {a.customer ? (
+                    <div style={{ maxWidth: '300px', fontSize: '0.9rem', fontWeight: '500', color: '#111827' }}>
+                      📍 {a.customer.address}
+                    </div>
+                  ) : (
+                    <div style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                      ⚠️ Adresse fehlt (Kein Kunde!)
+                    </div>
+                  )}
+                </td>
+                <td style={{ padding: '12px' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#1F2937', fontWeight: '600', marginBottom: '4px' }}>
+                    {a.title}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#374151', maxWidth: '350px', whiteSpace: 'pre-wrap', maxHeight: '150px', overflowY: 'auto', background: '#F3F4F6', padding: '10px', borderRadius: '6px', border: '1px solid #D1D5DB', lineHeight: '1.4' }}>
+                    {a.description || <span style={{ color: '#9CA3AF', fontStyle: 'italic' }}>Keine weiteren Details angegeben</span>}
+                  </div>
+                </td>
+                <td style={{ padding: '12px', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                  {a.scheduled_at ? new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : '–'}
+                </td>
+                <td style={{ padding: '12px' }}>
+                  <span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span>
+                </td>
+                <td style={{ padding: '12px' }}>
                   <select
                     value={a.assigned_user?.id || a.assigned_user_id || ''}
                     onChange={e => reassign(a.id, e.target.value)}
-                    style={{ fontSize: '0.85rem', padding: '2px 4px' }}
+                    style={{ fontSize: '0.85rem', padding: '4px 8px', borderRadius: '4px', border: '1px solid #D1D5DB', width: '100%' }}
                   >
                     <option value="">🟡 Nicht zugewiesen</option>
                     {employees.map(emp => <option key={emp.id} value={emp.id}>🟢 {emp.full_name}</option>)}
@@ -765,10 +955,15 @@ function AssignmentsAdminTab() {
 export default function Portal() {
   const [user, setUser] = useState<User | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [unassignedAssignments, setUnassignedAssignments] = useState<Assignment[]>([]);
   const [timelogs, setTimelogs] = useState<Timelog[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const navigate = useNavigate();
   const deferredPrompt = useRef<any>(null);
 
@@ -788,16 +983,26 @@ export default function Portal() {
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [aRes, tRes] = await Promise.all([
-        fetch(`${API}/assignments/my`, { headers: authHeaders() }),
+      const isAdmin = user?.role === 'admin';
+      const assignmentsUrl = isAdmin ? `${API}/assignments/all` : `${API}/assignments/my`;
+      
+      const [aRes, tRes, mRes] = await Promise.all([
+        fetch(assignmentsUrl, { headers: authHeaders() }),
         fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
+        fetch(`${API}/assignments/map`, { headers: authHeaders() }),
       ]);
       if (aRes.status === 401 || tRes.status === 401) { localStorage.clear(); navigate('/login'); return; }
-      setAssignments(await aRes.json());
-      setTimelogs(await tRes.json());
+      
+      const mine = await aRes.json();
+      const logs = await tRes.json();
+      const mapData = await mRes.json();
+
+      setAssignments(mine);
+      setTimelogs(logs);
+      setUnassignedAssignments(mapData.unassigned || []);
     } catch { setError('Fehler beim Laden der Daten.'); }
     finally { setLoading(false); }
-  }, [navigate]);
+  }, [navigate, user?.role]);
 
   useEffect(() => { if (user) loadData(); }, [user, loadData]);
 
@@ -812,7 +1017,7 @@ export default function Portal() {
   };
 
   const handleOrderMarketing = () => {
-    window.open('mailto:info@helferchen.info?subject=Werbematerial%20bestellen&body=Hallo%2C%0A%0Aich%20m%C3%B6chte%20Werbematerial%20bestellen.%0A%0AAnzahl%20und%20Art%3A%20', '_blank');
+    window.location.href = '/werbeartikel';
   };
 
   if (!user) return <div className="loading-screen">Laden…</div>;
@@ -834,9 +1039,11 @@ export default function Portal() {
         <header className="portal-header">
           <div className="portal-header-left">
             <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
-            <span className="portal-user">Angemeldet als <strong>{user.full_name}</strong></span>
+            <span className="portal-user">Angemeldet als <strong>{user?.full_name}</strong></span>
           </div>
-          <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>Abmelden</button>
+          <button className="btn-logout" onClick={() => { localStorage.clear(); navigate('/'); }} style={{ backgroundColor: '#dc2626', color: 'white', fontWeight: 'bold' }}>
+            Abmelden
+          </button>
         </header>
 
         <div className="portal-action-bar">
@@ -877,9 +1084,9 @@ export default function Portal() {
             {activeTab === 'appointments' && <AppointmentsTab assignments={assignments} onRefresh={loadData} />}
             {activeTab === 'tour' && (
               <div>
-                <TourTab assignments={assignments} />
+                <TourTab assignments={assignments} unassigned={unassignedAssignments} selectedDate={selectedDate} setSelectedDate={setSelectedDate} user={user} />
                 <h3 style={{ margin: '24px 0 12px' }}>Kartenansicht (OpenStreetMap)</h3>
-                <OsmMapView mine={assignments} unassigned={[]} />
+                <OsmMapView mine={assignments} unassigned={unassignedAssignments} filterDate={selectedDate} />
               </div>
             )}
             {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab />}

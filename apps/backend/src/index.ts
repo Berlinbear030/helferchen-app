@@ -12,6 +12,7 @@ import adminRoutes from './routes/admin';
 import bookingRequestRoutes from './routes/bookingRequests';
 import dashboardRoutes from './routes/dashboard';
 import cronRoutes from './routes/cron';
+import shopRoutes from './routes/shop';
 import telegramRoutes from './telegram';
 import { initDatabase } from './db/init';
 import { testConnection } from './db/pool';
@@ -35,6 +36,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/booking-requests', bookingRequestRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/shop', shopRoutes);
 app.use('/api/telegram', telegramRoutes);
 
 app.get('/', (_req: Request, res: Response) => {

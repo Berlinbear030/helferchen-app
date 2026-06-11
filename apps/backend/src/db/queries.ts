@@ -1,4 +1,4 @@
-import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, AuditEntry, Role } from './index';
+import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, ShopArticle, AuditEntry, Role } from './index';
 import { query, dbConnected } from './pool';
 import { randomUUID } from 'crypto';
 
@@ -92,19 +92,24 @@ export const AssignmentRepo = {
     const res = await query('SELECT * FROM assignments WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
-  async create(customer_id: string, assigned_user_id: string | null, title: string, description: string, scheduled_at: string): Promise<Assignment> {
+  async create(customer_id: string, assigned_user_id: string | null, title: string, description: string, scheduled_at: string, booking_request_id: string | null = null): Promise<Assignment> {
     if (!useDb()) {
-      const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending' as const, created_at: new Date().toISOString() };
-      db.assignments.push(a);
-      return a;
+      const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending' as const, created_at: new Date().toISOString(), booking_request_id: booking_request_id || '' };
+      db.assignments.push(a as any);
+      return a as any;
     }
     const id = randomUUID();
     const formattedDate = scheduled_at.replace('T', ' ').slice(0, 19).padEnd(19, ':00').slice(0, 19);
     await query(
-      'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, customer_id, assigned_user_id || null, title, description, formattedDate]
+      'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at, booking_request_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, customer_id, assigned_user_id || null, title, description, formattedDate, booking_request_id]
     );
-    return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
+    return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() } as any;
+  },
+  async findByBookingRequestId(bookingRequestId: string): Promise<Assignment | null> {
+    if (!useDb()) return (db.assignments as any).find((a: any) => a.booking_request_id === bookingRequestId) || null;
+    const res = await query('SELECT * FROM assignments WHERE booking_request_id = ?', [bookingRequestId]);
+    return res.rows[0] || null;
   },
   async updateStatus(id: string, status: string): Promise<void> {
     if (!useDb()) {
@@ -292,17 +297,25 @@ export const BookingRequestRepo = {
     return res.rows;
   },
   async create(data: Partial<BookingRequest>): Promise<BookingRequest> {
+    const fullAddress = data.street
+      ? `${data.street} ${data.house_number}, ${data.zip} ${data.city}`.trim()
+      : data.address || '';
+
     if (!useDb()) {
-      const entry = {
+      const entry: BookingRequest = {
         id: Date.now().toString() + Math.random().toString(36).slice(2),
         name: data.name!,
         phone: data.phone!,
         email: data.email || '',
-        address: data.address || '',
+        address: fullAddress,
+        street: data.street,
+        house_number: data.house_number,
+        zip: data.zip,
+        city: data.city,
         service_description: data.service_description!,
         preferred_date: data.preferred_date!,
         preferred_time: data.preferred_time!,
-        status: 'open' as const,
+        status: 'open',
         assigned_user_id: null,
         notes: '',
         created_at: new Date().toISOString(),
@@ -312,15 +325,19 @@ export const BookingRequestRepo = {
     }
     const id = randomUUID();
     await query(
-      'INSERT INTO booking_requests (id, name, phone, email, address, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, data.name, data.phone, data.email, data.address, data.service_description, data.preferred_date, data.preferred_time]
+      'INSERT INTO booking_requests (id, name, phone, email, address, street, house_number, zip, city, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, data.name, data.phone, data.email || '', fullAddress, data.street || null, data.house_number || null, data.zip || null, data.city || null, data.service_description, data.preferred_date, data.preferred_time]
     );
     return {
       id,
       name: data.name!,
       phone: data.phone!,
       email: data.email || '',
-      address: data.address || '',
+      address: fullAddress,
+      street: data.street,
+      house_number: data.house_number,
+      zip: data.zip,
+      city: data.city,
       service_description: data.service_description!,
       preferred_date: data.preferred_date!,
       preferred_time: data.preferred_time!,
@@ -450,5 +467,47 @@ export const AuditRepo = {
     }
     const res = await query(sql, values);
     return res.rows;
+  }
+};
+
+export const ShopArticleRepo = {
+  async findAll(activeOnly = false): Promise<ShopArticle[]> {
+    if (!useDb()) return [];
+    const sql = activeOnly
+      ? 'SELECT * FROM shop_articles WHERE active = TRUE ORDER BY name ASC'
+      : 'SELECT * FROM shop_articles ORDER BY name ASC';
+    const res = await query(sql);
+    return res.rows;
+  },
+  async findById(id: string): Promise<ShopArticle | null> {
+    if (!useDb()) return null;
+    const res = await query('SELECT * FROM shop_articles WHERE id = ?', [id]);
+    return res.rows[0] || null;
+  },
+  async create(data: { name: string; description: string; price: number; image_url?: string; stock: number }): Promise<ShopArticle> {
+    const id = randomUUID();
+    await query(
+      'INSERT INTO shop_articles (id, name, description, price, image_url, stock) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, data.name, data.description, data.price, data.image_url || '', data.stock]
+    );
+    return { id, name: data.name, description: data.description, price: data.price, image_url: data.image_url || '', stock: data.stock, active: true, created_at: new Date().toISOString() };
+  },
+  async update(id: string, data: Partial<ShopArticle>): Promise<boolean> {
+    const fields: string[] = [];
+    const values: any[] = [];
+    if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name); }
+    if (data.description !== undefined) { fields.push('description = ?'); values.push(data.description); }
+    if (data.price !== undefined) { fields.push('price = ?'); values.push(data.price); }
+    if (data.image_url !== undefined) { fields.push('image_url = ?'); values.push(data.image_url); }
+    if (data.stock !== undefined) { fields.push('stock = ?'); values.push(data.stock); }
+    if (data.active !== undefined) { fields.push('active = ?'); values.push(data.active); }
+    if (fields.length === 0) return false;
+    values.push(id);
+    const res = await query(`UPDATE shop_articles SET ${fields.join(', ')} WHERE id = ?`, values);
+    return res.rowCount > 0;
+  },
+  async delete(id: string): Promise<boolean> {
+    const res = await query('DELETE FROM shop_articles WHERE id = ?', [id]);
+    return res.rowCount > 0;
   }
 };
