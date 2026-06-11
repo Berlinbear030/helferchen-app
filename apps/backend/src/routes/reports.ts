@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken, requireRole, requirePermission } from '../middleware/auth';
-import { ReportRepo, TimelogRepo } from '../db/queries';
+import { ReportRepo, TimelogRepo, AssignmentRepo } from '../db/queries';
 
 const router = Router();
 
@@ -42,6 +42,40 @@ router.get('/my', authenticateToken, async (req: AuthRequest, res: Response) => 
 router.get('/', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   const reports = await ReportRepo.findAll();
   res.json(reports);
+});
+
+// GET /api/reports/customer-stats — revenue aggregation per customer (admin)
+router.get('/customer-stats', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+  function calcPrice(minutes: number): number {
+    if (minutes <= 15) return 20;
+    return 20 + Math.ceil((minutes - 15) / 15) * 15;
+  }
+
+  const reports = await ReportRepo.findAll();
+  const statsMap: Record<string, { total_revenue: number; open_amount: number }> = {};
+
+  await Promise.all(reports.map(async (report) => {
+    const [timelog, assignment] = await Promise.all([
+      TimelogRepo.findById(report.timelog_id),
+      AssignmentRepo.findById(report.assignment_id),
+    ]);
+    if (!assignment) return;
+
+    const minutes = (timelog?.start_time && timelog?.end_time)
+      ? Math.max(0, Math.round(
+          (new Date(String(timelog.end_time).replace(' ', 'T') + (String(timelog.end_time).includes('Z') ? '' : 'Z')).getTime() -
+           new Date(String(timelog.start_time).replace(' ', 'T') + (String(timelog.start_time).includes('Z') ? '' : 'Z')).getTime()) / 60000
+        ))
+      : 0;
+    const price = calcPrice(minutes);
+    const customerId = assignment.customer_id;
+
+    if (!statsMap[customerId]) statsMap[customerId] = { total_revenue: 0, open_amount: 0 };
+    statsMap[customerId].total_revenue += price;
+    if (!report.signature_id) statsMap[customerId].open_amount += price;
+  }));
+
+  res.json(statsMap);
 });
 
 router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {

@@ -1092,24 +1092,29 @@ async function downloadReportPdf(reportId: string) {
 
 // ── Kunden Tab ─────────────────────────────────────────────────────────────────
 
+interface CustomerStats { total_revenue: number; open_amount: number; }
+
 function KundenTab({ canDelete }: { canDelete: boolean }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [customerStats, setCustomerStats] = useState<Record<string, CustomerStats>>({});
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   const loadKunden = useCallback(async () => {
-    const [cR, aR, rR] = await Promise.all([
+    const [cR, aR, rR, sR] = await Promise.all([
       fetch(`${API}/customers`, { headers: authHeaders() }),
       fetch(`${API}/assignments/all`, { headers: authHeaders() }),
       fetch(`${API}/reports`, { headers: authHeaders() }),
+      fetch(`${API}/reports/customer-stats`, { headers: authHeaders() }),
     ]);
     if (cR.ok) setCustomers(await cR.json());
     if (aR.ok) setAssignments(await aR.json());
     if (rR.ok) setReports(await rR.json());
+    if (sR.ok) setCustomerStats(await sR.json());
     setLoading(false);
   }, []);
 
@@ -1123,11 +1128,6 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
 
   const getReport = (aid: string) => reports.find(r => r.assignment_id === aid);
   const customerAssignments = (cid: string) => assignments.filter(a => a.customer?.id === cid);
-  const openInvoiceCount = (cid: string) => customerAssignments(cid).filter(a => {
-    if (a.status !== 'completed') return false;
-    const rep = getReport(a.id);
-    return rep && !rep.signature_id;
-  }).length;
 
   const fbtn3 = (active: boolean): React.CSSProperties => ({ padding: '5px 12px', border: '1px solid #D1D5DB', borderRadius: '16px', cursor: 'pointer', fontSize: '0.82rem', background: active ? '#00454A' : 'white', color: active ? 'white' : '#374151', fontWeight: active ? 700 : 400 });
 
@@ -1156,14 +1156,17 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
               <th style={{ padding: '10px 12px', textAlign: 'left' }}>Kunde</th>
               {!selected && <th style={{ padding: '10px 12px', textAlign: 'left' }}>Adresse</th>}
               <th style={{ padding: '10px 12px', textAlign: 'center' }}>Aufträge</th>
-              <th style={{ padding: '10px 12px', textAlign: 'center' }}>Offen</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Umsatz</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Offen</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: '#9CA3AF' }}>Keine Kunden gefunden.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: '#9CA3AF' }}>Keine Kunden gefunden.</td></tr>}
             {filtered.map(c => {
               const cas = customerAssignments(c.id);
-              const open = openInvoiceCount(c.id);
+              const stats = customerStats[c.id];
+              const totalRevenue = stats?.total_revenue ?? 0;
+              const openAmount = stats?.open_amount ?? 0;
               const isSel = selected?.id === c.id;
               return (
                 <tr key={c.id} onClick={() => setSelected(isSel ? null : c)}
@@ -1175,8 +1178,15 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
                   </td>
                   {!selected && <td style={{ padding: '12px', fontSize: '0.88rem', color: '#374151' }}>{c.address}</td>}
                   <td style={{ padding: '12px', textAlign: 'center', color: '#374151' }}>{cas.length}</td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    {open > 0 ? <span style={{ background: '#EF4444', color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '0.78rem', fontWeight: 700 }}>{open}</span> : <span style={{ color: '#9CA3AF' }}>—</span>}
+                  <td style={{ padding: '12px', textAlign: 'right' }}>
+                    {totalRevenue > 0
+                      ? <span style={{ fontWeight: 600, color: '#16A34A' }}>{totalRevenue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                      : <span style={{ color: '#9CA3AF' }}>—</span>}
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right' }}>
+                    {openAmount > 0
+                      ? <span style={{ background: '#FEF2F2', color: '#DC2626', padding: '2px 8px', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700 }}>{openAmount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                      : <span style={{ color: '#9CA3AF' }}>—</span>}
                   </td>
                 </tr>
               );

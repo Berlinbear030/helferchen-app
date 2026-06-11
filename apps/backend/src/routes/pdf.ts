@@ -16,11 +16,6 @@ function utcMs(s: string | Date | null | undefined): number {
   return new Date(str.endsWith('Z') || str.includes('+') ? str : str.replace(' ', 'T') + 'Z').getTime();
 }
 
-function fmtDateTime(s: string | Date | null | undefined): string {
-  if (!s) return '—';
-  return new Date(utcMs(s)).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
-}
-
 function fmtDate(s: string | Date | null | undefined): string {
   if (!s) return '—';
   return new Date(utcMs(s)).toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -32,7 +27,6 @@ function fmtTime(s: string | Date | null | undefined): string {
 }
 
 function calcPrice(minutes: number): number {
-  if (minutes <= 0) return 0;
   if (minutes <= 15) return 20;
   return 20 + Math.ceil((minutes - 15) / 15) * 15;
 }
@@ -45,12 +39,13 @@ const GREEN = '#00454A';
 const LIGHT_GREEN = '#E6F4F3';
 const GRAY = '#6B7280';
 const DARK = '#1F2937';
-const SEP_COLOR = '#E5E7EB';
+const SEP_COLOR = '#D1D5DB';
 const LOGO_PATH = '/var/www/helferchen/logo.png';
 const IBAN = 'DE12 1005 0000 1064 2171 99';
 const BIC = 'BELADEBEXXX';
-const COMPANY_NAME = 'Helferchen UG (haftungsbeschränkt)';
-const COMPANY_ADDRESS = 'info@helferchen.info · www.helferchen.info';
+const TAX_RATE = 0.19;
+const GESCHAEFTSFUEHRER = 'Fabian Marquardt (Geschäftsführer)';
+const STEUERNUMMER = '36/434/00685';
 
 // ── PDF Builder ────────────────────────────────────────────────────────────────
 
@@ -66,12 +61,13 @@ async function buildPdf(reportId: string): Promise<Buffer> {
   ]);
 
   const customer = assignment ? await CustomerRepo.findById(assignment.customer_id) : null;
-  const isPaid = assignment?.status === 'completed';
+  const isPaid = !!signature;
   const minutes = (timelog?.start_time && timelog?.end_time)
     ? Math.max(0, Math.round((utcMs(timelog.end_time as any) - utcMs(timelog.start_time as any)) / 60000))
     : 0;
   const price = calcPrice(minutes);
   const extraBlocks = minutes > 15 ? Math.ceil((minutes - 15) / 15) : 0;
+  const extraCost = extraBlocks * 15;
   const invoiceNum = `HCH-${reportId.slice(0, 8).toUpperCase()}`;
   const invoiceDate = report.created_at ? fmtDate(report.created_at) : new Date().toLocaleDateString('de-DE');
 
@@ -82,46 +78,37 @@ async function buildPdf(reportId: string): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const W = 595.28; // A4 width pt
-    const M = 50;     // margin
-    const CW = W - M * 2; // content width
+    const W = 595.28;
+    const M = 50;
+    const CW = W - M * 2;
 
-    // ── Header bar ─────────────────────────────────────────────────────────────
-    doc.rect(0, 0, W, 90).fill(GREEN);
+    // ── HELFERCHEN header ───────────────────────────────────────────────────────
+    doc.rect(0, 0, W, 78).fill('#FFFFFF');
 
-    // Logo (left)
     if (fs.existsSync(LOGO_PATH)) {
       try {
-        doc.image(LOGO_PATH, M, 14, { height: 50, fit: [130, 60] });
-      } catch { /* skip logo if it fails */ }
+        doc.image(LOGO_PATH, W / 2 - 65, 14, { height: 50, fit: [130, 50] });
+      } catch { /* fallback to text */ }
     }
 
-    // Company name (right of logo area)
-    doc.fillColor('white')
-      .font('Helvetica-Bold').fontSize(18)
-      .text(COMPANY_NAME, 200, 20, { width: W - 200 - M, align: 'right' });
-    doc.font('Helvetica').fontSize(9)
-      .text(COMPANY_ADDRESS, 200, 44, { width: W - 200 - M, align: 'right' });
+    // Big brand title
+    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(34)
+      .text('HELFERCHEN', 0, 18, { width: W, align: 'center' });
+    doc.moveTo(M, 72).lineTo(W - M, 72).stroke(SEP_COLOR);
 
-    // ── Document title strip ───────────────────────────────────────────────────
-    doc.rect(0, 90, W, 30).fill(LIGHT_GREEN);
-    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(13)
-      .text('RECHNUNG / ABRECHNUNGSSEITE', M, 99, { width: CW / 2 });
-    doc.fillColor(GRAY).font('Helvetica').fontSize(9)
-      .text(`Rechnungsnummer: ${invoiceNum}   ·   Datum: ${invoiceDate}`, M + CW / 2, 101, { width: CW / 2, align: 'right' });
+    // ── Title strip ────────────────────────────────────────────────────────────
+    doc.rect(0, 76, W, 30).fill(GREEN);
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(11)
+      .text('RECHNUNG / ARBEITSNACHWEIS', M, 85, { width: CW / 2 });
+    doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
+      .text(`Rechnungsnummer: ${invoiceNum}   ·   Datum: ${invoiceDate}`, M + CW / 2, 88, { width: CW / 2, align: 'right' });
 
-    let y = 140;
+    let y = 126;
 
-    // ── Customer & employee address block ──────────────────────────────────────
-    // Left: Customer
+    // ── Customer & employee block ──────────────────────────────────────────────
     doc.fillColor(GRAY).font('Helvetica').fontSize(8)
       .text('RECHNUNGSEMPFÄNGER', M, y);
-    y += 14;
-    if (customer) {
-      doc.fillColor(GRAY).font('Helvetica').fontSize(9)
-        .text(`Kunden-Nr.: ${customer.id.slice(0, 8).toUpperCase()}`, M, y);
-      y += 13;
-    }
+    y += 13;
     doc.fillColor(DARK).font('Helvetica-Bold').fontSize(11)
       .text(customer ? `${customer.first_name} ${customer.last_name}` : '—', M, y);
     y += 15;
@@ -132,43 +119,38 @@ async function buildPdf(reportId: string): Promise<Buffer> {
       doc.text(`Tel: ${customer.phone_number}`, M, y); y += 13;
     }
 
-    // Right: Employee + assignment
     const rx = M + CW / 2;
-    let ry = 140;
+    let ry = 126;
     doc.fillColor(GRAY).font('Helvetica').fontSize(8)
       .text('BEARBEITET VON', rx, ry);
-    ry += 14;
+    ry += 13;
     doc.fillColor(DARK).font('Helvetica-Bold').fontSize(11)
       .text(employee?.full_name || '—', rx, ry);
     ry += 15;
     if (assignment) {
-      doc.fillColor(GRAY).font('Helvetica').fontSize(9)
-        .text(`Auftragnummer: ${assignment.id.slice(0, 8).toUpperCase()}`, rx, ry);
+      doc.fillColor(DARK).font('Helvetica').fontSize(10)
+        .text(`Auftrag: ${assignment.title}`, rx, ry, { width: CW / 2 - 10 });
       ry += 13;
     }
-    doc.font('Helvetica').fontSize(10).fillColor(DARK)
-      .text(`Aufgabe: ${assignment?.title || '—'}`, rx, ry);
-    ry += 13;
     if (assignment?.scheduled_at) {
-      doc.text(`Termin: ${fmtDate(assignment.scheduled_at)}`, rx, ry); ry += 13;
+      doc.fillColor(DARK).font('Helvetica').fontSize(10)
+        .text(`Termin: ${fmtDate(assignment.scheduled_at)}`, rx, ry); ry += 13;
     }
 
-    y = Math.max(y, ry) + 20;
+    y = Math.max(y, ry) + 18;
 
-    // ── Separator ─────────────────────────────────────────────────────────────
+    // ── Table header ───────────────────────────────────────────────────────────
     doc.moveTo(M, y).lineTo(W - M, y).stroke(SEP_COLOR);
-    y += 14;
-
-    // ── Leistungsübersicht header ──────────────────────────────────────────────
+    y += 10;
     doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(8)
-      .text('BESCHREIBUNG', M, y)
+      .text('LEISTUNG', M, y)
       .text('ARBEITSZEIT', M + CW * 0.5, y)
       .text('BETRAG', W - M - 70, y, { width: 70, align: 'right' });
     y += 12;
     doc.moveTo(M, y).lineTo(W - M, y).stroke(SEP_COLOR);
     y += 10;
 
-    // Service row
+    // Service row — shows extra cost above Grundgebühr (0 for ≤15 min)
     doc.fillColor(DARK).font('Helvetica-Bold').fontSize(10)
       .text(assignment?.title || 'Service', M, y, { width: CW * 0.45 });
     if (timelog?.start_time) {
@@ -178,8 +160,8 @@ async function buildPdf(reportId: string): Promise<Buffer> {
       doc.font('Helvetica').fontSize(10)
         .text(timeStr, M + CW * 0.5, y, { width: CW * 0.3 });
     }
-    doc.font('Helvetica-Bold').fontSize(10)
-      .text(euro(price), W - M - 70, y, { width: 70, align: 'right' });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK)
+      .text(euro(extraCost), W - M - 70, y, { width: 70, align: 'right' });
     y += 16;
 
     if (assignment?.description) {
@@ -188,7 +170,6 @@ async function buildPdf(reportId: string): Promise<Buffer> {
       y += 14;
     }
 
-    // Duration detail
     doc.font('Helvetica').fontSize(9).fillColor(GRAY)
       .text(`Dauer: ${minutes} Minuten`, M + CW * 0.5, y - 14, { width: CW * 0.3 });
 
@@ -209,61 +190,57 @@ async function buildPdf(reportId: string): Promise<Buffer> {
       rowY(`Zusatzzeit: ${extraBlocks} × 15 Min à 15,00 €`, euro(extraBlocks * 15));
     }
 
-    // MwSt breakdown
-    const mwstRate = 0.07;
-    const netto = price / (1 + mwstRate);
-    const mwstAmount = price - netto;
-
     y += 6;
     doc.moveTo(M, y).lineTo(W - M, y).stroke(SEP_COLOR);
     y += 8;
 
-    const summaryLabelX = W - M - 240;
-    const summaryAmtX = W - M - 70;
-    doc.fillColor(GRAY).font('Helvetica').fontSize(9)
-      .text('Zwischensumme (Netto):', summaryLabelX, y, { width: 160 })
-      .text(euro(netto), summaryAmtX, y, { width: 70, align: 'right' });
-    y += 14;
-    doc.fillColor(GRAY).font('Helvetica').fontSize(9)
-      .text('Inkl. 7 % MwSt:', summaryLabelX, y, { width: 160 })
-      .text(euro(mwstAmount), summaryAmtX, y, { width: 70, align: 'right' });
-    y += 12;
+    // ── GESAMTBETRAG box ───────────────────────────────────────────────────────
+    // Design: dark teal box, GESAMTBETRAG label left, Zwischensumme/MwSt/Total right
+    const netto = price / (1 + TAX_RATE);
+    const mwstAmount = price - netto;
+    const boxH = 44;
+    doc.rect(M, y, CW, boxH).fill(GREEN);
 
-    // Total row
-    doc.rect(M, y, CW, 28).fill(GREEN);
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(12)
-      .text('GESAMTBETRAG', M + 10, y + 8, { width: CW - 90 });
-    doc.fontSize(13)
-      .text(euro(price), W - M - 80, y + 7, { width: 70, align: 'right' });
-    y += 42;
+    // Left: big GESAMTBETRAG label
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(13)
+      .text('GESAMTBETRAG', M + 10, y + 6, { width: CW * 0.45 });
 
-    // ── Separator ─────────────────────────────────────────────────────────────
-    doc.moveTo(M, y).lineTo(W - M, y).stroke(SEP_COLOR);
-    y += 14;
+    // Right: summary column
+    const summaryX = M + CW * 0.5;
+    const summaryW = CW * 0.5 - 10;
+    doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
+      .text(`Zwischensumme:`, summaryX, y + 5, { width: summaryW - 60 })
+      .text(euro(price), summaryX + summaryW - 60, y + 5, { width: 60, align: 'right' });
+    doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
+      .text(`inkl. ${Math.round(TAX_RATE * 100)} % MwSt.:`, summaryX, y + 18, { width: summaryW - 60 })
+      .text(euro(mwstAmount), summaryX + summaryW - 60, y + 18, { width: 60, align: 'right' });
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(10)
+      .text(`GESAMTBETRAG: ${euro(price)}`, summaryX, y + 31, { width: summaryW });
 
-    // ── Bericht ────────────────────────────────────────────────────────────────
+    y += boxH + 14;
+
+    // ── Arbeitsbericht ─────────────────────────────────────────────────────────
     if (report.notes) {
       doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(8).text('ARBEITSBERICHT', M, y);
-      y += 14;
+      y += 13;
       doc.fillColor(DARK).font('Helvetica').fontSize(10)
         .text(report.notes, M, y, { width: CW, lineGap: 3 });
-      y += doc.heightOfString(report.notes, { width: CW, lineGap: 3 }) + 18;
+      y += doc.heightOfString(report.notes, { width: CW, lineGap: 3 }) + 16;
     }
 
     // ── Payment status ─────────────────────────────────────────────────────────
     doc.moveTo(M, y).lineTo(W - M, y).stroke(SEP_COLOR);
-    y += 14;
-
+    y += 12;
     doc.fillColor(GRAY).font('Helvetica-Bold').fontSize(8).text('ZAHLUNGSSTATUS', M, y);
-    y += 14;
+    y += 13;
 
     if (isPaid) {
       doc.rect(M, y, CW, 32).fill('#F0FDF4');
-      doc.fillColor('#15803D').font('Helvetica-Bold').fontSize(12)
-        .text('✓  Bezahlt', M + 12, y + 9);
+      doc.fillColor('#15803D').font('Helvetica-Bold').fontSize(13)
+        .text('✓  Bar bezahlt', M + 12, y + 8);
       if (signature?.signed_at) {
         doc.font('Helvetica').fontSize(9).fillColor('#15803D')
-          .text(`Kassiert am ${fmtDate(signature.signed_at)}`, M + 120, y + 12);
+          .text(`Kassiert am ${fmtDate(signature.signed_at)}`, M + 160, y + 12);
       }
       y += 46;
     } else {
@@ -297,16 +274,10 @@ async function buildPdf(reportId: string): Promise<Buffer> {
       }
 
       const sigY = y + 76;
-      // Signature line
       doc.moveTo(M, sigY).lineTo(M + 200, sigY).stroke(DARK);
       doc.fillColor(DARK).font('Helvetica').fontSize(9)
         .text(signature.signer_name, M, sigY + 4)
         .text(`Datum: ${fmtDate(signature.signed_at)}`, M, sigY + 16);
-
-      // Employee counter-signature area
-      doc.moveTo(W - M - 200, sigY).lineTo(W - M, sigY).stroke(DARK);
-      doc.text('Mitarbeiter', W - M - 200, sigY + 4)
-        .text(employee?.full_name || '—', W - M - 200, sigY + 16);
 
       y = sigY + 34;
     } else {
@@ -318,11 +289,12 @@ async function buildPdf(reportId: string): Promise<Buffer> {
     y += 20;
 
     // ── Footer ─────────────────────────────────────────────────────────────────
-    const footerY = 841.89 - 40; // A4 height - footer height
-    doc.rect(0, footerY, W, 40).fill(GREEN);
+    const footerY = 841.89 - 44;
+    doc.rect(0, footerY, W, 44).fill(GREEN);
     doc.fillColor('white').font('Helvetica').fontSize(8)
-      .text(`${COMPANY_NAME}  ·  ${COMPANY_ADDRESS}  ·  IBAN: ${IBAN}`, M, footerY + 8, { width: CW, align: 'center' })
-      .text(`Rechnungsnummer: ${invoiceNum}  ·  Erstellt: ${invoiceDate}`, M, footerY + 22, { width: CW, align: 'center' });
+      .text(`${GESCHAEFTSFUEHRER}  ·  Steuernummer: ${STEUERNUMMER}`, M, footerY + 7, { width: CW, align: 'center' })
+      .text(`info@helferchen.info  ·  www.helferchen.info`, M, footerY + 19, { width: CW, align: 'center' })
+      .text(`IBAN: ${IBAN}  ·  Rechnungsnummer: ${invoiceNum}  ·  Erstellt: ${invoiceDate}`, M, footerY + 31, { width: CW, align: 'center' });
 
     doc.end();
   });

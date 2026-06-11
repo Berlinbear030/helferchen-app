@@ -35,6 +35,36 @@ router.get('/', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), asyn
     const reports = await queries_1.ReportRepo.findAll();
     res.json(reports);
 });
+// GET /api/reports/customer-stats — revenue aggregation per customer (admin)
+router.get('/customer-stats', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
+    function calcPrice(minutes) {
+        if (minutes <= 15)
+            return 20;
+        return 20 + Math.ceil((minutes - 15) / 15) * 15;
+    }
+    const reports = await queries_1.ReportRepo.findAll();
+    const statsMap = {};
+    await Promise.all(reports.map(async (report) => {
+        const [timelog, assignment] = await Promise.all([
+            queries_1.TimelogRepo.findById(report.timelog_id),
+            queries_1.AssignmentRepo.findById(report.assignment_id),
+        ]);
+        if (!assignment)
+            return;
+        const minutes = (timelog?.start_time && timelog?.end_time)
+            ? Math.max(0, Math.round((new Date(String(timelog.end_time).replace(' ', 'T') + (String(timelog.end_time).includes('Z') ? '' : 'Z')).getTime() -
+                new Date(String(timelog.start_time).replace(' ', 'T') + (String(timelog.start_time).includes('Z') ? '' : 'Z')).getTime()) / 60000))
+            : 0;
+        const price = calcPrice(minutes);
+        const customerId = assignment.customer_id;
+        if (!statsMap[customerId])
+            statsMap[customerId] = { total_revenue: 0, open_amount: 0 };
+        statsMap[customerId].total_revenue += price;
+        if (!report.signature_id)
+            statsMap[customerId].open_amount += price;
+    }));
+    res.json(statsMap);
+});
 router.get('/:id', auth_1.authenticateToken, async (req, res) => {
     const report = await queries_1.ReportRepo.findById(String(req.params.id));
     if (!report)
