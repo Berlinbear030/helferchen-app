@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { BookingRequestRepo, AuditRepo, CustomerRepo, AssignmentRepo } from '../db/queries';
 import { AuthRequest, authenticateToken, requireRole, requirePermission } from '../middleware/auth';
 import { sendBookingConfirmation } from '../services/email';
+import { query } from '../db/pool';
 
 const router = Router();
 
@@ -104,10 +105,18 @@ router.patch('/:id', authenticateToken, async (req: AuthRequest, res: Response) 
 
 // Auth: delete a booking request
 router.delete('/:id', authenticateToken, requirePermission('Auftrag loeschen'), async (req: AuthRequest, res: Response) => {
-  const success = await BookingRequestRepo.delete(req.params.id as string);
-  if (!success) return res.status(404).json({ error: 'Nicht gefunden.' });
-  await AuditRepo.create('booking_request', req.params.id as string, 'deleted', req.user!.id, 'Booking request deleted');
-  return res.status(204).send();
+  try {
+    const id = req.params.id as string;
+    // Unlink assignments that reference this booking request before deleting
+    await query('UPDATE assignments SET booking_request_id = NULL WHERE booking_request_id = ?', [id]);
+    const success = await BookingRequestRepo.delete(id);
+    if (!success) return res.status(404).json({ error: 'Nicht gefunden.' });
+    await AuditRepo.create('booking_request', id, 'deleted', req.user!.id, 'Booking request deleted');
+    return res.status(204).send();
+  } catch (err: any) {
+    console.error('DELETE /booking-requests error:', err);
+    return res.status(500).json({ message: 'Fehler beim Löschen der Anfrage', detail: err.message });
+  }
 });
 
 export default router;

@@ -4,6 +4,20 @@ import '../index.css';
 
 const API = '/api';
 
+function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: '10px', padding: '28px 32px', maxWidth: '380px', width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', textAlign: 'center' }}>
+        <p style={{ fontSize: '1rem', color: '#111', marginBottom: '24px', lineHeight: 1.5 }}>{message}</p>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <button onClick={onCancel} style={{ padding: '9px 22px', borderRadius: '6px', border: '1px solid #D1D5DB', background: '#fff', cursor: 'pointer', fontSize: '0.95rem' }}>Abbrechen</button>
+          <button onClick={onConfirm} style={{ padding: '9px 22px', borderRadius: '6px', border: 'none', background: '#DC2626', color: '#fff', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600 }}>Löschen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface User { id: string; full_name: string; role: string; permissions?: string[]; }
 interface Customer { id: string; first_name: string; last_name: string; address: string; phone_number?: string; email?: string; }
 interface Assignment { id: string; title: string; description: string; scheduled_at: string; status: string; customer: Customer; assigned_user_id?: string; assigned_user?: { id: string; full_name: string } | null; }
@@ -283,6 +297,7 @@ function BookingRequestsTab({ canDelete }: { canDelete: boolean }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('open');
   const [assignSelects, setAssignSelects] = useState<Record<string, string>>({});
+  const [confirmDel, setConfirmDel] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -303,9 +318,14 @@ function BookingRequestsTab({ canDelete }: { canDelete: boolean }) {
     load();
   };
 
-  const deleteRequest = async (id: string, name: string) => {
-    if (!confirm(`Anfrage von "${name}" wirklich löschen?`)) return;
-    await fetch(`${API}/booking-requests/${id}`, { method: 'DELETE', headers: authHeaders() });
+  const deleteRequest = (id: string, name: string) => {
+    setConfirmDel({ id, name });
+  };
+
+  const confirmDelExecute = async () => {
+    if (!confirmDel) return;
+    await fetch(`${API}/booking-requests/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
+    setConfirmDel(null);
     load();
   };
 
@@ -313,6 +333,7 @@ function BookingRequestsTab({ canDelete }: { canDelete: boolean }) {
 
   return (
     <div className="booking-requests-tab">
+      {confirmDel && <ConfirmDialog message={`Anfrage von "${confirmDel.name}" wirklich löschen?`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
       <div className="filter-row">
         {opts.map(o => <button key={o.v} className={`filter-btn ${filter === o.v ? 'active' : ''}`} onClick={() => setFilter(o.v)}>{o.l}</button>)}
       </div>
@@ -430,6 +451,7 @@ function EmployeesTab() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [form, setForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
+  const [confirmDel, setConfirmDel] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -462,8 +484,13 @@ function EmployeesTab() {
   };
 
   const del = async (id: string, name: string) => {
-    if (!confirm(`${name} wirklich löschen?`)) return;
-    await fetch(`${API}/admin/users/${id}`, { method: 'DELETE', headers: authHeaders() });
+    setConfirmDel({ id, name });
+  };
+
+  const confirmDelExecute = async () => {
+    if (!confirmDel) return;
+    await fetch(`${API}/admin/users/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
+    setConfirmDel(null);
     load();
   };
 
@@ -482,6 +509,7 @@ function EmployeesTab() {
 
   return (
     <div className="employees-tab">
+      {confirmDel && <ConfirmDialog message={`${confirmDel.name} wirklich löschen?`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
       <div className="employees-header">
         <h3>Mitarbeiterverwaltung ({employees.length})</h3>
         <button className="btn-primary btn-sm" onClick={() => { setShowForm(!showForm); setMsg(''); }}>
@@ -793,6 +821,7 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
   const [searchQ, setSearchQ] = useState('');
+  const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -822,9 +851,14 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
     load();
   };
 
-  const deleteAssignment = async (id: string, title: string) => {
-    if (!confirm(`Auftrag "${title}" wirklich löschen?`)) return;
-    const r = await fetch(`${API}/assignments/${id}`, { method: 'DELETE', headers: authHeaders() });
+  const deleteAssignment = (id: string, title: string) => {
+    setConfirmDel({ id, title });
+  };
+
+  const confirmDelExecute = async () => {
+    if (!confirmDel) return;
+    const r = await fetch(`${API}/assignments/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
+    setConfirmDel(null);
     if (r.ok) {
       setMsg('✅ Auftrag gelöscht.');
       setTimeout(() => setMsg(''), 3000);
@@ -899,6 +933,7 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
 
   return (
     <div className="assignments-admin-layout" style={{ display: 'flex', gap: '24px' }}>
+      {confirmDel && <ConfirmDialog message={`Auftrag "${confirmDel.title}" wirklich löschen? Alle zugehörigen Zeitnachweise und Berichte werden ebenfalls gelöscht.`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
       <div style={{ flex: 1 }}>
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
@@ -1103,6 +1138,7 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
   const [selected, setSelected] = useState<Customer | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [confirmDelReport, setConfirmDelReport] = useState<string | null>(null);
 
   const loadKunden = useCallback(async () => {
     const [cR, aR, rR, sR] = await Promise.all([
@@ -1120,9 +1156,14 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
 
   useEffect(() => { loadKunden(); }, [loadKunden]);
 
-  const deleteReport = async (reportId: string) => {
-    if (!confirm('Rechnung/Bericht wirklich löschen?')) return;
-    await fetch(`${API}/reports/${reportId}`, { method: 'DELETE', headers: authHeaders() });
+  const deleteReport = (reportId: string) => {
+    setConfirmDelReport(reportId);
+  };
+
+  const confirmDelReportExecute = async () => {
+    if (!confirmDelReport) return;
+    await fetch(`${API}/reports/${confirmDelReport}`, { method: 'DELETE', headers: authHeaders() });
+    setConfirmDelReport(null);
     loadKunden();
   };
 
@@ -1144,6 +1185,7 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
 
   return (
     <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+      {confirmDelReport && <ConfirmDialog message="Rechnung/Bericht wirklich löschen?" onConfirm={confirmDelReportExecute} onCancel={() => setConfirmDelReport(null)} />}
       {/* List */}
       <div style={{ width: selected ? '340px' : '100%', flexShrink: 0 }}>
         <div style={{ marginBottom: '14px', display: 'flex', gap: '10px' }}>

@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const auth_1 = require("../middleware/auth");
 const queries_1 = require("../db/queries");
+const pool_1 = require("../db/pool");
 const router = (0, express_1.Router)();
 router.get('/', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
     const assignments = await queries_1.AssignmentRepo.findAll();
@@ -92,9 +93,19 @@ router.patch('/:id/status', auth_1.authenticateToken, async (req, res) => {
     res.json({ ...assignment, status });
 });
 router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requirePermission)('Auftrag loeschen'), async (req, res) => {
-    const success = await queries_1.AssignmentRepo.delete(String(req.params.id));
-    if (!success)
-        return res.status(404).json({ message: 'Assignment not found' });
-    res.status(204).send();
+    try {
+        const id = String(req.params.id);
+        // Cascade: remove reports and timelogs that reference this assignment before deleting
+        await (0, pool_1.query)('DELETE FROM reports WHERE assignment_id = ?', [id]);
+        await (0, pool_1.query)('DELETE FROM time_logs WHERE assignment_id = ?', [id]);
+        const success = await queries_1.AssignmentRepo.delete(id);
+        if (!success)
+            return res.status(404).json({ message: 'Assignment not found' });
+        res.status(204).send();
+    }
+    catch (err) {
+        console.error('DELETE /assignments error:', err);
+        res.status(500).json({ message: 'Fehler beim Löschen des Auftrags', detail: err.message });
+    }
 });
 exports.default = router;

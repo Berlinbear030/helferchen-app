@@ -4,6 +4,7 @@ const express_1 = require("express");
 const queries_1 = require("../db/queries");
 const auth_1 = require("../middleware/auth");
 const email_1 = require("../services/email");
+const pool_1 = require("../db/pool");
 const router = (0, express_1.Router)();
 // Public: submit a booking request
 router.post('/', async (req, res) => {
@@ -81,10 +82,19 @@ router.patch('/:id', auth_1.authenticateToken, async (req, res) => {
 });
 // Auth: delete a booking request
 router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requirePermission)('Auftrag loeschen'), async (req, res) => {
-    const success = await queries_1.BookingRequestRepo.delete(req.params.id);
-    if (!success)
-        return res.status(404).json({ error: 'Nicht gefunden.' });
-    await queries_1.AuditRepo.create('booking_request', req.params.id, 'deleted', req.user.id, 'Booking request deleted');
-    return res.status(204).send();
+    try {
+        const id = req.params.id;
+        // Unlink assignments that reference this booking request before deleting
+        await (0, pool_1.query)('UPDATE assignments SET booking_request_id = NULL WHERE booking_request_id = ?', [id]);
+        const success = await queries_1.BookingRequestRepo.delete(id);
+        if (!success)
+            return res.status(404).json({ error: 'Nicht gefunden.' });
+        await queries_1.AuditRepo.create('booking_request', id, 'deleted', req.user.id, 'Booking request deleted');
+        return res.status(204).send();
+    }
+    catch (err) {
+        console.error('DELETE /booking-requests error:', err);
+        return res.status(500).json({ message: 'Fehler beim Löschen der Anfrage', detail: err.message });
+    }
 });
 exports.default = router;
