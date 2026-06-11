@@ -7,6 +7,8 @@ export interface User {
   role: 'admin' | 'employee';
   email: string;
   full_name: string;
+  address?: string;
+  qualification?: string;
   created_at: string;
 }
 
@@ -37,6 +39,9 @@ export interface Timelog {
   assignment_id: string;
   start_time: string;
   end_time: string | null;
+  duration_minutes: number | null;
+  blocks_count: number | null;
+  total_price: number | null;
   is_signed: boolean;
   created_at: string;
 }

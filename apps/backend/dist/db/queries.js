@@ -24,7 +24,7 @@ exports.UserRepo = {
     async findAll() {
         if (!useDb())
             return index_1.default.users;
-        const res = await (0, pool_1.query)('SELECT id, username, full_name, email, role, created_at FROM users ORDER BY username ASC');
+        const res = await (0, pool_1.query)('SELECT id, username, full_name, email, role, address, qualification, created_at FROM users ORDER BY username ASC');
         return res.rows;
     },
     async create(username, password_hash, full_name, email, role) {
@@ -46,6 +46,41 @@ exports.UserRepo = {
             return true;
         }
         const res = await (0, pool_1.query)('DELETE FROM users WHERE id = ?', [id]);
+        return res.rowCount > 0;
+    },
+    async update(id, fields) {
+        if (!useDb())
+            return false;
+        const setClauses = [];
+        const values = [];
+        if (fields.password_hash !== undefined) {
+            setClauses.push('password_hash = ?');
+            values.push(fields.password_hash);
+        }
+        if (fields.email !== undefined) {
+            setClauses.push('email = ?');
+            values.push(fields.email);
+        }
+        if (fields.full_name !== undefined) {
+            setClauses.push('full_name = ?');
+            values.push(fields.full_name);
+        }
+        if (fields.role !== undefined) {
+            setClauses.push('role = ?');
+            values.push(fields.role);
+        }
+        if (fields.address !== undefined) {
+            setClauses.push('address = ?');
+            values.push(fields.address);
+        }
+        if (fields.qualification !== undefined) {
+            setClauses.push('qualification = ?');
+            values.push(fields.qualification);
+        }
+        if (setClauses.length === 0)
+            return false;
+        values.push(id);
+        const res = await (0, pool_1.query)(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, values);
         return res.rowCount > 0;
     },
     async countAll() {
@@ -180,14 +215,14 @@ exports.TimelogRepo = {
     },
     async create(userId, assignmentId) {
         if (!useDb()) {
-            const t = { id: Date.now().toString(), user_id: userId, assignment_id: assignmentId, start_time: new Date().toISOString(), end_time: null, is_signed: false, created_at: new Date().toISOString() };
+            const t = { id: Date.now().toString(), user_id: userId, assignment_id: assignmentId, start_time: new Date().toISOString(), end_time: null, duration_minutes: null, blocks_count: null, total_price: null, is_signed: false, created_at: new Date().toISOString() };
             index_1.default.timelogs.push(t);
             return t;
         }
         const id = (0, crypto_1.randomUUID)();
         const start_time = new Date().toISOString().slice(0, 19).replace('T', ' ');
         await (0, pool_1.query)('INSERT INTO time_logs (id, user_id, assignment_id, start_time) VALUES (?, ?, ?, NOW())', [id, userId, assignmentId]);
-        return { id, user_id: userId, assignment_id: assignmentId, start_time, end_time: null, is_signed: false, created_at: new Date().toISOString() };
+        return { id, user_id: userId, assignment_id: assignmentId, start_time, end_time: null, duration_minutes: null, blocks_count: null, total_price: null, is_signed: false, created_at: new Date().toISOString() };
     },
     async stop(id) {
         if (!useDb()) {

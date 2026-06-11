@@ -38,7 +38,35 @@ export interface User {
   role: string;
   email: string;
   full_name: string;
+  address?: string;
+  qualification?: string;
   created_at: string;
+}
+
+export interface EmployeeStats {
+  total_assignments: number;
+  completed_assignments: number;
+  total_timelogs: number;
+  total_earnings: number;
+  timelogs: Array<{
+    id: string;
+    assignment_id: string;
+    start_time: string;
+    end_time: string | null;
+    duration_minutes: number | null;
+    blocks_count: number | null;
+    total_price: number | null;
+    is_signed: boolean;
+    assignment_title: string | null;
+    customer_name: string | null;
+  }>;
+  assignments: Array<{
+    id: string;
+    title: string;
+    status: string;
+    scheduled_at: string;
+    customer_name: string | null;
+  }>;
 }
 
 export interface AuditEntry {
@@ -91,10 +119,14 @@ export const adminApi = {
   getUsers: () => apiFetch<User[]>('/admin/users'),
   createUser: (data: { username: string; password: string; role: string; email?: string; full_name?: string }) =>
     apiFetch<User>('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  getUser: (id: string) => apiFetch<User>(`/admin/users/${id}`),
+  updateUser: (id: string, data: { role?: string; password?: string; email?: string; full_name?: string; address?: string; qualification?: string }) =>
+    apiFetch<void>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   updateUserRole: (id: string, role: string) =>
     apiFetch<void>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
   deleteUser: (id: string) =>
     apiFetch<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+  getUserStats: (id: string) => apiFetch<EmployeeStats>(`/admin/users/${id}/stats`),
   getAudit: (params?: { entity_type?: string; entity_id?: string; limit?: number }) => {
     const q = new URLSearchParams();
     if (params?.entity_type) q.set('entity_type', params.entity_type);

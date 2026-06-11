@@ -184,16 +184,87 @@ router.delete('/roles/:id', async (req, res) => {
     await queries_1.AuditRepo.create('role', id, 'deleted', req.user.id, `Role ${role.name} deleted`);
     res.status(204).send();
 });
-// PATCH /api/admin/users/:id — update user role
-router.patch('/users/:id', async (req, res) => {
-    const { role } = req.body;
-    if (!role)
-        return res.status(400).json({ message: 'role is required' });
+// GET /api/admin/users/:id — get single user
+router.get('/users/:id', async (req, res) => {
     const user = await queries_1.UserRepo.findById(req.params.id);
     if (!user)
         return res.status(404).json({ message: 'User not found' });
-    await (0, pool_1.query)('UPDATE users SET role = ? WHERE id = ?', [role, req.params.id]);
-    await queries_1.AuditRepo.create('user', req.params.id, 'role_changed', req.user.id, `Role changed to ${role}`);
+    const { password_hash: _, ...safeUser } = user;
+    res.json(safeUser);
+});
+// GET /api/admin/users/:id/stats — employee work history and earnings
+router.get('/users/:id/stats', async (req, res) => {
+    const userId = req.params.id;
+    const user = await queries_1.UserRepo.findById(userId);
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    const [timelogs, assignments] = await Promise.all([
+        queries_1.TimelogRepo.findByUserId(userId),
+        queries_1.AssignmentRepo.findByUserId(userId),
+    ]);
+    const customerIds = [...new Set(assignments.map(a => a.customer_id))];
+    const customers = await Promise.all(customerIds.map(id => queries_1.CustomerRepo.findById(id)));
+    const customerMap = {};
+    for (const c of customers) {
+        if (c)
+            customerMap[c.id] = `${c.first_name} ${c.last_name}`;
+    }
+    const assignmentMap = {};
+    for (const a of assignments) {
+        assignmentMap[a.id] = { title: a.title, customer_id: a.customer_id };
+    }
+    const enrichedTimelogs = timelogs.map(t => ({
+        ...t,
+        assignment_title: assignmentMap[t.assignment_id]?.title ?? null,
+        customer_name: assignmentMap[t.assignment_id] ? customerMap[assignmentMap[t.assignment_id].customer_id] ?? null : null,
+    }));
+    const totalEarnings = timelogs.reduce((sum, t) => sum + (parseFloat(String(t.total_price ?? '0')) || 0), 0);
+    res.json({
+        total_assignments: assignments.length,
+        completed_assignments: assignments.filter(a => a.status === 'completed').length,
+        total_timelogs: timelogs.length,
+        total_earnings: totalEarnings,
+        timelogs: enrichedTimelogs,
+        assignments: assignments.map(a => ({ ...a, customer_name: customerMap[a.customer_id] ?? null })),
+    });
+});
+// PATCH /api/admin/users/:id — update user (all editable fields)
+router.patch('/users/:id', async (req, res) => {
+    const { role, password, email, full_name, address, qualification } = req.body;
+    const user = await queries_1.UserRepo.findById(req.params.id);
+    if (!user)
+        return res.status(404).json({ message: 'User not found' });
+    const updateFields = {};
+    const changes = [];
+    if (role !== undefined) {
+        updateFields.role = role;
+        changes.push(`role=${role}`);
+    }
+    if (full_name !== undefined) {
+        updateFields.full_name = full_name;
+        changes.push('full_name updated');
+    }
+    if (email !== undefined) {
+        updateFields.email = email;
+        changes.push('email updated');
+    }
+    if (address !== undefined) {
+        updateFields.address = address;
+        changes.push('address updated');
+    }
+    if (qualification !== undefined) {
+        updateFields.qualification = qualification;
+        changes.push('qualification updated');
+    }
+    if (password) {
+        updateFields.password_hash = await bcryptjs_1.default.hash(password, 10);
+        changes.push('password changed');
+    }
+    if (Object.keys(updateFields).length === 0) {
+        return res.status(400).json({ message: 'No fields to update' });
+    }
+    await queries_1.UserRepo.update(req.params.id, updateFields);
+    await queries_1.AuditRepo.create('user', req.params.id, 'updated', req.user.id, changes.join(', '));
     res.json({ message: 'Updated' });
 });
 exports.default = router;

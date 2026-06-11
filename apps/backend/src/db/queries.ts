@@ -17,7 +17,7 @@ export const UserRepo = {
   },
   async findAll(): Promise<User[]> {
     if (!useDb()) return db.users;
-    const res = await query('SELECT id, username, full_name, email, role, created_at FROM users ORDER BY username ASC');
+    const res = await query('SELECT id, username, full_name, email, role, address, qualification, created_at FROM users ORDER BY username ASC');
     return res.rows;
   },
   async create(username: string, password_hash: string, full_name: string, email: string, role: string): Promise<User> {
@@ -41,6 +41,21 @@ export const UserRepo = {
       return true;
     }
     const res = await query('DELETE FROM users WHERE id = ?', [id]);
+    return res.rowCount > 0;
+  },
+  async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string }): Promise<boolean> {
+    if (!useDb()) return false;
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    if (fields.password_hash !== undefined) { setClauses.push('password_hash = ?'); values.push(fields.password_hash); }
+    if (fields.email !== undefined) { setClauses.push('email = ?'); values.push(fields.email); }
+    if (fields.full_name !== undefined) { setClauses.push('full_name = ?'); values.push(fields.full_name); }
+    if (fields.role !== undefined) { setClauses.push('role = ?'); values.push(fields.role); }
+    if (fields.address !== undefined) { setClauses.push('address = ?'); values.push(fields.address); }
+    if (fields.qualification !== undefined) { setClauses.push('qualification = ?'); values.push(fields.qualification); }
+    if (setClauses.length === 0) return false;
+    values.push(id);
+    const res = await query(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, values);
     return res.rowCount > 0;
   },
   async countAll(): Promise<number> {
@@ -172,7 +187,7 @@ export const TimelogRepo = {
   },
   async create(userId: string, assignmentId: string): Promise<Timelog> {
     if (!useDb()) {
-      const t = { id: Date.now().toString(), user_id: userId, assignment_id: assignmentId, start_time: new Date().toISOString(), end_time: null, is_signed: false, created_at: new Date().toISOString() };
+      const t = { id: Date.now().toString(), user_id: userId, assignment_id: assignmentId, start_time: new Date().toISOString(), end_time: null, duration_minutes: null, blocks_count: null, total_price: null, is_signed: false, created_at: new Date().toISOString() };
       db.timelogs.push(t);
       return t;
     }
@@ -182,7 +197,7 @@ export const TimelogRepo = {
       'INSERT INTO time_logs (id, user_id, assignment_id, start_time) VALUES (?, ?, ?, NOW())',
       [id, userId, assignmentId]
     );
-    return { id, user_id: userId, assignment_id: assignmentId, start_time, end_time: null, is_signed: false, created_at: new Date().toISOString() };
+    return { id, user_id: userId, assignment_id: assignmentId, start_time, end_time: null, duration_minutes: null, blocks_count: null, total_price: null, is_signed: false, created_at: new Date().toISOString() };
   },
   async stop(id: string): Promise<Timelog> {
     if (!useDb()) {

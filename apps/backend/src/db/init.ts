@@ -146,6 +146,14 @@ export async function initDatabase(): Promise<void> {
     } catch (e) {}
   }
 
+  // Migrate users: add address and qualification columns
+  try {
+    await query('ALTER TABLE users ADD COLUMN address TEXT');
+  } catch (e) {}
+  try {
+    await query('ALTER TABLE users ADD COLUMN qualification TEXT');
+  } catch (e) {}
+
   await query(`
     CREATE TABLE IF NOT EXISTS mail_users (
       id INT AUTO_INCREMENT PRIMARY KEY,

@@ -144,6 +144,15 @@ async function initDatabase() {
         }
         catch (e) { }
     }
+    // Migrate users: add address and qualification columns
+    try {
+        await (0, pool_1.query)('ALTER TABLE users ADD COLUMN address TEXT');
+    }
+    catch (e) { }
+    try {
+        await (0, pool_1.query)('ALTER TABLE users ADD COLUMN qualification TEXT');
+    }
+    catch (e) { }
     await (0, pool_1.query)(`
     CREATE TABLE IF NOT EXISTS mail_users (
       id INT AUTO_INCREMENT PRIMARY KEY,
