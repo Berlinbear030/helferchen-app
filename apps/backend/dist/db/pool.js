@@ -24,7 +24,11 @@ function createPool() {
             database: url.pathname.slice(1),
             waitForConnections: true,
             connectionLimit: 10,
+            queueLimit: 0,
+            enableKeepAlive: true,
+            keepAliveInitialDelay: 30000,
             timezone: '+00:00',
+            connectTimeout: 10000,
         });
     }
     return null;
@@ -34,12 +38,30 @@ const query = async (text, params) => {
     if (!pool || !exports.dbConnected) {
         throw new Error('Database not available');
     }
-    const [result] = await pool.query(text, params);
-    if (Array.isArray(result)) {
-        return { rows: result, rowCount: result.length };
+    try {
+        const [result] = await pool.query(text, params);
+        if (Array.isArray(result)) {
+            return { rows: result, rowCount: result.length };
+        }
+        const header = result;
+        return { rows: [], rowCount: header.affectedRows };
     }
-    const header = result;
-    return { rows: [], rowCount: header.affectedRows };
+    catch (err) {
+        // On fatal connection errors, mark as disconnected and re-probe
+        if (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNREFUSED') {
+            exports.dbConnected = false;
+            console.error('DB connection lost, attempting reconnect…');
+            const ok = await testConnection();
+            if (!ok)
+                throw new Error('Database not available');
+            const [result] = await pool.query(text, params);
+            if (Array.isArray(result))
+                return { rows: result, rowCount: result.length };
+            const header = result;
+            return { rows: [], rowCount: header.affectedRows };
+        }
+        throw err;
+    }
 };
 exports.query = query;
 async function testConnection() {

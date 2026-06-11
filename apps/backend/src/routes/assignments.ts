@@ -27,8 +27,8 @@ router.get('/my', authenticateToken, async (req: AuthRequest, res: Response) => 
 });
 
 router.post('/', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
-  let { customer_id, assigned_user_id, title, description, scheduled_at, new_customer } = req.body;
-  
+  let { customer_id, assigned_user_id, title, description, scheduled_at, new_customer, hourly_rate } = req.body;
+
   if (customer_id === 'NEW_CUSTOMER' && new_customer) {
     const names = new_customer.name.split(' ');
     const first = names[0];
@@ -45,7 +45,9 @@ router.post('/', authenticateToken, requireRole('admin'), async (req: AuthReques
     assigned_user_id ? String(assigned_user_id) : null,
     String(title),
     String(description || ''),
-    String(scheduled_at || new Date().toISOString())
+    String(scheduled_at || new Date().toISOString()),
+    null,
+    hourly_rate !== undefined ? parseFloat(String(hourly_rate)) : 65.00
   );
   res.status(201).json(assignment);
 });

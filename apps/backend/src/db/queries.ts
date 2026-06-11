@@ -92,19 +92,19 @@ export const AssignmentRepo = {
     const res = await query('SELECT * FROM assignments WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
-  async create(customer_id: string, assigned_user_id: string | null, title: string, description: string, scheduled_at: string, booking_request_id: string | null = null): Promise<Assignment> {
+  async create(customer_id: string, assigned_user_id: string | null, title: string, description: string, scheduled_at: string, booking_request_id: string | null = null, hourly_rate: number = 65.00): Promise<Assignment> {
     if (!useDb()) {
-      const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending' as const, created_at: new Date().toISOString(), booking_request_id: booking_request_id || '' };
+      const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending' as const, hourly_rate, created_at: new Date().toISOString(), booking_request_id: booking_request_id || '' };
       db.assignments.push(a as any);
       return a as any;
     }
     const id = randomUUID();
     const formattedDate = scheduled_at.replace('T', ' ').slice(0, 19).padEnd(19, ':00').slice(0, 19);
     await query(
-      'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at, booking_request_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, customer_id, assigned_user_id || null, title, description, formattedDate, booking_request_id]
+      'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at, booking_request_id, hourly_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, customer_id, assigned_user_id || null, title, description, formattedDate, booking_request_id, hourly_rate]
     );
-    return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() } as any;
+    return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', hourly_rate, created_at: new Date().toISOString() } as any;
   },
   async findByBookingRequestId(bookingRequestId: string): Promise<Assignment | null> {
     if (!useDb()) return (db.assignments as any).find((a: any) => a.booking_request_id === bookingRequestId) || null;

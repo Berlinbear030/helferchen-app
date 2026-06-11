@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AuditRepo = exports.RoleRepo = exports.BookingRequestRepo = exports.SignatureRepo = exports.ReportRepo = exports.TimelogRepo = exports.AssignmentRepo = exports.CustomerRepo = exports.UserRepo = void 0;
+exports.ShopArticleRepo = exports.AuditRepo = exports.RoleRepo = exports.BookingRequestRepo = exports.SignatureRepo = exports.ReportRepo = exports.TimelogRepo = exports.AssignmentRepo = exports.CustomerRepo = exports.UserRepo = void 0;
 const index_1 = __importDefault(require("./index"));
 const pool_1 = require("./pool");
 const crypto_1 = require("crypto");
@@ -98,16 +98,22 @@ exports.AssignmentRepo = {
         const res = await (0, pool_1.query)('SELECT * FROM assignments WHERE id = ?', [id]);
         return res.rows[0] || null;
     },
-    async create(customer_id, assigned_user_id, title, description, scheduled_at) {
+    async create(customer_id, assigned_user_id, title, description, scheduled_at, booking_request_id = null, hourly_rate = 65.00) {
         if (!useDb()) {
-            const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
+            const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', hourly_rate, created_at: new Date().toISOString(), booking_request_id: booking_request_id || '' };
             index_1.default.assignments.push(a);
             return a;
         }
         const id = (0, crypto_1.randomUUID)();
         const formattedDate = scheduled_at.replace('T', ' ').slice(0, 19).padEnd(19, ':00').slice(0, 19);
-        await (0, pool_1.query)('INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at) VALUES (?, ?, ?, ?, ?, ?)', [id, customer_id, assigned_user_id || null, title, description, formattedDate]);
-        return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', created_at: new Date().toISOString() };
+        await (0, pool_1.query)('INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at, booking_request_id, hourly_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, customer_id, assigned_user_id || null, title, description, formattedDate, booking_request_id, hourly_rate]);
+        return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', hourly_rate, created_at: new Date().toISOString() };
+    },
+    async findByBookingRequestId(bookingRequestId) {
+        if (!useDb())
+            return index_1.default.assignments.find((a) => a.booking_request_id === bookingRequestId) || null;
+        const res = await (0, pool_1.query)('SELECT * FROM assignments WHERE booking_request_id = ?', [bookingRequestId]);
+        return res.rows[0] || null;
     },
     async updateStatus(id, status) {
         if (!useDb()) {
@@ -298,13 +304,20 @@ exports.BookingRequestRepo = {
         return res.rows;
     },
     async create(data) {
+        const fullAddress = data.street
+            ? `${data.street} ${data.house_number}, ${data.zip} ${data.city}`.trim()
+            : data.address || '';
         if (!useDb()) {
             const entry = {
                 id: Date.now().toString() + Math.random().toString(36).slice(2),
                 name: data.name,
                 phone: data.phone,
                 email: data.email || '',
-                address: data.address || '',
+                address: fullAddress,
+                street: data.street,
+                house_number: data.house_number,
+                zip: data.zip,
+                city: data.city,
                 service_description: data.service_description,
                 preferred_date: data.preferred_date,
                 preferred_time: data.preferred_time,
@@ -317,13 +330,17 @@ exports.BookingRequestRepo = {
             return entry;
         }
         const id = (0, crypto_1.randomUUID)();
-        await (0, pool_1.query)('INSERT INTO booking_requests (id, name, phone, email, address, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [id, data.name, data.phone, data.email, data.address, data.service_description, data.preferred_date, data.preferred_time]);
+        await (0, pool_1.query)('INSERT INTO booking_requests (id, name, phone, email, address, street, house_number, zip, city, service_description, preferred_date, preferred_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [id, data.name, data.phone, data.email || '', fullAddress, data.street || null, data.house_number || null, data.zip || null, data.city || null, data.service_description, data.preferred_date, data.preferred_time]);
         return {
             id,
             name: data.name,
             phone: data.phone,
             email: data.email || '',
-            address: data.address || '',
+            address: fullAddress,
+            street: data.street,
+            house_number: data.house_number,
+            zip: data.zip,
+            city: data.city,
             service_description: data.service_description,
             preferred_date: data.preferred_date,
             preferred_time: data.preferred_time,
@@ -455,5 +472,64 @@ exports.AuditRepo = {
         }
         const res = await (0, pool_1.query)(sql, values);
         return res.rows;
+    }
+};
+exports.ShopArticleRepo = {
+    async findAll(activeOnly = false) {
+        if (!useDb())
+            return [];
+        const sql = activeOnly
+            ? 'SELECT * FROM shop_articles WHERE active = TRUE ORDER BY name ASC'
+            : 'SELECT * FROM shop_articles ORDER BY name ASC';
+        const res = await (0, pool_1.query)(sql);
+        return res.rows;
+    },
+    async findById(id) {
+        if (!useDb())
+            return null;
+        const res = await (0, pool_1.query)('SELECT * FROM shop_articles WHERE id = ?', [id]);
+        return res.rows[0] || null;
+    },
+    async create(data) {
+        const id = (0, crypto_1.randomUUID)();
+        await (0, pool_1.query)('INSERT INTO shop_articles (id, name, description, price, image_url, stock) VALUES (?, ?, ?, ?, ?, ?)', [id, data.name, data.description, data.price, data.image_url || '', data.stock]);
+        return { id, name: data.name, description: data.description, price: data.price, image_url: data.image_url || '', stock: data.stock, active: true, created_at: new Date().toISOString() };
+    },
+    async update(id, data) {
+        const fields = [];
+        const values = [];
+        if (data.name !== undefined) {
+            fields.push('name = ?');
+            values.push(data.name);
+        }
+        if (data.description !== undefined) {
+            fields.push('description = ?');
+            values.push(data.description);
+        }
+        if (data.price !== undefined) {
+            fields.push('price = ?');
+            values.push(data.price);
+        }
+        if (data.image_url !== undefined) {
+            fields.push('image_url = ?');
+            values.push(data.image_url);
+        }
+        if (data.stock !== undefined) {
+            fields.push('stock = ?');
+            values.push(data.stock);
+        }
+        if (data.active !== undefined) {
+            fields.push('active = ?');
+            values.push(data.active);
+        }
+        if (fields.length === 0)
+            return false;
+        values.push(id);
+        const res = await (0, pool_1.query)(`UPDATE shop_articles SET ${fields.join(', ')} WHERE id = ?`, values);
+        return res.rowCount > 0;
+    },
+    async delete(id) {
+        const res = await (0, pool_1.query)('DELETE FROM shop_articles WHERE id = ?', [id]);
+        return res.rowCount > 0;
     }
 };

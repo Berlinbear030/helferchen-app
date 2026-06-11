@@ -60,6 +60,9 @@ export async function initDatabase(): Promise<void> {
     await query('ALTER TABLE assignments ADD COLUMN booking_request_id CHAR(36) AFTER status');
     await query('ALTER TABLE assignments ADD CONSTRAINT fk_booking_request FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id)');
   } catch (e) {}
+  try {
+    await query('ALTER TABLE assignments ADD COLUMN hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 65.00');
+  } catch (e) {}
 
   await query(`
     CREATE TABLE IF NOT EXISTS time_logs (

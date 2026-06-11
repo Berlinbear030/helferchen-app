@@ -3,647 +3,674 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const API = '/api';
 
 interface User { id: string; full_name: string; role: string; email?: string; }
-interface Customer { id: string; first_name: string; last_name: string; address: string; phone_number?: string; }
-interface Assignment {
-  id: string; title: string; description: string; scheduled_at: string; status: string;
-  customer: Customer; assigned_user_id?: string;
-}
+interface Customer { id: string; first_name: string; last_name: string; address: string; phone_number?: string; email?: string; }
+interface Assignment { id: string; title: string; description: string; scheduled_at: string; status: string; customer: Customer; assigned_user_id?: string; hourly_rate?: number; }
 interface Timelog { id: string; assignment_id: string; start_time: string; end_time: string | null; is_signed: boolean; }
 interface Report { id: string; assignment_id: string; timelog_id: string; notes: string; created_at: string; signature_id: string | null; }
 
-type AppTab = 'auftraege' | 'bericht' | 'zeiten' | 'rechnung';
+// ── Flow state carried through all steps ──────────────────────────────────────
+
+interface FlowState {
+  assignment: Assignment;
+  timelog: Timelog | null;
+  notes: string;
+  reportId: string | null;
+  signatureData: string;
+  signerName: string;
+  paymentMethod: 'bar' | null;
+  savedWithoutPayment: boolean;
+}
+
+type Screen = 'list' | 'detail' | 'timer' | 'bericht' | 'zusammenfassung' | 'unterschrift' | 'zahlung' | 'abschluss';
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
 }
 
-function statusLabel(s: string) {
-  return ({ pending: 'Ausstehend', in_progress: 'In Bearbeitung', completed: 'Abgeschlossen', cancelled: 'Abgebrochen' } as Record<string, string>)[s] || s;
-}
+function pad(n: number) { return n < 10 ? '0' + n : String(n); }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+function formatClock(iso: string) {
+  const d = new Date(iso);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())} Uhr`;
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function formatDuration(start: string, end: string | null) {
-  const ms = (end ? new Date(end) : new Date()).getTime() - new Date(start).getTime();
+function formatDurationMs(ms: number) {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);
-  return `${h}h ${m}m`;
+  const s = Math.floor((ms % 60000) / 1000);
+  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  return `${pad(m)}:${pad(s)}`;
 }
 
-// ── Login Screen ───────────────────────────────────────────────────────────────
+function calcMinutes(start: string, end: string | null): number {
+  const ms = (end ? new Date(end) : new Date()).getTime() - new Date(start).getTime();
+  return Math.ceil(ms / 60000);
+}
+
+function calcPrice(minutes: number, rate: number): number {
+  return Math.round((minutes / 60) * rate * 100) / 100;
+}
+
+function euroFmt(n: number) {
+  return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
 
 function LoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(''); setLoading(true);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setErr(''); setBusy(true);
     try {
-      const r = await fetch(`${API}/auth/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      if (r.status === 401 || r.status === 403) { setError('Benutzername oder Passwort falsch.'); return; }
-      if (!r.ok) throw new Error('Serverfehler');
+      const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass }) });
+      if (!r.ok) { setErr('Benutzername oder Passwort falsch.'); return; }
       const d = await r.json();
       localStorage.setItem('token', d.token);
       localStorage.setItem('user', JSON.stringify(d.user));
       onLogin(d.user);
-    } catch {
-      setError('Verbindungsfehler. Bitte erneut versuchen.');
-    } finally { setLoading(false); }
+    } catch { setErr('Verbindungsfehler.'); } finally { setBusy(false); }
   };
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f0faf9', padding: '24px' }}>
-      <div style={{ width: '100%', maxWidth: '360px', background: 'white', borderRadius: '16px', padding: '32px 24px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <img src="/logo.png" alt="Helferchen" style={{ height: '56px', marginBottom: '12px' }} />
-          <h1 style={{ fontSize: '1.4rem', color: '#00454A', margin: 0 }}>Helferchen App</h1>
-          <p style={{ color: '#6B7280', fontSize: '0.9rem', marginTop: '4px' }}>Mitarbeiter-Zugang</p>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#00454A', padding: '24px' }}>
+      <div style={{ width: '100%', maxWidth: '360px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <img src="/logo.png" alt="Helferchen" style={{ height: '60px', filter: 'brightness(0) invert(1)', marginBottom: '16px' }} />
+          <h1 style={{ color: 'white', fontSize: '1.6rem', margin: 0, fontWeight: 700 }}>Helferchen</h1>
+          <p style={{ color: 'rgba(255,255,255,0.7)', margin: '8px 0 0', fontSize: '0.95rem' }}>Mitarbeiter-App</p>
         </div>
-        {error && <div style={{ background: '#FEF2F2', color: '#DC2626', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>{error}</div>}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <input
-            type="text" placeholder="Benutzername" value={username}
-            onChange={e => setUsername(e.target.value)} required
-            style={inputStyle}
-          />
-          <input
-            type="password" placeholder="Passwort" value={password}
-            onChange={e => setPassword(e.target.value)} required
-            style={inputStyle}
-          />
-          <button type="submit" disabled={loading} style={primaryBtnStyle}>
-            {loading ? 'Anmelden…' : 'Anmelden'}
-          </button>
-        </form>
+        <div style={{ background: 'white', borderRadius: '20px', padding: '28px 24px' }}>
+          {err && <div style={{ background: '#FEF2F2', color: '#DC2626', padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', fontSize: '0.9rem' }}>{err}</div>}
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <input type="text" placeholder="Benutzername" value={user} onChange={e => setUser(e.target.value)} required style={iStyle} />
+            <input type="password" placeholder="Passwort" value={pass} onChange={e => setPass(e.target.value)} required style={iStyle} />
+            <button type="submit" disabled={busy} style={{ ...btnPrimary, marginTop: '4px', padding: '14px', fontSize: '1rem', borderRadius: '12px' }}>
+              {busy ? 'Anmelden…' : 'Anmelden'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Aufträge Tab ───────────────────────────────────────────────────────────────
+// ── Assignment List ────────────────────────────────────────────────────────────
 
-function AuftraegeTab({ user }: { user: User }) {
+function ListScreen({ user, onSelect }: { user: User; onSelect: (a: Assignment) => void }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [timelogs, setTimelogs] = useState<Timelog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState('');
   const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 10));
 
   const load = useCallback(async () => {
     setLoading(true);
-    try {
-      const [aRes, tRes] = await Promise.all([
-        fetch(`${API}/assignments/my`, { headers: authHeaders() }),
-        fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
-      ]);
-      if (aRes.ok) setAssignments(await aRes.json());
-      if (tRes.ok) setTimelogs(await tRes.json());
-    } finally { setLoading(false); }
+    const [aRes, tRes] = await Promise.all([
+      fetch(`${API}/assignments/my`, { headers: authHeaders() }),
+      fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
+    ]);
+    if (aRes.ok) setAssignments(await aRes.json());
+    if (tRes.ok) setTimelogs(await tRes.json());
+    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleStatus = async (id: string, status: string) => {
-    await fetch(`${API}/assignments/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }) });
-    showMsg(status === 'in_progress' ? '▶ Auftrag gestartet' : '✓ Auftrag abgeschlossen');
-    load();
-  };
+  const filtered = assignments.filter(a => {
+    if (!filterDate) return true;
+    return a.scheduled_at && a.scheduled_at.startsWith(filterDate);
+  });
 
-  const startTimer = async (assignmentId: string) => {
-    const r = await fetch(`${API}/timelogs/start`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ assignment_id: assignmentId }) });
-    if (r.ok) { showMsg('⏱ Timer gestartet'); load(); }
-    else { const d = await r.json(); showMsg('⚠ ' + (d.message || 'Fehler')); }
-  };
+  const today = new Date().toISOString().slice(0, 10);
+  const isToday = filterDate === today;
 
-  const stopTimer = async (timelogId: string) => {
-    const r = await fetch(`${API}/timelogs/stop`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ timelog_id: timelogId }) });
-    if (r.ok) { showMsg('⏹ Timer gestoppt'); load(); }
-  };
-
-  const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000); };
-
-  const filtered = assignments.filter(a => a.scheduled_at && a.scheduled_at.startsWith(filterDate));
-  const activeTimelog = timelogs.find(t => !t.end_time);
-
-  if (loading) return <div style={loadingStyle}>Lädt…</div>;
+  const statusColor = (s: string) => ({ pending: '#6B7280', in_progress: '#F59E0B', completed: '#10B981' })[s] || '#6B7280';
+  const statusLabel = (s: string) => ({ pending: 'Ausstehend', in_progress: 'In Bearbeitung', completed: 'Abgeschlossen' })[s] || s;
 
   return (
-    <div style={tabContent}>
-      {msg && <div style={toastStyle}>{msg}</div>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-        <label style={{ fontSize: '0.85rem', color: '#6B7280', whiteSpace: 'nowrap' }}>Datum:</label>
-        <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ ...inputStyle, flex: 1, padding: '8px 10px' }} />
+    <div style={screenWrap}>
+      <div style={{ padding: '16px 16px 8px', background: 'white', borderBottom: '1px solid #F3F4F6' }}>
+        <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} style={{ ...iStyle, fontSize: '0.9rem', padding: '8px 12px' }} />
+        {!isToday && <button onClick={() => setFilterDate(today)} style={{ display: 'block', width: '100%', marginTop: '8px', padding: '6px', background: 'transparent', border: 'none', color: '#00454A', fontSize: '0.85rem', cursor: 'pointer' }}>← Heute</button>}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#9CA3AF' }}>Lädt…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}>
+            <p style={{ fontSize: '2.5rem', margin: '0 0 12px' }}>📭</p>
+            <p style={{ color: '#9CA3AF', fontSize: '0.95rem' }}>Keine Aufträge für {isToday ? 'heute' : 'diesen Tag'}.</p>
+          </div>
+        ) : (
+          filtered.map(a => {
+            const runningLog = timelogs.find(t => t.assignment_id === a.id && !t.end_time);
+            return (
+              <button key={a.id} onClick={() => onSelect(a)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'white', border: 'none', borderRadius: '16px', padding: '18px', marginBottom: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '4px', background: statusColor(a.status), borderRadius: '16px 0 0 16px' }} />
+                <div style={{ marginLeft: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <strong style={{ fontSize: '1.05rem', color: '#111827', flex: 1, paddingRight: '8px' }}>{a.title}</strong>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: statusColor(a.status), whiteSpace: 'nowrap' }}>{statusLabel(a.status)}</span>
+                  </div>
+                  <p style={{ margin: '3px 0', fontSize: '0.85rem', color: '#6B7280' }}>⏰ {formatClock(a.scheduled_at)}</p>
+                  {a.customer && <p style={{ margin: '3px 0', fontSize: '0.85rem', color: '#374151' }}>👤 {a.customer.first_name} {a.customer.last_name}</p>}
+                  {a.customer?.address && <p style={{ margin: '3px 0', fontSize: '0.85rem', color: '#6B7280' }}>📍 {a.customer.address}</p>}
+                  {runningLog && <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#F59E0B', fontWeight: 600 }}>⏱ Timer läuft</p>}
+                </div>
+                <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: '#D1D5DB', fontSize: '1.2rem' }}>›</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Assignment Detail + Timer Start ───────────────────────────────────────────
+
+function DetailScreen({ flow, onBack, onStartTimer, onContinue }: {
+  flow: FlowState;
+  onBack: () => void;
+  onStartTimer: (timelog: Timelog) => void;
+  onContinue: (timelog: Timelog) => void;
+}) {
+  const [timelogs, setTimelogs] = useState<Timelog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const { assignment } = flow;
+
+  const load = useCallback(async () => {
+    const r = await fetch(`${API}/timelogs/my`, { headers: authHeaders() });
+    if (r.ok) setTimelogs(await r.json());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const assignmentTimelogs = timelogs.filter(t => t.assignment_id === assignment.id);
+  const running = assignmentTimelogs.find(t => !t.end_time);
+  const stopped = assignmentTimelogs.filter(t => t.end_time);
+
+  const startTimer = async () => {
+    setBusy(true); setErr('');
+    const r = await fetch(`${API}/timelogs/start`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ assignment_id: assignment.id }) });
+    if (r.ok) {
+      const timelog = await r.json();
+      if (assignment.status === 'pending') {
+        await fetch(`${API}/assignments/${assignment.id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: 'in_progress' }) });
+      }
+      onStartTimer(timelog);
+    } else { const d = await r.json(); setErr(d.message || 'Fehler beim Starten.'); }
+    setBusy(false);
+  };
+
+  const continueWithTimelog = (t: Timelog) => {
+    if (!t.end_time) { onContinue(t); } // resume running timer
+  };
+
+  return (
+    <div style={screenWrap}>
+      <div style={headerBar}>
+        <button onClick={onBack} style={backBtn}>‹</button>
+        <span style={{ fontWeight: 700, fontSize: '1rem' }}>{assignment.title}</span>
+        <span style={{ width: '40px' }} />
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        {err && <div style={errBox}>{err}</div>}
+        <div style={card}>
+          <h3 style={cardTitle}>Auftrag</h3>
+          <p style={detail}><span style={detailLabel}>Service</span>{assignment.title}</p>
+          {assignment.description && <p style={detail}><span style={detailLabel}>Beschreibung</span>{assignment.description}</p>}
+          <p style={detail}><span style={detailLabel}>Termin</span>{formatDate(assignment.scheduled_at)}, {formatClock(assignment.scheduled_at)}</p>
+          <p style={detail}><span style={detailLabel}>Stundensatz</span>{euroFmt(assignment.hourly_rate ?? 65)}/Std.</p>
+        </div>
+
+        {assignment.customer && (
+          <div style={card}>
+            <h3 style={cardTitle}>Kunde</h3>
+            <p style={detail}><span style={detailLabel}>Name</span>{assignment.customer.first_name} {assignment.customer.last_name}</p>
+            <p style={detail}><span style={detailLabel}>Adresse</span>{assignment.customer.address}</p>
+            {assignment.customer.phone_number && <p style={detail}><span style={detailLabel}>Telefon</span>{assignment.customer.phone_number}</p>}
+            <a href={`https://maps.google.com/?q=${encodeURIComponent(assignment.customer.address)}`} target="_blank" rel="noreferrer"
+              style={{ display: 'inline-block', marginTop: '8px', color: '#00454A', fontSize: '0.85rem', fontWeight: 600 }}>
+              📍 In Maps öffnen ↗
+            </a>
+          </div>
+        )}
+
+        {!loading && stopped.length > 0 && (
+          <div style={card}>
+            <h3 style={cardTitle}>Vorherige Zeiteinträge</h3>
+            {stopped.map(t => (
+              <p key={t.id} style={{ margin: '4px 0', fontSize: '0.85rem', color: '#6B7280' }}>
+                {formatClock(t.start_time)} – {t.end_time ? formatClock(t.end_time) : '?'} ({calcMinutes(t.start_time, t.end_time)} Min)
+              </p>
+            ))}
+          </div>
+        )}
+
+        {running && (
+          <div style={{ ...card, background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
+            <p style={{ margin: 0, color: '#065F46', fontWeight: 600 }}>⏱ Timer läuft gerade</p>
+            <button style={{ ...btnPrimary, marginTop: '12px', width: '100%' }} onClick={() => continueWithTimelog(running)}>
+              Zum laufenden Timer →
+            </button>
+          </div>
+        )}
       </div>
 
-      {activeTimelog && (
-        <div style={{ background: '#ECFDF5', border: '1px solid #6EE7B7', borderRadius: '12px', padding: '14px', marginBottom: '16px' }}>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#065F46', fontWeight: 600 }}>⏱ Timer läuft</p>
-          <p style={{ margin: '4px 0 10px', color: '#047857', fontSize: '0.9rem' }}>
-            {assignments.find(a => a.id === activeTimelog.assignment_id)?.title || 'Unbekannter Auftrag'} — {formatDuration(activeTimelog.start_time, null)}
-          </p>
-          <button style={dangerBtnStyle} onClick={() => stopTimer(activeTimelog.id)}>⏹ Timer stoppen</button>
+      {!running && (
+        <div style={bottomBar}>
+          <button style={{ ...btnPrimary, width: '100%', padding: '16px', fontSize: '1.05rem', borderRadius: '14px' }} onClick={startTimer} disabled={busy}>
+            {busy ? 'Startet…' : '⏱ Timer starten'}
+          </button>
         </div>
-      )}
-
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#9CA3AF', padding: '48px 0', fontSize: '0.95rem' }}>
-          <p>📭 Keine Aufträge für diesen Tag.</p>
-        </div>
-      ) : (
-        filtered.map(a => {
-          const runningLog = timelogs.find(t => t.assignment_id === a.id && !t.end_time);
-          return (
-            <div key={a.id} style={{ background: 'white', borderRadius: '12px', padding: '16px', marginBottom: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', borderLeft: `4px solid ${a.status === 'completed' ? '#10B981' : a.status === 'in_progress' ? '#F59E0B' : '#00454A'}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                <strong style={{ fontSize: '1rem', flex: 1 }}>{a.title}</strong>
-                <span style={{ fontSize: '0.75rem', background: a.status === 'completed' ? '#D1FAE5' : a.status === 'in_progress' ? '#FEF3C7' : '#E0F2FE', color: a.status === 'completed' ? '#065F46' : a.status === 'in_progress' ? '#92400E' : '#0369A1', padding: '2px 8px', borderRadius: '12px', whiteSpace: 'nowrap', marginLeft: '8px' }}>
-                  {statusLabel(a.status)}
-                </span>
-              </div>
-              <p style={{ margin: '4px 0', fontSize: '0.85rem', color: '#374151' }}>⏰ {formatTime(a.scheduled_at)} Uhr</p>
-              {a.customer && (
-                <>
-                  <p style={{ margin: '4px 0', fontSize: '0.85rem', color: '#374151' }}>👤 {a.customer.first_name} {a.customer.last_name}</p>
-                  <p style={{ margin: '4px 0', fontSize: '0.85rem', color: '#374151' }}>📍 {a.customer.address}</p>
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent(a.customer.address)}`} target="_blank" rel="noreferrer"
-                    style={{ display: 'inline-block', fontSize: '0.8rem', color: '#00454A', textDecoration: 'underline', marginBottom: '10px' }}>
-                    In Maps öffnen ↗
-                  </a>
-                </>
-              )}
-              {a.description && <p style={{ fontSize: '0.8rem', color: '#6B7280', margin: '6px 0', padding: '8px', background: '#F9FAFB', borderRadius: '6px' }}>{a.description}</p>}
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                {a.status === 'pending' && <button style={primaryBtnStyle} onClick={() => handleStatus(a.id, 'in_progress')}>▶ Starten</button>}
-                {a.status === 'in_progress' && !runningLog && <button style={secondaryBtnStyle} onClick={() => startTimer(a.id)}>⏱ Timer starten</button>}
-                {runningLog && <button style={dangerBtnStyle} onClick={() => stopTimer(runningLog.id)}>⏹ Timer stoppen</button>}
-                {a.status === 'in_progress' && <button style={successBtnStyle} onClick={() => handleStatus(a.id, 'completed')}>✓ Abschließen</button>}
-              </div>
-            </div>
-          );
-        })
       )}
     </div>
   );
 }
 
-// ── Signature Canvas ───────────────────────────────────────────────────────────
+// ── Timer Running Screen ───────────────────────────────────────────────────────
 
-function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const [hasSignature, setHasSignature] = useState(false);
+function TimerScreen({ flow, onBack, onStop }: {
+  flow: FlowState;
+  onBack: () => void;
+  onStop: (timelog: Timelog) => void;
+}) {
+  const { assignment, timelog } = flow;
+  const [elapsed, setElapsed] = useState(0);
+  const [stopping, setStopping] = useState(false);
 
-  const getPos = (e: React.TouchEvent | React.MouseEvent, canvas: HTMLCanvasElement) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    if ('touches' in e) {
-      return {
-        x: (e.touches[0].clientX - rect.left) * scaleX,
-        y: (e.touches[0].clientY - rect.top) * scaleY,
-      };
+  useEffect(() => {
+    if (!timelog) return;
+    const tick = () => setElapsed(Date.now() - new Date(timelog.start_time).getTime());
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, [timelog]);
+
+  const stop = async () => {
+    if (!timelog) return;
+    setStopping(true);
+    const r = await fetch(`${API}/timelogs/stop`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ timelog_id: timelog.id }) });
+    if (r.ok) {
+      const stopped = await r.json();
+      onStop(stopped);
     }
-    return {
-      x: ((e as React.MouseEvent).clientX - rect.left) * scaleX,
-      y: ((e as React.MouseEvent).clientY - rect.top) * scaleY,
-    };
+    setStopping(false);
   };
 
-  const startDraw = (e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault();
-    const canvas = canvasRef.current!;
-    const ctx = canvas.getContext('2d')!;
-    const pos = getPos(e, canvas);
-    ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
-    drawing.current = true;
-  };
-
-  const draw = (e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault();
-    if (!drawing.current) return;
-    const canvas = canvasRef.current!;
-    const ctx = canvas.getContext('2d')!;
-    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#1a1a2e';
-    const pos = getPos(e, canvas);
-    ctx.lineTo(pos.x, pos.y); ctx.stroke();
-    setHasSignature(true);
-  };
-
-  const stopDraw = () => { drawing.current = false; };
-
-  const clear = () => {
-    const canvas = canvasRef.current!;
-    canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
-    setHasSignature(false);
-  };
-
-  const save = () => {
-    if (!hasSignature) return;
-    onSave(canvasRef.current!.toDataURL('image/png'));
-  };
+  const h = Math.floor(elapsed / 3600000);
+  const m = Math.floor((elapsed % 3600000) / 60000);
+  const s = Math.floor((elapsed % 60000) / 1000);
 
   return (
-    <div>
-      <p style={{ fontSize: '0.85rem', color: '#6B7280', marginBottom: '8px' }}>Unterschrift des Kunden:</p>
-      <canvas
-        ref={canvasRef} width={640} height={200}
-        style={{ width: '100%', height: '140px', border: '2px dashed #D1D5DB', borderRadius: '8px', background: '#FAFAFA', touchAction: 'none', cursor: 'crosshair', display: 'block' }}
-        onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-        onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
-      />
-      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-        <button style={{ ...secondaryBtnStyle, fontSize: '0.8rem', padding: '6px 14px' }} onClick={clear}>✕ Löschen</button>
-        <button style={{ ...primaryBtnStyle, fontSize: '0.8rem', padding: '6px 14px' }} onClick={save} disabled={!hasSignature}>
-          ✓ Unterschrift übernehmen
+    <div style={{ ...screenWrap, background: '#00454A' }}>
+      <div style={{ ...headerBar, background: '#00454A', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <button onClick={onBack} style={{ ...backBtn, color: 'rgba(255,255,255,0.7)', background: 'rgba(255,255,255,0.1)' }}>‹</button>
+        <span style={{ fontWeight: 700, fontSize: '1rem', color: 'white' }}>Timer</span>
+        <span style={{ width: '40px' }} />
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', margin: '0 0 8px', textAlign: 'center' }}>{assignment.title}</p>
+        {assignment.customer && <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 48px', textAlign: 'center' }}>👤 {assignment.customer.first_name} {assignment.customer.last_name}</p>}
+
+        <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '24px', padding: '40px 48px', textAlign: 'center', marginBottom: '48px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: '4px' }}>
+            {h > 0 && <>
+              <span style={{ fontSize: '4rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pad(h)}</span>
+              <span style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.2, padding: '0 2px' }}>:</span>
+            </>}
+            <span style={{ fontSize: '4rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pad(m)}</span>
+            <span style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.2, padding: '0 2px' }}>:</span>
+            <span style={{ fontSize: '4rem', fontWeight: 800, color: 'white', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{pad(s)}</span>
+          </div>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', margin: '16px 0 0', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            {timelog ? `Gestartet ${formatClock(timelog.start_time)}` : ''}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ padding: '16px 24px', paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
+        <button style={{ width: '100%', padding: '16px', background: '#EF4444', color: 'white', border: 'none', borderRadius: '14px', fontSize: '1.05rem', fontWeight: 700, cursor: 'pointer' }} onClick={stop} disabled={stopping}>
+          {stopping ? 'Stoppt…' : '⏹ Timer stoppen'}
         </button>
       </div>
     </div>
   );
 }
 
-// ── Bericht Tab ────────────────────────────────────────────────────────────────
+// ── Bericht Screen ─────────────────────────────────────────────────────────────
 
-function BerichtTab({ user }: { user: User }) {
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [timelogs, setTimelogs] = useState<Timelog[]>([]);
-  const [reports, setReports] = useState<Report[]>([]);
-  const [selectedAssignment, setSelectedAssignment] = useState('');
-  const [selectedTimelog, setSelectedTimelog] = useState('');
-  const [notes, setNotes] = useState('');
-  const [signerName, setSignerName] = useState('');
-  const [signatureData, setSignatureData] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [createdReport, setCreatedReport] = useState<Report | null>(null);
+function BerichtScreen({ flow, onBack, onNext }: {
+  flow: FlowState;
+  onBack: () => void;
+  onNext: (notes: string) => void;
+}) {
+  const [notes, setNotes] = useState(flow.notes);
+  const { assignment, timelog } = flow;
 
-  const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 4000); };
-
-  const load = useCallback(async () => {
-    const [aRes, tRes, rRes] = await Promise.all([
-      fetch(`${API}/assignments/my`, { headers: authHeaders() }),
-      fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
-      fetch(`${API}/reports/my`, { headers: authHeaders() }),
-    ]);
-    if (aRes.ok) setAssignments(await aRes.json());
-    if (tRes.ok) setTimelogs(await tRes.json());
-    if (rRes.ok) setReports(await rRes.json());
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const completedAssignments = assignments.filter(a => a.status === 'completed' || a.status === 'in_progress');
-  const availableTimelogs = timelogs.filter(t => t.assignment_id === selectedAssignment && t.end_time);
-  const reportedTimelogIds = reports.map(r => r.timelog_id);
-  const unreportedTimelogs = availableTimelogs.filter(t => !reportedTimelogIds.includes(t.id));
-
-  const handleSaveReport = async () => {
-    if (!selectedAssignment || !selectedTimelog || !notes.trim()) {
-      showMsg('⚠ Bitte Auftrag, Zeiteintrag und Bericht ausfüllen.'); return;
-    }
-    setSaving(true);
-    try {
-      const r = await fetch(`${API}/reports`, {
-        method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ assignment_id: selectedAssignment, timelog_id: selectedTimelog, notes }),
-      });
-      if (!r.ok) { const d = await r.json(); showMsg('❌ ' + (d.message || 'Fehler beim Speichern')); return; }
-      const report = await r.json();
-      setCreatedReport(report);
-      showMsg('✅ Bericht gespeichert!');
-      load();
-    } finally { setSaving(false); }
-  };
-
-  const handleSaveSignature = async () => {
-    if (!createdReport) { showMsg('⚠ Bitte zuerst Bericht speichern.'); return; }
-    if (!signatureData) { showMsg('⚠ Bitte Unterschrift zeichnen.'); return; }
-    if (!signerName.trim()) { showMsg('⚠ Bitte Name des Unterzeichners eingeben.'); return; }
-    setSaving(true);
-    try {
-      const r = await fetch(`${API}/signatures`, {
-        method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ report_id: createdReport.id, image_data: signatureData, signer_name: signerName }),
-      });
-      if (!r.ok) { const d = await r.json(); showMsg('❌ ' + (d.message || 'Fehler')); return; }
-      showMsg('✅ Unterschrift gespeichert!');
-      setSignatureData('');
-      load();
-    } finally { setSaving(false); }
-  };
-
-  const downloadPdf = (reportId: string) => {
-    window.open(`${API}/pdf/${reportId}`, '_blank');
-  };
+  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const rate = assignment.hourly_rate ?? 65;
+  const price = calcPrice(minutes, rate);
 
   return (
-    <div style={tabContent}>
-      {msg && <div style={toastStyle}>{msg}</div>}
+    <div style={screenWrap}>
+      <div style={headerBar}>
+        <button onClick={onBack} style={backBtn}>‹</button>
+        <span style={{ fontWeight: 700, fontSize: '1rem' }}>Bericht schreiben</span>
+        <span style={{ width: '40px' }} />
+      </div>
 
-      <section style={cardStyle}>
-        <h3 style={sectionTitle}>Neuen Bericht erstellen</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <label style={labelStyle}>Auftrag wählen:</label>
-            <select value={selectedAssignment} onChange={e => { setSelectedAssignment(e.target.value); setSelectedTimelog(''); setCreatedReport(null); }} style={inputStyle}>
-              <option value="">— Auftrag auswählen —</option>
-              {completedAssignments.map(a => (
-                <option key={a.id} value={a.id}>{a.title} ({a.customer?.first_name} {a.customer?.last_name})</option>
-              ))}
-            </select>
-          </div>
-
-          {selectedAssignment && (
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div style={{ ...card, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <label style={labelStyle}>Zeiteintrag wählen:</label>
-              {unreportedTimelogs.length === 0 ? (
-                <p style={{ fontSize: '0.85rem', color: '#9CA3AF' }}>Keine abgeschlossenen Zeiteinträge ohne Bericht.</p>
-              ) : (
-                <select value={selectedTimelog} onChange={e => setSelectedTimelog(e.target.value)} style={inputStyle}>
-                  <option value="">— Zeiteintrag auswählen —</option>
-                  {unreportedTimelogs.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {formatDate(t.start_time)} {formatTime(t.start_time)} – {t.end_time ? formatTime(t.end_time) : 'laufend'} ({formatDuration(t.start_time, t.end_time)})
-                    </option>
-                  ))}
-                </select>
-              )}
+              <p style={{ margin: 0, fontWeight: 700, color: '#065F46', fontSize: '1rem' }}>{assignment.customer?.first_name} {assignment.customer?.last_name}</p>
+              <p style={{ margin: '4px 0 0', color: '#047857', fontSize: '0.85rem' }}>{assignment.customer?.address}</p>
             </div>
-          )}
-
-          <div>
-            <label style={labelStyle}>Bericht / Notizen:</label>
-            <textarea
-              value={notes} onChange={e => setNotes(e.target.value)} rows={4}
-              placeholder="Beschreibung der erledigten Arbeiten…"
-              style={{ ...inputStyle, resize: 'vertical', minHeight: '100px', fontFamily: 'inherit' }}
-            />
+            <div style={{ textAlign: 'right' }}>
+              {timelog && <p style={{ margin: 0, color: '#047857', fontWeight: 700, fontSize: '1.1rem' }}>{minutes} Min</p>}
+              {timelog && <p style={{ margin: '2px 0 0', color: '#059669', fontSize: '0.8rem' }}>{formatClock(timelog.start_time)} – {timelog.end_time ? formatClock(timelog.end_time) : '?'}</p>}
+            </div>
           </div>
-
-          <button style={primaryBtnStyle} onClick={handleSaveReport} disabled={saving}>
-            {saving ? 'Speichern…' : '💾 Bericht speichern'}
-          </button>
         </div>
-      </section>
 
-      {createdReport && (
-        <section style={{ ...cardStyle, border: '1px solid #6EE7B7' }}>
-          <h3 style={sectionTitle}>Unterschrift einholen</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div>
-              <label style={labelStyle}>Name des Unterzeichners (Kunde):</label>
-              <input type="text" value={signerName} onChange={e => setSignerName(e.target.value)} placeholder="Vor- und Nachname" style={inputStyle} />
-            </div>
-            <SignatureCanvas onSave={data => setSignatureData(data)} />
-            {signatureData && (
-              <div>
-                <p style={{ fontSize: '0.8rem', color: '#6B7280', margin: '0 0 4px' }}>Vorschau:</p>
-                <img src={signatureData} alt="Unterschrift" style={{ maxWidth: '200px', border: '1px solid #E5E7EB', borderRadius: '6px' }} />
-              </div>
-            )}
-            <button style={successBtnStyle} onClick={handleSaveSignature} disabled={saving || !signatureData}>
-              {saving ? 'Speichern…' : '✍ Unterschrift speichern'}
-            </button>
-            <button style={secondaryBtnStyle} onClick={() => downloadPdf(createdReport.id)}>
-              📄 PDF herunterladen
-            </button>
+        <div style={card}>
+          <label style={{ display: 'block', fontWeight: 600, marginBottom: '10px', color: '#374151' }}>Was wurde erledigt?</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Beschreibung der erledigten Arbeiten, besondere Vorkommnisse, verwendete Materialien…"
+            rows={6}
+            style={{ ...iStyle, resize: 'vertical', minHeight: '140px', fontFamily: 'inherit', lineHeight: 1.5 }}
+            autoFocus
+          />
+        </div>
+
+        <div style={{ ...card, background: '#F9FAFB' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#6B7280', fontSize: '0.9rem' }}>Voraussichtliche Kosten</span>
+            <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#111827' }}>{euroFmt(price)}</span>
           </div>
-        </section>
-      )}
+          <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#9CA3AF' }}>{minutes} Min × {euroFmt(rate)}/Std.</p>
+        </div>
+      </div>
 
-      {reports.length > 0 && (
-        <section style={cardStyle}>
-          <h3 style={sectionTitle}>Meine Berichte</h3>
-          {reports.slice(0, 5).map(r => {
-            const a = assignments.find(x => x.id === r.assignment_id);
-            return (
-              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #F3F4F6' }}>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{a?.title || 'Unbekannt'}</p>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#6B7280' }}>{formatDate(r.created_at)} {r.signature_id ? '✍ Unterschrift' : ''}</p>
-                </div>
-                <button style={{ ...secondaryBtnStyle, fontSize: '0.75rem', padding: '5px 10px' }} onClick={() => downloadPdf(r.id)}>
-                  📄 PDF
-                </button>
-              </div>
-            );
-          })}
-        </section>
-      )}
+      <div style={bottomBar}>
+        <button
+          style={{ ...btnPrimary, width: '100%', padding: '16px', fontSize: '1.05rem', borderRadius: '14px', opacity: notes.trim() ? 1 : 0.5 }}
+          onClick={() => { if (notes.trim()) onNext(notes); }}
+          disabled={!notes.trim()}
+        >
+          Weiter zur Zusammenfassung →
+        </button>
+      </div>
     </div>
   );
 }
 
-// ── Zeiten Tab ─────────────────────────────────────────────────────────────────
+// ── Zusammenfassung + Unterschrift ────────────────────────────────────────────
 
-function ZeitenTab({ user }: { user: User }) {
-  const [timelogs, setTimelogs] = useState<Timelog[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState('');
-  const [tick, setTick] = useState(0);
+function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const [has, setHas] = useState(false);
 
-  const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000); };
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [tRes, aRes] = await Promise.all([
-        fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
-        fetch(`${API}/assignments/my`, { headers: authHeaders() }),
-      ]);
-      if (tRes.ok) setTimelogs(await tRes.json());
-      if (aRes.ok) setAssignments(await aRes.json());
-    } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const stopTimer = async (timelogId: string) => {
-    const r = await fetch(`${API}/timelogs/stop`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ timelog_id: timelogId }) });
-    if (r.ok) { showMsg('⏹ Timer gestoppt'); load(); }
+  const pos = (e: React.TouchEvent | React.MouseEvent, c: HTMLCanvasElement) => {
+    const r = c.getBoundingClientRect();
+    const sx = c.width / r.width, sy = c.height / r.height;
+    if ('touches' in e) return { x: (e.touches[0].clientX - r.left) * sx, y: (e.touches[0].clientY - r.top) * sy };
+    return { x: ((e as React.MouseEvent).clientX - r.left) * sx, y: ((e as React.MouseEvent).clientY - r.top) * sy };
   };
 
-  const startTimer = async (assignmentId: string) => {
-    const r = await fetch(`${API}/timelogs/start`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ assignment_id: assignmentId }) });
-    if (r.ok) { showMsg('⏱ Timer gestartet'); load(); }
-    else { const d = await r.json(); showMsg('⚠ ' + (d.message || 'Fehler')); }
+  const start = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    const c = ref.current!; const ctx = c.getContext('2d')!;
+    const p = pos(e, c); ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    drawing.current = true;
   };
+  const move = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    if (!drawing.current) return;
+    const c = ref.current!; const ctx = c.getContext('2d')!;
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#111827';
+    const p = pos(e, c); ctx.lineTo(p.x, p.y); ctx.stroke();
+    setHas(true);
+  };
+  const stop = () => { drawing.current = false; };
 
-  const running = timelogs.filter(t => !t.end_time);
-  const done = timelogs.filter(t => t.end_time).slice(0, 20);
-  const availableForTimer = assignments.filter(a => a.status === 'in_progress' && !running.find(t => t.assignment_id === a.id));
-
-  if (loading) return <div style={loadingStyle}>Lädt…</div>;
+  const clear = () => { ref.current!.getContext('2d')!.clearRect(0, 0, 640, 200); setHas(false); };
+  const save = () => { if (has) onSave(ref.current!.toDataURL('image/png')); };
 
   return (
-    <div style={tabContent}>
-      {msg && <div style={toastStyle}>{msg}</div>}
-
-      {running.length > 0 && (
-        <section style={{ ...cardStyle, background: '#ECFDF5', border: '1px solid #6EE7B7' }}>
-          <h3 style={{ ...sectionTitle, color: '#065F46' }}>⏱ Laufende Timer</h3>
-          {running.map(t => {
-            const a = assignments.find(x => x.id === t.assignment_id);
-            return (
-              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: '0.95rem' }}>{a?.title || 'Auftrag'}</p>
-                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#047857' }}>{formatDuration(t.start_time, null)} ⏳</p>
-                </div>
-                <button style={dangerBtnStyle} onClick={() => stopTimer(t.id)}>⏹ Stop</button>
-              </div>
-            );
-          })}
-        </section>
-      )}
-
-      {availableForTimer.length > 0 && (
-        <section style={cardStyle}>
-          <h3 style={sectionTitle}>Timer starten</h3>
-          {availableForTimer.map(a => (
-            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <p style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem' }}>{a.title}</p>
-              <button style={primaryBtnStyle} onClick={() => startTimer(a.id)}>⏱ Starten</button>
-            </div>
-          ))}
-        </section>
-      )}
-
-      <section style={cardStyle}>
-        <h3 style={sectionTitle}>Zeithistorie</h3>
-        {done.length === 0 ? (
-          <p style={{ color: '#9CA3AF', fontSize: '0.9rem' }}>Noch keine abgeschlossenen Zeiteinträge.</p>
-        ) : (
-          done.map(t => {
-            const a = assignments.find(x => x.id === t.assignment_id);
-            return (
-              <div key={t.id} style={{ padding: '10px 0', borderBottom: '1px solid #F3F4F6' }}>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem' }}>{a?.title || '—'}</p>
-                <p style={{ margin: '2px 0', fontSize: '0.8rem', color: '#6B7280' }}>
-                  {formatDate(t.start_time)} {formatTime(t.start_time)} – {t.end_time ? formatTime(t.end_time) : '?'} ({formatDuration(t.start_time, t.end_time)})
-                  {t.is_signed ? ' ✍' : ''}
-                </p>
-              </div>
-            );
-          })
-        )}
-      </section>
+    <div>
+      <canvas ref={ref} width={640} height={200}
+        style={{ width: '100%', height: '130px', border: '2px dashed #D1D5DB', borderRadius: '12px', background: 'white', touchAction: 'none', cursor: 'crosshair', display: 'block' }}
+        onMouseDown={start} onMouseMove={move} onMouseUp={stop} onMouseLeave={stop}
+        onTouchStart={start} onTouchMove={move} onTouchEnd={stop}
+      />
+      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+        <button style={{ ...btnOutline, flex: 1, padding: '10px' }} onClick={clear}>✕ Löschen</button>
+        <button style={{ ...btnPrimary, flex: 2, padding: '10px' }} onClick={save} disabled={!has}>✓ Unterschrift bestätigen</button>
+      </div>
     </div>
   );
 }
 
-// ── Rechnung Tab ───────────────────────────────────────────────────────────────
+function ZusammenfassungScreen({ flow, onBack, onSign }: {
+  flow: FlowState;
+  onBack: () => void;
+  onSign: (signerName: string, sigData: string, reportId: string) => void;
+}) {
+  const { assignment, timelog, notes } = flow;
+  const [signerName, setSignerName] = useState(assignment.customer ? `${assignment.customer.first_name} ${assignment.customer.last_name}` : '');
+  const [sigData, setSigData] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [reportId, setReportId] = useState(flow.reportId);
 
-function RechnungTab({ user }: { user: User }) {
-  const [reports, setReports] = useState<Report[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [emailModal, setEmailModal] = useState<{ reportId: string } | null>(null);
-  const [emailAddress, setEmailAddress] = useState('');
-  const [sending, setSending] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 4000); };
+  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const rate = assignment.hourly_rate ?? 65;
+  const price = calcPrice(minutes, rate);
 
   useEffect(() => {
+    if (reportId || !timelog?.end_time) return;
     (async () => {
-      const [rRes, aRes] = await Promise.all([
-        fetch(`${API}/reports/my`, { headers: authHeaders() }),
-        fetch(`${API}/assignments/my`, { headers: authHeaders() }),
-      ]);
-      if (rRes.ok) setReports(await rRes.json());
-      if (aRes.ok) setAssignments(await aRes.json());
-      setLoading(false);
+      const r = await fetch(`${API}/reports`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ assignment_id: assignment.id, timelog_id: timelog.id, notes }) });
+      if (r.ok) { const d = await r.json(); setReportId(d.id); }
     })();
   }, []);
 
-  const sendEmail = async () => {
-    if (!emailModal || !emailAddress) return;
-    setSending(true);
-    try {
-      const r = await fetch(`${API}/pdf/${emailModal.reportId}/email`, {
-        method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ to: emailAddress }),
-      });
-      if (r.ok) { showMsg('✅ PDF per E-Mail gesendet!'); setEmailModal(null); setEmailAddress(''); }
-      else { const d = await r.json(); showMsg('❌ ' + (d.message || 'Fehler beim Senden')); }
-    } finally { setSending(false); }
+  const handleSign = async () => {
+    if (!sigData || !signerName.trim() || !reportId) { setErr('Bitte Name und Unterschrift eingeben.'); return; }
+    setSaving(true); setErr('');
+    const r = await fetch(`${API}/signatures`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ report_id: reportId, image_data: sigData, signer_name: signerName }) });
+    if (r.ok) { onSign(signerName, sigData, reportId); }
+    else { const d = await r.json(); setErr(d.message || 'Fehler beim Speichern.'); }
+    setSaving(false);
   };
 
-  if (loading) return <div style={loadingStyle}>Lädt…</div>;
+  return (
+    <div style={screenWrap}>
+      <div style={headerBar}>
+        <button onClick={onBack} style={backBtn}>‹</button>
+        <span style={{ fontWeight: 700, fontSize: '1rem' }}>Zusammenfassung</span>
+        <span style={{ width: '40px' }} />
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        {err && <div style={errBox}>{err}</div>}
+
+        <div style={{ ...card, border: '2px solid #00454A' }}>
+          <p style={{ margin: '0 0 4px', fontSize: '0.75rem', color: '#00454A', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Helferchen Arbeitsnachweis</p>
+          <h2 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: '#111827' }}>{assignment.title}</h2>
+
+          <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '14px', marginBottom: '14px' }}>
+            <p style={{ margin: '0 0 2px', fontWeight: 600, color: '#374151' }}>{assignment.customer?.first_name} {assignment.customer?.last_name}</p>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#6B7280' }}>{assignment.customer?.address}</p>
+          </div>
+
+          {timelog && (
+            <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '14px', marginBottom: '14px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: '0.85rem', color: '#6B7280' }}>Arbeitszeit</p>
+              <p style={{ margin: 0, fontWeight: 600, color: '#111827', fontSize: '1rem' }}>
+                {formatClock(timelog.start_time)} – {timelog.end_time ? formatClock(timelog.end_time) : '?'} ({minutes} Min)
+              </p>
+            </div>
+          )}
+
+          {notes && (
+            <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '14px', marginBottom: '14px' }}>
+              <p style={{ margin: '0 0 6px', fontSize: '0.85rem', color: '#6B7280' }}>Bericht</p>
+              <p style={{ margin: 0, color: '#374151', fontSize: '0.9rem', lineHeight: 1.5 }}>{notes}</p>
+            </div>
+          )}
+
+          <div style={{ borderTop: '2px solid #111827', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, fontSize: '1rem', color: '#111827' }}>Gesamtkosten</span>
+            <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#00454A' }}>{euroFmt(price)}</span>
+          </div>
+          <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#9CA3AF', textAlign: 'right' }}>{minutes} Min × {euroFmt(rate)}/Std.</p>
+        </div>
+
+        <div style={card}>
+          <h3 style={cardTitle}>Unterschrift des Kunden</h3>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: '#374151', marginBottom: '6px', fontWeight: 500 }}>Name des Unterzeichners</label>
+            <input type="text" value={signerName} onChange={e => setSignerName(e.target.value)} style={iStyle} />
+          </div>
+          <SignatureCanvas onSave={d => setSigData(d)} />
+          {sigData && (
+            <div style={{ marginTop: '10px' }}>
+              <p style={{ fontSize: '0.75rem', color: '#9CA3AF', margin: '0 0 6px' }}>Unterschrift gespeichert:</p>
+              <img src={sigData} alt="Unterschrift" style={{ maxWidth: '160px', border: '1px solid #E5E7EB', borderRadius: '8px' }} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={bottomBar}>
+        <button style={{ ...btnPrimary, width: '100%', padding: '16px', fontSize: '1.05rem', borderRadius: '14px', opacity: sigData && signerName.trim() ? 1 : 0.5 }}
+          onClick={handleSign} disabled={saving || !sigData || !signerName.trim()}>
+          {saving ? 'Speichert…' : 'Weiter zur Zahlung →'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Zahlung Screen ─────────────────────────────────────────────────────────────
+
+function ZahlungScreen({ flow, onBack, onDone }: {
+  flow: FlowState;
+  onBack: () => void;
+  onDone: (method: 'bar' | 'saved') => void;
+}) {
+  const { assignment, timelog } = flow;
+  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const rate = assignment.hourly_rate ?? 65;
+  const price = calcPrice(minutes, rate);
+  const [busy, setBusy] = useState(false);
+  const [downloadDone, setDownloadDone] = useState(false);
+
+  const downloadPdf = () => {
+    if (flow.reportId) window.open(`${API}/pdf/${flow.reportId}`, '_blank');
+    setDownloadDone(true);
+  };
+
+  const sendEmail = async () => {
+    const email = assignment.customer?.email;
+    if (!email && !flow.reportId) return;
+    const addr = email || prompt('E-Mail-Adresse des Kunden:');
+    if (!addr) return;
+    setBusy(true);
+    await fetch(`${API}/pdf/${flow.reportId}/email`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ to: addr }) });
+    setBusy(false);
+    alert('✅ PDF per E-Mail gesendet!');
+  };
 
   return (
-    <div style={tabContent}>
-      {msg && <div style={toastStyle}>{msg}</div>}
+    <div style={screenWrap}>
+      <div style={headerBar}>
+        <button onClick={onBack} style={backBtn}>‹</button>
+        <span style={{ fontWeight: 700, fontSize: '1rem' }}>Zahlung</span>
+        <span style={{ width: '40px' }} />
+      </div>
 
-      {emailModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
-          <div style={{ background: 'white', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '340px' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: '1.1rem' }}>📧 PDF per E-Mail senden</h3>
-            <input type="email" value={emailAddress} onChange={e => setEmailAddress(e.target.value)} placeholder="E-Mail-Adresse" style={inputStyle} />
-            <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-              <button style={secondaryBtnStyle} onClick={() => setEmailModal(null)}>Abbrechen</button>
-              <button style={primaryBtnStyle} onClick={sendEmail} disabled={sending || !emailAddress}>
-                {sending ? 'Senden…' : 'Senden'}
-              </button>
-            </div>
-          </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div style={{ textAlign: 'center', padding: '8px 0 24px' }}>
+          <p style={{ fontSize: '2.5rem', margin: '0 0 8px' }}>💶</p>
+          <p style={{ fontSize: '0.9rem', color: '#6B7280', margin: '0 0 4px' }}>Offener Betrag</p>
+          <p style={{ fontSize: '2.2rem', fontWeight: 800, color: '#111827', margin: 0 }}>{euroFmt(price)}</p>
         </div>
-      )}
 
-      <section style={cardStyle}>
-        <h3 style={sectionTitle}>Meine Berichte & PDFs</h3>
-        {reports.length === 0 ? (
-          <p style={{ color: '#9CA3AF', fontSize: '0.9rem' }}>Noch keine Berichte vorhanden. Erstelle im Bericht-Tab einen Bericht.</p>
-        ) : (
-          reports.map(r => {
-            const a = assignments.find(x => x.id === r.assignment_id);
-            return (
-              <div key={r.id} style={{ padding: '14px 0', borderBottom: '1px solid #F3F4F6' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.95rem' }}>{a?.title || 'Unbekannter Auftrag'}</p>
-                    <p style={{ margin: '2px 0', fontSize: '0.8rem', color: '#6B7280' }}>
-                      {a?.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '—'}
-                    </p>
-                    <p style={{ margin: '2px 0', fontSize: '0.8rem', color: '#6B7280' }}>
-                      {formatDate(r.created_at)} {r.signature_id ? '· ✍ Unterschrift vorhanden' : '· Keine Unterschrift'}
-                    </p>
-                    {r.notes && <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: '#374151', background: '#F9FAFB', padding: '6px 8px', borderRadius: '6px' }}>{r.notes.slice(0, 80)}{r.notes.length > 80 ? '…' : ''}</p>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <button style={{ ...secondaryBtnStyle, fontSize: '0.8rem', padding: '6px 12px' }}
-                    onClick={() => window.open(`${API}/pdf/${r.id}`, '_blank')}>
-                    📄 PDF
-                  </button>
-                  <button style={{ ...secondaryBtnStyle, fontSize: '0.8rem', padding: '6px 12px' }}
-                    onClick={() => { setEmailModal({ reportId: r.id }); setEmailAddress(a?.customer?.phone_number || ''); }}>
-                    📧 E-Mail
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </section>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+          <button style={{ ...btnPrimary, padding: '20px', fontSize: '1.1rem', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
+            onClick={() => onDone('bar')}>
+            <span style={{ fontSize: '1.5rem' }}>💵</span>
+            <span>Bar bezahlt</span>
+          </button>
+
+          <button disabled style={{ padding: '20px', fontSize: '1.1rem', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', border: '2px solid #E5E7EB', background: '#F9FAFB', color: '#9CA3AF', cursor: 'not-allowed' }}>
+            <span style={{ fontSize: '1.5rem' }}>💳</span>
+            <span>Kartenzahlung (demnächst)</span>
+          </button>
+
+          <button style={{ ...btnOutline, padding: '16px', fontSize: '0.95rem', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            onClick={() => onDone('saved')}>
+            <span>💾</span>
+            <span>Zwischenspeichern (Kunde zahlt später)</span>
+          </button>
+        </div>
+
+        <div style={card}>
+          <h3 style={cardTitle}>Quittung senden</h3>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button style={{ ...btnOutline, flex: 1, padding: '12px', fontSize: '0.85rem' }} onClick={downloadPdf}>
+              📄 PDF herunterladen
+            </button>
+            <button style={{ ...btnOutline, flex: 1, padding: '12px', fontSize: '0.85rem' }} onClick={sendEmail} disabled={busy}>
+              {busy ? '…' : '📧 Per E-Mail'}
+            </button>
+          </div>
+          {downloadDone && <p style={{ margin: '8px 0 0', fontSize: '0.8rem', color: '#10B981', textAlign: 'center' }}>✓ PDF geöffnet</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Abschluss Screen ───────────────────────────────────────────────────────────
+
+function AbschlussScreen({ flow, onNewJob }: { flow: FlowState; onNewJob: () => void }) {
+  const { assignment, timelog } = flow;
+  const minutes = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
+  const price = calcPrice(minutes, assignment.hourly_rate ?? 65);
+
+  return (
+    <div style={{ ...screenWrap, alignItems: 'center', justifyContent: 'center', background: '#00454A' }}>
+      <div style={{ textAlign: 'center', padding: '40px 24px', maxWidth: '360px' }}>
+        <div style={{ fontSize: '4rem', margin: '0 0 24px' }}>✅</div>
+        <h2 style={{ color: 'white', fontSize: '1.6rem', margin: '0 0 12px' }}>Auftrag abgeschlossen!</h2>
+        <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 8px' }}>{assignment.title}</p>
+        <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 32px', fontSize: '0.9rem' }}>
+          {flow.savedWithoutPayment ? '💾 Auftrag gespeichert — Zahlung ausstehend' : `💵 Bar bezahlt · ${euroFmt(price)}`}
+        </p>
+        <button style={{ ...btnPrimary, padding: '16px 32px', fontSize: '1rem', background: 'white', color: '#00454A', borderRadius: '14px' }} onClick={onNewJob}>
+          Zurück zu Aufträgen
+        </button>
+      </div>
     </div>
   );
 }
@@ -652,134 +679,116 @@ function RechnungTab({ user }: { user: User }) {
 
 function MobileApp() {
   const [user, setUser] = useState<User | null>(null);
-  const [tab, setTab] = useState<AppTab>('auftraege');
   const [checking, setChecking] = useState(true);
+  const [screen, setScreen] = useState<Screen>('list');
+  const [flow, setFlow] = useState<FlowState | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const stored = localStorage.getItem('user');
-    if (token && stored) {
-      try {
-        const u = JSON.parse(stored) as User;
-        fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
-          .then(r => { if (r.ok) return r.json(); throw new Error('Unauthorized'); })
-          .then(u => setUser(u))
-          .catch(() => { localStorage.removeItem('token'); localStorage.removeItem('user'); })
-          .finally(() => setChecking(false));
-      } catch { setChecking(false); }
-    } else { setChecking(false); }
+    if (!token) { setChecking(false); return; }
+    fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(u => setUser(u))
+      .catch(() => { localStorage.removeItem('token'); localStorage.removeItem('user'); })
+      .finally(() => setChecking(false));
   }, []);
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-  };
+  const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setUser(null); };
 
-  if (checking) return <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0faf9' }}><p style={{ color: '#00454A' }}>Laden…</p></div>;
+  const resetFlow = () => { setFlow(null); setScreen('list'); };
+
+  if (checking) return (
+    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#00454A' }}>
+      <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem' }}>Laden…</p>
+    </div>
+  );
 
   if (!user) return <LoginScreen onLogin={u => setUser(u)} />;
 
-  const navItems: { id: AppTab; label: string; icon: string }[] = [
-    { id: 'auftraege', label: 'Aufträge', icon: '📅' },
-    { id: 'bericht', label: 'Bericht', icon: '✍' },
-    { id: 'zeiten', label: 'Zeiten', icon: '⏱' },
-    { id: 'rechnung', label: 'Rechnung', icon: '📄' },
-  ];
+  // Screens without header (full-screen)
+  if (screen === 'timer' && flow) {
+    return <TimerScreen flow={flow} onBack={() => setScreen('detail')}
+      onStop={stopped => { setFlow(f => f ? { ...f, timelog: stopped } : f); setScreen('bericht'); }} />;
+  }
+
+  if (screen === 'abschluss' && flow) {
+    return <AbschlussScreen flow={flow} onNewJob={resetFlow} />;
+  }
 
   return (
-    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: '#F9FAFB', maxWidth: '520px', margin: '0 auto', position: 'relative' }}>
-      <header style={{ background: '#00454A', color: 'white', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100, paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: '#F9FAFB', maxWidth: '520px', margin: '0 auto' }}>
+      <header style={{ background: '#00454A', color: 'white', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 'max(12px, env(safe-area-inset-top))', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="/logo.png" alt="" style={{ height: '28px', filter: 'brightness(0) invert(1)' }} />
+          <img src="/logo.png" alt="" style={{ height: '26px', filter: 'brightness(0) invert(1)' }} />
           <div>
-            <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>Helferchen App</p>
-            <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8 }}>{user.full_name}</p>
+            <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700 }}>Helferchen App</p>
+            <p style={{ margin: 0, fontSize: '0.72rem', opacity: 0.7 }}>{user.full_name}</p>
           </div>
         </div>
-        <button onClick={logout} style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', padding: '6px 12px', borderRadius: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
+        <button onClick={logout} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '5px 10px', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer' }}>
           Abmelden
         </button>
       </header>
 
-      <main style={{ flex: 1, overflowY: 'auto', paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
-        {tab === 'auftraege' && <AuftraegeTab user={user} />}
-        {tab === 'bericht' && <BerichtTab user={user} />}
-        {tab === 'zeiten' && <ZeitenTab user={user} />}
-        {tab === 'rechnung' && <RechnungTab user={user} />}
-      </main>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {screen === 'list' && (
+          <ListScreen user={user} onSelect={a => {
+            setFlow({ assignment: a, timelog: null, notes: '', reportId: null, signatureData: '', signerName: '', paymentMethod: null, savedWithoutPayment: false });
+            setScreen('detail');
+          }} />
+        )}
 
-      <nav style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '520px', background: 'white', borderTop: '1px solid #E5E7EB', display: 'flex', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {navItems.map(item => (
-          <button
-            key={item.id}
-            onClick={() => setTab(item.id)}
-            style={{
-              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              padding: '10px 4px', border: 'none', background: 'transparent', cursor: 'pointer',
-              color: tab === item.id ? '#00454A' : '#9CA3AF',
-              borderTop: tab === item.id ? '2px solid #00454A' : '2px solid transparent',
-              transition: 'all 0.15s',
+        {screen === 'detail' && flow && (
+          <DetailScreen flow={flow} onBack={resetFlow}
+            onStartTimer={tl => { setFlow(f => f ? { ...f, timelog: tl } : f); setScreen('timer'); }}
+            onContinue={tl => { setFlow(f => f ? { ...f, timelog: tl } : f); setScreen('timer'); }}
+          />
+        )}
+
+        {screen === 'bericht' && flow && (
+          <BerichtScreen flow={flow} onBack={() => setScreen('detail')}
+            onNext={notes => { setFlow(f => f ? { ...f, notes } : f); setScreen('zusammenfassung'); }}
+          />
+        )}
+
+        {screen === 'zusammenfassung' && flow && (
+          <ZusammenfassungScreen flow={flow} onBack={() => setScreen('bericht')}
+            onSign={(signerName, sigData, reportId) => {
+              setFlow(f => f ? { ...f, signerName, signatureData: sigData, reportId } : f);
+              setScreen('zahlung');
             }}
-          >
-            <span style={{ fontSize: '1.3rem' }}>{item.icon}</span>
-            <span style={{ fontSize: '0.7rem', marginTop: '2px', fontWeight: tab === item.id ? 600 : 400 }}>{item.label}</span>
-          </button>
-        ))}
-      </nav>
+          />
+        )}
+
+        {screen === 'zahlung' && flow && (
+          <ZahlungScreen flow={flow} onBack={() => setScreen('zusammenfassung')}
+            onDone={method => {
+              if (method === 'bar') {
+                fetch(`${API}/assignments/${flow.assignment.id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: 'completed' }) });
+              }
+              setFlow(f => f ? { ...f, paymentMethod: method === 'bar' ? 'bar' : null, savedWithoutPayment: method === 'saved' } : f);
+              setScreen('abschluss');
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
+// ── Shared Styles ──────────────────────────────────────────────────────────────
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 12px', border: '1px solid #D1D5DB', borderRadius: '8px',
-  fontSize: '1rem', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  padding: '10px 18px', background: '#00454A', color: 'white', border: 'none',
-  borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: '10px 18px', background: 'white', color: '#374151', border: '1px solid #D1D5DB',
-  borderRadius: '8px', fontSize: '0.9rem', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
-};
-
-const successBtnStyle: React.CSSProperties = {
-  padding: '10px 18px', background: '#10B981', color: 'white', border: 'none',
-  borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  padding: '10px 18px', background: '#EF4444', color: 'white', border: 'none',
-  borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-};
-
-const tabContent: React.CSSProperties = { padding: '16px' };
-
-const cardStyle: React.CSSProperties = {
-  background: 'white', borderRadius: '12px', padding: '16px', marginBottom: '14px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-};
-
-const sectionTitle: React.CSSProperties = {
-  margin: '0 0 14px', fontSize: '1rem', fontWeight: 700, color: '#111827',
-};
-
-const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: '0.85rem', color: '#374151', marginBottom: '6px', fontWeight: 500,
-};
-
-const loadingStyle: React.CSSProperties = {
-  padding: '48px', textAlign: 'center', color: '#6B7280',
-};
-
-const toastStyle: React.CSSProperties = {
-  position: 'sticky', top: 0, background: '#00454A', color: 'white', padding: '10px 16px',
-  textAlign: 'center', fontSize: '0.9rem', borderRadius: '8px', margin: '0 0 12px', zIndex: 50,
-};
+const screenWrap: React.CSSProperties = { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' };
+const headerBar: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'white', borderBottom: '1px solid #F3F4F6', flexShrink: 0 };
+const backBtn: React.CSSProperties = { width: '40px', height: '40px', border: 'none', background: '#F3F4F6', borderRadius: '50%', fontSize: '1.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', fontWeight: 300 };
+const bottomBar: React.CSSProperties = { padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))', background: 'white', borderTop: '1px solid #F3F4F6', flexShrink: 0 };
+const card: React.CSSProperties = { background: 'white', borderRadius: '16px', padding: '18px', marginBottom: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' };
+const cardTitle: React.CSSProperties = { margin: '0 0 14px', fontSize: '0.95rem', fontWeight: 700, color: '#111827' };
+const detail: React.CSSProperties = { display: 'flex', flexDirection: 'column', margin: '0 0 10px' };
+const detailLabel: React.CSSProperties = { fontSize: '0.75rem', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' };
+const errBox: React.CSSProperties = { background: '#FEF2F2', color: '#DC2626', padding: '10px 14px', borderRadius: '10px', marginBottom: '14px', fontSize: '0.88rem' };
+const iStyle: React.CSSProperties = { width: '100%', padding: '12px 14px', border: '1.5px solid #E5E7EB', borderRadius: '10px', fontSize: '1rem', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', background: 'white' };
+const btnPrimary: React.CSSProperties = { background: '#00454A', color: 'white', border: 'none', borderRadius: '10px', padding: '12px 20px', fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer' };
+const btnOutline: React.CSSProperties = { background: 'white', color: '#374151', border: '1.5px solid #E5E7EB', borderRadius: '10px', padding: '12px 20px', fontSize: '0.95rem', fontWeight: 500, cursor: 'pointer' };
 
 export default MobileApp;

@@ -48,12 +48,24 @@ async function initDatabase() {
       description TEXT,
       scheduled_at DATETIME NOT NULL,
       status VARCHAR(50) NOT NULL DEFAULT 'pending',
+      booking_request_id CHAR(36),
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       FOREIGN KEY (customer_id) REFERENCES customers(id),
-      FOREIGN KEY (assigned_user_id) REFERENCES users(id)
+      FOREIGN KEY (assigned_user_id) REFERENCES users(id),
+      FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+    // Ensure columns exist (for migration)
+    try {
+        await (0, pool_1.query)('ALTER TABLE assignments ADD COLUMN booking_request_id CHAR(36) AFTER status');
+        await (0, pool_1.query)('ALTER TABLE assignments ADD CONSTRAINT fk_booking_request FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id)');
+    }
+    catch (e) { }
+    try {
+        await (0, pool_1.query)('ALTER TABLE assignments ADD COLUMN hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 65.00');
+    }
+    catch (e) { }
     await (0, pool_1.query)(`
     CREATE TABLE IF NOT EXISTS time_logs (
       id CHAR(36) NOT NULL,
@@ -124,12 +136,33 @@ async function initDatabase() {
     catch (e) {
         // Ignore error if column already exists
     }
+    // Migrate booking_requests: add separate address fields for sorting by proximity
+    const addressCols = ['street', 'house_number', 'zip', 'city'];
+    for (const col of addressCols) {
+        try {
+            await (0, pool_1.query)(`ALTER TABLE booking_requests ADD COLUMN ${col} VARCHAR(255)`);
+        }
+        catch (e) { }
+    }
     await (0, pool_1.query)(`
     CREATE TABLE IF NOT EXISTS mail_users (
       id INT AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
       password VARCHAR(255) NOT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+    await (0, pool_1.query)(`
+    CREATE TABLE IF NOT EXISTS shop_articles (
+      id CHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      image_url TEXT,
+      stock INT NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
     await (0, pool_1.query)(`
@@ -150,7 +183,7 @@ async function initDatabase() {
       name VARCHAR(100) UNIQUE NOT NULL,
       display_name TEXT NOT NULL,
       is_system BOOLEAN NOT NULL DEFAULT FALSE,
-      permissions TEXT NOT NULL DEFAULT '[]',
+      permissions TEXT NOT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -181,10 +214,23 @@ async function initDatabase() {
     const mailPass = 'Helferchen2026!';
     const mailHash = hashForDovecot(mailPass);
     if (mailHash) {
-        const stdEmails = ['info@helferchen.info', 'kundenservice@helferchen.info', 'no-replay@helferchen.info'];
+        const stdEmails = ['info@helferchen.info', 'kundenservice@helferchen.info', 'no-reply@helferchen.info', 'shop@helferchen.info'];
         for (const email of stdEmails) {
             await (0, pool_1.query)('INSERT IGNORE INTO mail_users (email, password) VALUES (?, ?)', [email, mailHash]);
         }
     }
+    console.log('Seeding sample data for demonstration...');
+    const sampleCustId = 'c1111111-1111-1111-1111-111111111111';
+    await (0, pool_1.query)(`INSERT IGNORE INTO customers (id, first_name, last_name, address, phone_number, notes)
+     VALUES (?, 'Erika', 'Mustermann', 'Musterstraße 1, 10115 Berlin', '030-1234567', 'Beispielkunde')`, [sampleCustId]);
+    const sampleAssignId = 'a1111111-1111-1111-1111-111111111111';
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10) + ' 10:00:00';
+    await (0, pool_1.query)(`INSERT IGNORE INTO assignments (id, customer_id, title, description, scheduled_at, status)
+     VALUES (?, ?, 'Fensterreinigung', 'Alle Fenster im Erdgeschoss reinigen.', ?, 'pending')`, [sampleAssignId, sampleCustId, tomorrowStr]);
+    const sampleRequestId = 'b1111111-1111-1111-1111-111111111111';
+    await (0, pool_1.query)(`INSERT IGNORE INTO booking_requests (id, name, phone, email, address, service_description, preferred_date, preferred_time, status)
+     VALUES (?, 'Hans Schmidt', '0151-9876543', 'hans@example.com', 'Alexanderplatz 1, 10178 Berlin', 'Hilfe beim Aufbau eines Regals', ?, '14:00', 'open')`, [sampleRequestId, tomorrow.toISOString().slice(0, 10)]);
     console.log('Database initialization complete.');
 }
