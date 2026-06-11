@@ -15,16 +15,18 @@ router.post('/login', async (req: Request, res: Response) => {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
-  const payload = { id: user.id, username: user.username, role: user.role };
+  const permissions: string[] = (() => { try { return JSON.parse(user.permissions || '[]'); } catch { return []; } })();
+  const payload = { id: user.id, username: user.username, role: user.role, permissions };
   const token = jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
   // addAudit('user', user.id, 'login', user.id, 'User logged in');
-  res.json({ token, user: { id: user.id, username: user.username, role: user.role, full_name: user.full_name } });
+  res.json({ token, user: { id: user.id, username: user.username, role: user.role, full_name: user.full_name, permissions } });
 });
 
 router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {
   const user = await UserRepo.findById(req.user?.id || '');
   if (!user) return res.status(404).json({ message: 'User not found' });
-  res.json({ id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email });
+  const permissions: string[] = (() => { try { return JSON.parse(user.permissions || '[]'); } catch { return []; } })();
+  res.json({ id: user.id, username: user.username, role: user.role, full_name: user.full_name, email: user.email, permissions });
 });
 
 export default router;

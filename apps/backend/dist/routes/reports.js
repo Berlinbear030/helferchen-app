@@ -41,4 +41,10 @@ router.get('/:id', auth_1.authenticateToken, async (req, res) => {
         return res.status(404).json({ message: 'Not found' });
     res.json(report);
 });
+router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requirePermission)('Auftrag loeschen'), async (req, res) => {
+    const success = await queries_1.ReportRepo.delete(String(req.params.id));
+    if (!success)
+        return res.status(404).json({ message: 'Not found' });
+    res.status(204).send();
+});
 exports.default = router;

@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
+import { AuthRequest, authenticateToken, requireRole, requirePermission } from '../middleware/auth';
 import { ReportRepo, TimelogRepo } from '../db/queries';
 
 const router = Router();
@@ -48,6 +48,12 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   const report = await ReportRepo.findById(String(req.params.id));
   if (!report) return res.status(404).json({ message: 'Not found' });
   res.json(report);
+});
+
+router.delete('/:id', authenticateToken, requirePermission('Auftrag loeschen'), async (req: AuthRequest, res: Response) => {
+  const success = await ReportRepo.delete(String(req.params.id));
+  if (!success) return res.status(404).json({ message: 'Not found' });
+  res.status(204).send();
 });
 
 export default router;

@@ -243,7 +243,7 @@ router.get('/users/:id/stats', async (req: AuthRequest, res: Response) => {
 
 // PATCH /api/admin/users/:id — update user (all editable fields)
 router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
-  const { role, password, email, full_name, address, qualification } = req.body;
+  const { role, password, email, full_name, address, qualification, permissions } = req.body;
   const user = await UserRepo.findById(req.params.id as string);
   if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -255,6 +255,10 @@ router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
   if (email !== undefined) { updateFields.email = email; changes.push('email updated'); }
   if (address !== undefined) { updateFields.address = address; changes.push('address updated'); }
   if (qualification !== undefined) { updateFields.qualification = qualification; changes.push('qualification updated'); }
+  if (permissions !== undefined) {
+    updateFields.permissions = JSON.stringify(Array.isArray(permissions) ? permissions : []);
+    changes.push('permissions updated');
+  }
   if (password) {
     updateFields.password_hash = await bcrypt.hash(password, 10);
     changes.push('password changed');

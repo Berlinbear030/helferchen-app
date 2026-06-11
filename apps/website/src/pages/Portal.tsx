@@ -4,7 +4,7 @@ import '../index.css';
 
 const API = '/api';
 
-interface User { id: string; full_name: string; role: string; }
+interface User { id: string; full_name: string; role: string; permissions?: string[]; }
 interface Customer { id: string; first_name: string; last_name: string; address: string; phone_number?: string; email?: string; }
 interface Assignment { id: string; title: string; description: string; scheduled_at: string; status: string; customer: Customer; assigned_user_id?: string; assigned_user?: { id: string; full_name: string } | null; }
 interface Timelog { id: string; assignment_id: string; start_time: string; end_time: string | null; is_signed: boolean; }
@@ -277,7 +277,7 @@ function TourTab({ assignments, unassigned, selectedDate, setSelectedDate, user 
 
 // ── Booking Requests Tab ───────────────────────────────────────────────────────
 
-function BookingRequestsTab() {
+function BookingRequestsTab({ canDelete }: { canDelete: boolean }) {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [employees, setEmployees] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -303,6 +303,12 @@ function BookingRequestsTab() {
     load();
   };
 
+  const deleteRequest = async (id: string, name: string) => {
+    if (!confirm(`Anfrage von "${name}" wirklich löschen?`)) return;
+    await fetch(`${API}/booking-requests/${id}`, { method: 'DELETE', headers: authHeaders() });
+    load();
+  };
+
   const opts = [{ v: 'open', l: 'Offen' }, { v: 'accepted', l: 'Angenommen' }, { v: 'rejected', l: 'Abgelehnt' }, { v: 'assigned', l: 'Zugewiesen' }];
 
   return (
@@ -318,7 +324,12 @@ function BookingRequestsTab() {
               <div key={r.id} className="booking-request-card">
                 <div className="booking-request-header">
                   <strong>{r.name}</strong>
-                  <span className="status-badge">{opts.find(o => o.v === r.status)?.l || r.status}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="status-badge">{opts.find(o => o.v === r.status)?.l || r.status}</span>
+                    {canDelete && (
+                      <button className="btn-danger btn-sm btn-icon" onClick={() => deleteRequest(r.id, r.name)} title="Anfrage löschen">✕</button>
+                    )}
+                  </div>
                 </div>
                 <p>📞 {r.phone}{r.email && ` · ✉ ${r.email}`}</p>
                 {r.address && <p>📍 {r.address}</p>}
@@ -401,7 +412,7 @@ function TimelogsTab({ timelogs, assignments }: { timelogs: Timelog[]; assignmen
 
 // ── Employees Tab ─────────────────────────────────────────────────────────────
 
-interface Employee { id: string; username: string; full_name: string; email: string; role: string; created_at: string; }
+interface Employee { id: string; username: string; full_name: string; email: string; role: string; permissions?: string; created_at: string; }
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin', gebietsleiter: 'Gebietsleiter', kundenbetreuer: 'Kundenbetreuer',
@@ -453,6 +464,17 @@ function EmployeesTab() {
   const del = async (id: string, name: string) => {
     if (!confirm(`${name} wirklich löschen?`)) return;
     await fetch(`${API}/admin/users/${id}`, { method: 'DELETE', headers: authHeaders() });
+    load();
+  };
+
+  const toggleDeletePerm = async (emp: Employee) => {
+    const current: string[] = (() => { try { return JSON.parse(emp.permissions || '[]'); } catch { return []; } })();
+    const hasPerm = current.includes('Auftrag loeschen');
+    const updated = hasPerm ? current.filter(p => p !== 'Auftrag loeschen') : [...current, 'Auftrag loeschen'];
+    await fetch(`${API}/admin/users/${emp.id}`, {
+      method: 'PATCH', headers: authHeaders(),
+      body: JSON.stringify({ permissions: updated }),
+    });
     load();
   };
 
@@ -520,6 +542,21 @@ function EmployeesTab() {
             <span className="role-badge" style={{ background: ROLE_COLORS[emp.role] || '#374151' }}>
               {ROLE_LABELS[emp.role] || emp.role}
             </span>
+            {emp.role !== 'admin' && (
+              <button
+                onClick={() => toggleDeletePerm(emp)}
+                style={{
+                  padding: '3px 8px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid',
+                  cursor: 'pointer',
+                  ...((() => { try { return JSON.parse(emp.permissions || '[]'); } catch { return []; } })().includes('Auftrag loeschen')
+                    ? { background: '#FEF3C7', color: '#92400E', borderColor: '#F59E0B' }
+                    : { background: '#F3F4F6', color: '#6B7280', borderColor: '#D1D5DB' }),
+                }}
+                title="Berechtigung 'Auftrag loeschen' umschalten"
+              >
+                {(() => { try { return JSON.parse(emp.permissions || '[]'); } catch { return []; } })().includes('Auftrag loeschen') ? '🔑 Löschen: An' : '🔒 Löschen: Aus'}
+              </button>
+            )}
             <button className="btn-danger btn-sm btn-icon" onClick={() => del(emp.id, emp.full_name)} title="Löschen">✕</button>
           </div>
         ))}
@@ -743,7 +780,7 @@ function BookingRequestsMap({ requests }: { requests: BookingRequest[] }) {
 
 // ── Admin: Aufträge verwalten ───────────────────────────────────────────────────
 
-function AssignmentsAdminTab() {
+function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [employees, setEmployees] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -783,6 +820,18 @@ function AssignmentsAdminTab() {
     setMsg('Zuweisung gespeichert.');
     setTimeout(() => setMsg(''), 3000);
     load();
+  };
+
+  const deleteAssignment = async (id: string, title: string) => {
+    if (!confirm(`Auftrag "${title}" wirklich löschen?`)) return;
+    const r = await fetch(`${API}/assignments/${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (r.ok) {
+      setMsg('✅ Auftrag gelöscht.');
+      setTimeout(() => setMsg(''), 3000);
+      load();
+    } else {
+      setMsg('❌ Löschen fehlgeschlagen.');
+    }
   };
 
   const convertRequest = (r: BookingRequest) => {
@@ -943,6 +992,7 @@ function AssignmentsAdminTab() {
               <th style={{ textAlign: 'left', padding: '12px' }}>📅 Termin</th>
               <th style={{ textAlign: 'left', padding: '12px' }}>Status</th>
               <th style={{ textAlign: 'left', padding: '12px' }}>Zuweisung</th>
+              {canDelete && <th style={{ padding: '12px' }}></th>}
             </tr>
           </thead>
           <tbody>
@@ -996,6 +1046,11 @@ function AssignmentsAdminTab() {
                     {employees.map(emp => <option key={emp.id} value={emp.id}>🟢 {emp.full_name}</option>)}
                   </select>
                 </td>
+                {canDelete && (
+                  <td style={{ padding: '12px' }}>
+                    <button className="btn-danger btn-sm btn-icon" onClick={() => deleteAssignment(a.id, a.title)} title="Auftrag löschen">✕</button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -1037,7 +1092,7 @@ async function downloadReportPdf(reportId: string) {
 
 // ── Kunden Tab ─────────────────────────────────────────────────────────────────
 
-function KundenTab() {
+function KundenTab({ canDelete }: { canDelete: boolean }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -1046,19 +1101,25 @@ function KundenTab() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    (async () => {
-      const [cR, aR, rR] = await Promise.all([
-        fetch(`${API}/customers`, { headers: authHeaders() }),
-        fetch(`${API}/assignments/all`, { headers: authHeaders() }),
-        fetch(`${API}/reports`, { headers: authHeaders() }),
-      ]);
-      if (cR.ok) setCustomers(await cR.json());
-      if (aR.ok) setAssignments(await aR.json());
-      if (rR.ok) setReports(await rR.json());
-      setLoading(false);
-    })();
+  const loadKunden = useCallback(async () => {
+    const [cR, aR, rR] = await Promise.all([
+      fetch(`${API}/customers`, { headers: authHeaders() }),
+      fetch(`${API}/assignments/all`, { headers: authHeaders() }),
+      fetch(`${API}/reports`, { headers: authHeaders() }),
+    ]);
+    if (cR.ok) setCustomers(await cR.json());
+    if (aR.ok) setAssignments(await aR.json());
+    if (rR.ok) setReports(await rR.json());
+    setLoading(false);
   }, []);
+
+  useEffect(() => { loadKunden(); }, [loadKunden]);
+
+  const deleteReport = async (reportId: string) => {
+    if (!confirm('Rechnung/Bericht wirklich löschen?')) return;
+    await fetch(`${API}/reports/${reportId}`, { method: 'DELETE', headers: authHeaders() });
+    loadKunden();
+  };
 
   const getReport = (aid: string) => reports.find(r => r.assignment_id === aid);
   const customerAssignments = (cid: string) => assignments.filter(a => a.customer?.id === cid);
@@ -1166,10 +1227,19 @@ function KundenTab() {
                           <span style={{ fontSize: '0.82rem', fontWeight: 700, color: rep.signature_id ? '#16A34A' : '#DC2626' }}>
                             {rep.signature_id ? '✅ Bezahlt / Unterschrieben' : '❗ Offene Rechnung'}
                           </span>
-                          <button onClick={() => downloadReportPdf(rep.id)}
-                            style={{ fontSize: '0.78rem', padding: '3px 10px', background: '#00454A', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                            📄 PDF herunterladen
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button onClick={() => downloadReportPdf(rep.id)}
+                              style={{ fontSize: '0.78rem', padding: '3px 10px', background: '#00454A', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                              📄 PDF herunterladen
+                            </button>
+                            {canDelete && (
+                              <button onClick={() => deleteReport(rep.id)}
+                                style={{ fontSize: '0.78rem', padding: '3px 10px', background: '#EF4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                title="Rechnung löschen">
+                                ✕ Löschen
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {rep.notes && <p style={{ margin: 0, fontSize: '0.82rem', color: '#374151', lineHeight: 1.45 }}>{rep.notes.length > 120 ? rep.notes.slice(0, 120) + '…' : rep.notes}</p>}
                       </div>
@@ -1260,15 +1330,16 @@ export default function Portal() {
   if (!user) return <div className="loading-screen">Laden…</div>;
 
   const isAdmin = user.role === 'admin';
-  const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
+  const canDelete = isAdmin || (user.permissions?.includes('Auftrag loeschen') ?? false);
+  const tabs: { id: Tab; label: string; requireAdmin?: boolean; requireDeletePerm?: boolean }[] = [
     { id: 'dashboard', label: '📊 Dashboard' },
     { id: 'appointments', label: '📅 Termine' },
     { id: 'tour', label: '🗺️ Tour' },
-    { id: 'booking-requests', label: '📬 Anfragen', adminOnly: true },
+    { id: 'booking-requests', label: '📬 Anfragen', requireDeletePerm: true },
     { id: 'timelogs', label: '⏱ Zeiten' },
-    { id: 'employees', label: '👥 Mitarbeiter', adminOnly: true },
-    { id: 'assignments-admin', label: '🧾 Rechnungen', adminOnly: true },
-    { id: 'kunden', label: '👥 Kunden', adminOnly: true },
+    { id: 'employees', label: '👥 Mitarbeiter', requireAdmin: true },
+    { id: 'assignments-admin', label: '🧾 Aufträge', requireDeletePerm: true },
+    { id: 'kunden', label: '👥 Kunden', requireDeletePerm: true },
   ];
 
   return (
@@ -1305,7 +1376,11 @@ export default function Portal() {
       </div>
 
       <nav className="portal-tabs">
-        {tabs.filter(t => !t.adminOnly || isAdmin).map(t => (
+        {tabs.filter(t => {
+          if (t.requireAdmin) return isAdmin;
+          if (t.requireDeletePerm) return isAdmin || canDelete;
+          return true;
+        }).map(t => (
           <button key={t.id} className={`tab-btn ${activeTab === t.id ? 'tab-active' : ''}`} onClick={() => setActiveTab(t.id)}>
             {t.label}
           </button>
@@ -1325,11 +1400,11 @@ export default function Portal() {
                 <OsmMapView mine={assignments} unassigned={unassignedAssignments} filterDate={selectedDate} />
               </div>
             )}
-            {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab />}
+            {activeTab === 'booking-requests' && (isAdmin || canDelete) && <BookingRequestsTab canDelete={canDelete} />}
             {activeTab === 'timelogs' && <TimelogsTab timelogs={timelogs} assignments={assignments} />}
             {activeTab === 'employees' && isAdmin && <EmployeesTab />}
-            {activeTab === 'assignments-admin' && isAdmin && <AssignmentsAdminTab />}
-            {activeTab === 'kunden' && isAdmin && <KundenTab />}
+            {activeTab === 'assignments-admin' && (isAdmin || canDelete) && <AssignmentsAdminTab canDelete={canDelete} />}
+            {activeTab === 'kunden' && (isAdmin || canDelete) && <KundenTab canDelete={canDelete} />}
           </>
         )}
       </main>

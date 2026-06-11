@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
+import { AuthRequest, authenticateToken, requireRole, requirePermission } from '../middleware/auth';
 import { AssignmentRepo, CustomerRepo, UserRepo } from '../db/queries';
 
 const router = Router();
@@ -105,7 +105,7 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
   res.json({ ...assignment, status });
 });
 
-router.delete('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticateToken, requirePermission('Auftrag loeschen'), async (req: AuthRequest, res: Response) => {
   const success = await AssignmentRepo.delete(String(req.params.id));
   if (!success) return res.status(404).json({ message: 'Assignment not found' });
   res.status(204).send();

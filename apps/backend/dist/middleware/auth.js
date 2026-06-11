@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireRole = exports.ROLE_HIERARCHY = exports.authenticateToken = void 0;
+exports.requirePermission = exports.requireRole = exports.ROLE_HIERARCHY = exports.authenticateToken = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -13,7 +13,8 @@ const authenticateToken = (req, res, next) => {
     jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || 'secret', (err, user) => {
         if (err)
             return res.sendStatus(403);
-        req.user = user;
+        const u = user;
+        req.user = { ...u, permissions: Array.isArray(u.permissions) ? u.permissions : [] };
         next();
     });
 };
@@ -38,3 +39,13 @@ const requireRole = (...roles) => (req, res, next) => {
     return res.status(403).json({ message: 'Forbidden' });
 };
 exports.requireRole = requireRole;
+const requirePermission = (permission) => (req, res, next) => {
+    if (!req.user)
+        return res.status(403).json({ message: 'Forbidden' });
+    if (req.user.role === 'admin')
+        return next();
+    if (req.user.permissions.includes(permission))
+        return next();
+    return res.status(403).json({ message: 'Forbidden' });
+};
+exports.requirePermission = requirePermission;

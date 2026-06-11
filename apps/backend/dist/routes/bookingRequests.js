@@ -79,4 +79,12 @@ router.patch('/:id', auth_1.authenticateToken, async (req, res) => {
     await queries_1.AuditRepo.create('booking_request', entry.id, 'update', req.user.id, JSON.stringify({ status, assigned_user_id }));
     return res.json(entry);
 });
+// Auth: delete a booking request
+router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requirePermission)('Auftrag loeschen'), async (req, res) => {
+    const success = await queries_1.BookingRequestRepo.delete(req.params.id);
+    if (!success)
+        return res.status(404).json({ error: 'Nicht gefunden.' });
+    await queries_1.AuditRepo.create('booking_request', req.params.id, 'deleted', req.user.id, 'Booking request deleted');
+    return res.status(204).send();
+});
 exports.default = router;

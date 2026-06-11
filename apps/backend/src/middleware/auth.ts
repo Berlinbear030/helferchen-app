@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
     id: string;
     username: string;
     role: string;
+    permissions: string[];
   };
 }
 
@@ -16,7 +17,8 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
 
   jwt.verify(token, process.env.JWT_SECRET as string || 'secret', (err, user) => {
     if (err) return res.sendStatus(403);
-    req.user = user as AuthRequest['user'];
+    const u = user as any;
+    req.user = { ...u, permissions: Array.isArray(u.permissions) ? u.permissions : [] };
     next();
   });
 };
@@ -36,5 +38,12 @@ export const requireRole = (...roles: string[]) => (req: AuthRequest, res: Respo
   if (roles.includes(req.user.role)) return next();
   // admin always has access
   if (req.user.role === 'admin') return next();
+  return res.status(403).json({ message: 'Forbidden' });
+};
+
+export const requirePermission = (permission: string) => (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) return res.status(403).json({ message: 'Forbidden' });
+  if (req.user.role === 'admin') return next();
+  if (req.user.permissions.includes(permission)) return next();
   return res.status(403).json({ message: 'Forbidden' });
 };

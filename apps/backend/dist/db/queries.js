@@ -24,7 +24,7 @@ exports.UserRepo = {
     async findAll() {
         if (!useDb())
             return index_1.default.users;
-        const res = await (0, pool_1.query)('SELECT id, username, full_name, email, role, address, qualification, created_at FROM users ORDER BY username ASC');
+        const res = await (0, pool_1.query)('SELECT id, username, full_name, email, role, address, qualification, permissions, created_at FROM users ORDER BY username ASC');
         return res.rows;
     },
     async create(username, password_hash, full_name, email, role) {
@@ -76,6 +76,10 @@ exports.UserRepo = {
         if (fields.qualification !== undefined) {
             setClauses.push('qualification = ?');
             values.push(fields.qualification);
+        }
+        if (fields.permissions !== undefined) {
+            setClauses.push('permissions = ?');
+            values.push(fields.permissions);
         }
         if (setClauses.length === 0)
             return false;
@@ -294,6 +298,17 @@ exports.ReportRepo = {
             return;
         }
         await (0, pool_1.query)('UPDATE reports SET signature_id = ? WHERE id = ?', [signature_id, id]);
+    },
+    async delete(id) {
+        if (!useDb()) {
+            const idx = index_1.default.reports.findIndex(x => x.id === id);
+            if (idx === -1)
+                return false;
+            index_1.default.reports.splice(idx, 1);
+            return true;
+        }
+        const res = await (0, pool_1.query)('DELETE FROM reports WHERE id = ?', [id]);
+        return res.rowCount > 0;
     }
 };
 exports.SignatureRepo = {
@@ -423,6 +438,17 @@ exports.BookingRequestRepo = {
         values.push(id);
         await (0, pool_1.query)(`UPDATE booking_requests SET ${fields.join(', ')} WHERE id = ?`, values);
         return this.findById(id);
+    },
+    async delete(id) {
+        if (!useDb()) {
+            const idx = index_1.default.bookingRequests.findIndex(x => x.id === id);
+            if (idx === -1)
+                return false;
+            index_1.default.bookingRequests.splice(idx, 1);
+            return true;
+        }
+        const res = await (0, pool_1.query)('DELETE FROM booking_requests WHERE id = ?', [id]);
+        return res.rowCount > 0;
     }
 };
 exports.RoleRepo = {

@@ -17,7 +17,7 @@ export const UserRepo = {
   },
   async findAll(): Promise<User[]> {
     if (!useDb()) return db.users;
-    const res = await query('SELECT id, username, full_name, email, role, address, qualification, created_at FROM users ORDER BY username ASC');
+    const res = await query('SELECT id, username, full_name, email, role, address, qualification, permissions, created_at FROM users ORDER BY username ASC');
     return res.rows;
   },
   async create(username: string, password_hash: string, full_name: string, email: string, role: string): Promise<User> {
@@ -43,7 +43,7 @@ export const UserRepo = {
     const res = await query('DELETE FROM users WHERE id = ?', [id]);
     return res.rowCount > 0;
   },
-  async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string }): Promise<boolean> {
+  async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string; permissions?: string }): Promise<boolean> {
     if (!useDb()) return false;
     const setClauses: string[] = [];
     const values: unknown[] = [];
@@ -53,6 +53,7 @@ export const UserRepo = {
     if (fields.role !== undefined) { setClauses.push('role = ?'); values.push(fields.role); }
     if (fields.address !== undefined) { setClauses.push('address = ?'); values.push(fields.address); }
     if (fields.qualification !== undefined) { setClauses.push('qualification = ?'); values.push(fields.qualification); }
+    if (fields.permissions !== undefined) { setClauses.push('permissions = ?'); values.push(fields.permissions); }
     if (setClauses.length === 0) return false;
     values.push(id);
     const res = await query(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, values);
@@ -265,6 +266,16 @@ export const ReportRepo = {
       return;
     }
     await query('UPDATE reports SET signature_id = ? WHERE id = ?', [signature_id, id]);
+  },
+  async delete(id: string): Promise<boolean> {
+    if (!useDb()) {
+      const idx = db.reports.findIndex(x => x.id === id);
+      if (idx === -1) return false;
+      db.reports.splice(idx, 1);
+      return true;
+    }
+    const res = await query('DELETE FROM reports WHERE id = ?', [id]);
+    return res.rowCount > 0;
   }
 };
 
@@ -394,6 +405,16 @@ export const BookingRequestRepo = {
     values.push(id);
     await query(`UPDATE booking_requests SET ${fields.join(', ')} WHERE id = ?`, values);
     return this.findById(id);
+  },
+  async delete(id: string): Promise<boolean> {
+    if (!useDb()) {
+      const idx = db.bookingRequests.findIndex(x => x.id === id);
+      if (idx === -1) return false;
+      db.bookingRequests.splice(idx, 1);
+      return true;
+    }
+    const res = await query('DELETE FROM booking_requests WHERE id = ?', [id]);
+    return res.rowCount > 0;
   }
 };
 

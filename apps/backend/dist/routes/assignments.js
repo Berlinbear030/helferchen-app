@@ -91,7 +91,7 @@ router.patch('/:id/status', auth_1.authenticateToken, async (req, res) => {
     await queries_1.AssignmentRepo.updateStatus(String(req.params.id), String(status));
     res.json({ ...assignment, status });
 });
-router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
+router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requirePermission)('Auftrag loeschen'), async (req, res) => {
     const success = await queries_1.AssignmentRepo.delete(String(req.params.id));
     if (!success)
         return res.status(404).json({ message: 'Assignment not found' });

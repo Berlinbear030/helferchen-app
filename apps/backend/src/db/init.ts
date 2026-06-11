@@ -146,12 +146,15 @@ export async function initDatabase(): Promise<void> {
     } catch (e) {}
   }
 
-  // Migrate users: add address and qualification columns
+  // Migrate users: add address, qualification, and permissions columns
   try {
     await query('ALTER TABLE users ADD COLUMN address TEXT');
   } catch (e) {}
   try {
     await query('ALTER TABLE users ADD COLUMN qualification TEXT');
+  } catch (e) {}
+  try {
+    await query("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'");
   } catch (e) {}
 
   await query(`

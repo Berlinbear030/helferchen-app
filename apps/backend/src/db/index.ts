@@ -9,6 +9,7 @@ export interface User {
   full_name: string;
   address?: string;
   qualification?: string;
+  permissions?: string; // JSON array of permission strings
   created_at: string;
 }
 
