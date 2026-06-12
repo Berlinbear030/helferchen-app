@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import Overview from './Overview';
 import Employees from './Employees';
@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const deferredPrompt = useRef<any>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user') || 'null');
@@ -61,9 +62,22 @@ export default function AdminDashboard() {
     window.open('mailto:info@helferchen.info?subject=Werbematerial%20bestellen&body=Hallo%2C%0A%0Aich%20m%C3%B6chte%20Werbematerial%20bestellen.%0A%0AAnzahl%20und%20Art%3A%20', '_blank');
   };
 
+  const closeSidebar = () => setSidebarOpen(false);
+
   return (
     <div className="admin-layout">
-      <aside className="admin-sidebar">
+      {/* Mobile top bar */}
+      <div className="admin-mobile-topbar">
+        <button className="admin-hamburger" onClick={() => setSidebarOpen(o => !o)} aria-label="Menü öffnen">
+          <span /><span /><span />
+        </button>
+        <img src="/logo_light.svg" alt="Helferchen" className="admin-mobile-logo" />
+      </div>
+
+      {/* Sidebar overlay backdrop */}
+      {sidebarOpen && <div className="admin-sidebar-backdrop" onClick={closeSidebar} />}
+
+      <aside className={`admin-sidebar${sidebarOpen ? ' admin-sidebar--open' : ''}`}>
         <div className="admin-sidebar-header">
           <img src="/logo_light.svg" alt="Helferchen Logo" style={{ width: '100%', marginBottom: '10px' }} />
           <span className="badge badge--admin">Admin Control</span>
@@ -79,6 +93,7 @@ export default function AdminDashboard() {
                 key={item.path}
                 to={fullPath}
                 className={`admin-nav-link${isActive ? ' admin-nav-link--active' : ''}`}
+                onClick={closeSidebar}
               >
                 {item.label}
               </Link>
@@ -92,7 +107,7 @@ export default function AdminDashboard() {
           <button className="btn-sidebar-outline" onClick={handleOrderMarketing}>
             <span className="btn-icon">🖨</span> Werbematerial bestellen
           </button>
-          <button className="btn-sidebar-billing" onClick={() => navigate('/admin/billing')}>
+          <button className="btn-sidebar-billing" onClick={() => { navigate('/admin/billing'); closeSidebar(); }}>
             Abrechnung
           </button>
         </div>
