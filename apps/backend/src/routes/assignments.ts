@@ -117,10 +117,11 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
   res.json({ ...assignment, status });
 });
 
-router.delete('/:id', authenticateToken, requirePermission('Auftrag loeschen'), async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
     const id = String(req.params.id);
-    // Cascade: remove reports and timelogs that reference this assignment before deleting
+    // Cascade: signatures → reports → time_logs → assignment
+    await query('DELETE FROM signatures WHERE timelog_id IN (SELECT id FROM time_logs WHERE assignment_id = ?)', [id]);
     await query('DELETE FROM reports WHERE assignment_id = ?', [id]);
     await query('DELETE FROM time_logs WHERE assignment_id = ?', [id]);
     const success = await AssignmentRepo.delete(id);

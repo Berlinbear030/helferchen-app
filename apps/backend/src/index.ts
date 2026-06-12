@@ -16,6 +16,7 @@ import shopRoutes from './routes/shop';
 import telegramRoutes from './telegram';
 import { initDatabase } from './db/init';
 import { testConnection, startKeepalive } from './db/pool';
+import { scheduleBackup } from './services/backup';
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ async function start() {
       console.warn('Database unreachable — running with in-memory fallback.');
     }
   }
+  scheduleBackup(); // daily database backup at 20:00
   app.listen(port, () => {
     console.log(`Helferchen API running at http://localhost:${port}`);
   });

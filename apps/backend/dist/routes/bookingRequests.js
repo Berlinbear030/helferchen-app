@@ -80,8 +80,8 @@ router.patch('/:id', auth_1.authenticateToken, async (req, res) => {
     await queries_1.AuditRepo.create('booking_request', entry.id, 'update', req.user.id, JSON.stringify({ status, assigned_user_id }));
     return res.json(entry);
 });
-// Auth: delete a booking request
-router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requirePermission)('Auftrag loeschen'), async (req, res) => {
+// Auth: delete a booking request (admin only)
+router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
     try {
         const id = req.params.id;
         // Unlink assignments that reference this booking request before deleting

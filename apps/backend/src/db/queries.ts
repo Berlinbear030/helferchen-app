@@ -91,6 +91,16 @@ export const CustomerRepo = {
       [id, first_name, last_name, address, phone_number, notes]
     );
     return { id, first_name, last_name, address, phone_number, notes, created_at: new Date().toISOString() };
+  },
+  async delete(id: string): Promise<boolean> {
+    if (!useDb()) {
+      const idx = db.customers.findIndex(c => c.id === id);
+      if (idx === -1) return false;
+      db.customers.splice(idx, 1);
+      return true;
+    }
+    const res = await query('DELETE FROM customers WHERE id = ?', [id]);
+    return res.rowCount > 0;
   }
 };
 

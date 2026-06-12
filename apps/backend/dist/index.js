@@ -21,6 +21,7 @@ const shop_1 = __importDefault(require("./routes/shop"));
 const telegram_1 = __importDefault(require("./telegram"));
 const init_1 = require("./db/init");
 const pool_1 = require("./db/pool");
+const backup_1 = require("./services/backup");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
@@ -56,15 +57,18 @@ async function start() {
             try {
                 await (0, init_1.initDatabase)();
                 console.log('Database connected and initialized.');
+                (0, pool_1.startKeepalive)(); // keep connections alive on shared hosting
             }
             catch (err) {
                 console.error('Database schema init failed (running with DB):', err);
+                (0, pool_1.startKeepalive)(); // still start keepalive even if init had issues
             }
         }
         else {
             console.warn('Database unreachable — running with in-memory fallback.');
         }
     }
+    (0, backup_1.scheduleBackup)(); // daily database backup at 20:00
     app.listen(port, () => {
         console.log(`Helferchen API running at http://localhost:${port}`);
     });

@@ -103,8 +103,8 @@ router.patch('/:id', authenticateToken, async (req: AuthRequest, res: Response) 
   return res.json(entry);
 });
 
-// Auth: delete a booking request
-router.delete('/:id', authenticateToken, requirePermission('Auftrag loeschen'), async (req: AuthRequest, res: Response) => {
+// Auth: delete a booking request (admin only)
+router.delete('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     // Unlink assignments that reference this booking request before deleting

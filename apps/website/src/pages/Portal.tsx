@@ -298,6 +298,7 @@ function BookingRequestsTab({ canDelete }: { canDelete: boolean }) {
   const [filter, setFilter] = useState('open');
   const [assignSelects, setAssignSelects] = useState<Record<string, string>>({});
   const [confirmDel, setConfirmDel] = useState<{ id: string; name: string } | null>(null);
+  const [msg, setMsg] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -324,9 +325,21 @@ function BookingRequestsTab({ canDelete }: { canDelete: boolean }) {
 
   const confirmDelExecute = async () => {
     if (!confirmDel) return;
-    await fetch(`${API}/booking-requests/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
-    setConfirmDel(null);
-    load();
+    try {
+      const r = await fetch(`${API}/booking-requests/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
+      setConfirmDel(null);
+      if (r.ok) {
+        load();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setMsg('❌ ' + (d.message || d.error || 'Löschen fehlgeschlagen'));
+        setTimeout(() => setMsg(''), 5000);
+      }
+    } catch {
+      setConfirmDel(null);
+      setMsg('❌ Netzwerkfehler beim Löschen');
+      setTimeout(() => setMsg(''), 5000);
+    }
   };
 
   const opts = [{ v: 'open', l: 'Offen' }, { v: 'accepted', l: 'Angenommen' }, { v: 'rejected', l: 'Abgelehnt' }, { v: 'assigned', l: 'Zugewiesen' }];
@@ -334,6 +347,7 @@ function BookingRequestsTab({ canDelete }: { canDelete: boolean }) {
   return (
     <div className="booking-requests-tab">
       {confirmDel && <ConfirmDialog message={`Anfrage von "${confirmDel.name}" wirklich löschen?`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
+      {msg && <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`}>{msg}</div>}
       <div className="filter-row">
         {opts.map(o => <button key={o.v} className={`filter-btn ${filter === o.v ? 'active' : ''}`} onClick={() => setFilter(o.v)}>{o.l}</button>)}
       </div>
@@ -447,10 +461,7 @@ const ROLE_COLORS: Record<string, string> = {
 function EmployeesTab() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
-  const [form, setForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
   const [confirmDel, setConfirmDel] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -463,26 +474,6 @@ function EmployeesTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true); setMsg('');
-    try {
-      const r = await fetch(`${API}/admin/users`, {
-        method: 'POST', headers: authHeaders(),
-        body: JSON.stringify(form),
-      });
-      if (r.ok) {
-        setMsg('Mitarbeiter angelegt!');
-        setForm({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
-        setShowForm(false);
-        load();
-      } else {
-        const d = await r.json();
-        setMsg(d.message || 'Fehler beim Anlegen');
-      }
-    } finally { setSaving(false); }
-  };
-
   const del = async (id: string, name: string) => {
     setConfirmDel({ id, name });
   };
@@ -494,17 +485,6 @@ function EmployeesTab() {
     load();
   };
 
-  const toggleDeletePerm = async (emp: Employee) => {
-    const current: string[] = (() => { try { return JSON.parse(emp.permissions || '[]'); } catch { return []; } })();
-    const hasPerm = current.includes('Auftrag loeschen');
-    const updated = hasPerm ? current.filter(p => p !== 'Auftrag loeschen') : [...current, 'Auftrag loeschen'];
-    await fetch(`${API}/admin/users/${emp.id}`, {
-      method: 'PATCH', headers: authHeaders(),
-      body: JSON.stringify({ permissions: updated }),
-    });
-    load();
-  };
-
   if (loading) return <div className="loading-text">Lade Mitarbeiter…</div>;
 
   return (
@@ -512,50 +492,9 @@ function EmployeesTab() {
       {confirmDel && <ConfirmDialog message={`${confirmDel.name} wirklich löschen?`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
       <div className="employees-header">
         <h3>Mitarbeiterverwaltung ({employees.length})</h3>
-        <button className="btn-primary btn-sm" onClick={() => { setShowForm(!showForm); setMsg(''); }}>
-          {showForm ? '× Abbrechen' : '+ Neuer Mitarbeiter'}
-        </button>
       </div>
 
       {msg && <div className={`msg-banner ${msg.includes('Fehler') ? 'msg-error' : 'msg-success'}`}>{msg}</div>}
-
-      {showForm && (
-        <form className="employee-form" onSubmit={save}>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Voller Name *</label>
-              <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} required placeholder="Max Mustermann" />
-            </div>
-            <div className="form-group">
-              <label>Benutzername *</label>
-              <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} required placeholder="max.mustermann" />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Passwort *</label>
-              <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required placeholder="Sicheres Passwort" />
-            </div>
-            <div className="form-group">
-              <label>E-Mail</label>
-              <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="max@helferchen.info" />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Rolle *</label>
-              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                <option value="mitarbeiter">Mitarbeiter</option>
-                <option value="kundenbetreuer">Kundenbetreuer</option>
-                <option value="gebietsleiter">Gebietsleiter</option>
-                <option value="buchhaltung">Buchhaltung</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-          </div>
-          <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Speichern…' : 'Mitarbeiter anlegen'}</button>
-        </form>
-      )}
 
       <div className="employees-list">
         {employees.length === 0 && <p className="empty-state">Keine Mitarbeiter vorhanden.</p>}
@@ -570,21 +509,6 @@ function EmployeesTab() {
             <span className="role-badge" style={{ background: ROLE_COLORS[emp.role] || '#374151' }}>
               {ROLE_LABELS[emp.role] || emp.role}
             </span>
-            {emp.role !== 'admin' && (
-              <button
-                onClick={() => toggleDeletePerm(emp)}
-                style={{
-                  padding: '3px 8px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid',
-                  cursor: 'pointer',
-                  ...((() => { try { return JSON.parse(emp.permissions || '[]'); } catch { return []; } })().includes('Auftrag loeschen')
-                    ? { background: '#FEF3C7', color: '#92400E', borderColor: '#F59E0B' }
-                    : { background: '#F3F4F6', color: '#6B7280', borderColor: '#D1D5DB' }),
-                }}
-                title="Berechtigung 'Auftrag loeschen' umschalten"
-              >
-                {(() => { try { return JSON.parse(emp.permissions || '[]'); } catch { return []; } })().includes('Auftrag loeschen') ? '🔑 Löschen: An' : '🔒 Löschen: Aus'}
-              </button>
-            )}
             <button className="btn-danger btn-sm btn-icon" onClick={() => del(emp.id, emp.full_name)} title="Löschen">✕</button>
           </div>
         ))}
@@ -1139,6 +1063,8 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [confirmDelReport, setConfirmDelReport] = useState<string | null>(null);
+  const [confirmDelCustomer, setConfirmDelCustomer] = useState<Customer | null>(null);
+  const [delMsg, setDelMsg] = useState('');
 
   const loadKunden = useCallback(async () => {
     const [cR, aR, rR, sR] = await Promise.all([
@@ -1167,6 +1093,26 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
     loadKunden();
   };
 
+  const confirmDelCustomerExecute = async () => {
+    if (!confirmDelCustomer) return;
+    try {
+      const r = await fetch(`${API}/customers/${confirmDelCustomer.id}`, { method: 'DELETE', headers: authHeaders() });
+      setConfirmDelCustomer(null);
+      if (r.ok) {
+        setSelected(null);
+        loadKunden();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setDelMsg('❌ ' + (d.message || d.error || 'Löschen fehlgeschlagen'));
+        setTimeout(() => setDelMsg(''), 5000);
+      }
+    } catch {
+      setConfirmDelCustomer(null);
+      setDelMsg('❌ Netzwerkfehler beim Löschen');
+      setTimeout(() => setDelMsg(''), 5000);
+    }
+  };
+
   const getReport = (aid: string) => reports.find(r => r.assignment_id === aid);
   const customerAssignments = (cid: string) => assignments.filter(a => a.customer?.id === cid);
 
@@ -1184,8 +1130,11 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
     : [];
 
   return (
-    <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
+    <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexDirection: 'column' }}>
       {confirmDelReport && <ConfirmDialog message="Rechnung/Bericht wirklich löschen?" onConfirm={confirmDelReportExecute} onCancel={() => setConfirmDelReport(null)} />}
+      {confirmDelCustomer && <ConfirmDialog message={`Kunde "${confirmDelCustomer.first_name} ${confirmDelCustomer.last_name}" und alle zugehörigen Aufträge, Berichte und Zeitnachweise unwiderruflich löschen? (DSGVO)`} onConfirm={confirmDelCustomerExecute} onCancel={() => setConfirmDelCustomer(null)} />}
+      {delMsg && <div className={`msg-banner ${delMsg.startsWith('❌') ? 'msg-error' : 'msg-success'}`}>{delMsg}</div>}
+    <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', width: '100%' }}>
       {/* List */}
       <div style={{ width: selected ? '340px' : '100%', flexShrink: 0 }}>
         <div style={{ marginBottom: '14px', display: 'flex', gap: '10px' }}>
@@ -1246,7 +1195,16 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
               <p style={{ margin: '0 0 2px', color: '#6B7280', fontSize: '0.88rem' }}>📍 {selected.address}</p>
               {selected.phone_number && <p style={{ margin: 0, color: '#6B7280', fontSize: '0.88rem' }}>📞 {selected.phone_number}</p>}
             </div>
-            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: '1.6rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>×</button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {canDelete && (
+                <button onClick={() => setConfirmDelCustomer(selected)}
+                  style={{ padding: '5px 12px', background: '#EF4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}
+                  title="Kunde löschen (DSGVO)">
+                  🗑 Löschen
+                </button>
+              )}
+              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: '1.6rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>×</button>
+            </div>
           </div>
 
           {/* Filters inside detail */}
@@ -1305,6 +1263,7 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }
@@ -1382,16 +1341,16 @@ export default function Portal() {
   if (!user) return <div className="loading-screen">Laden…</div>;
 
   const isAdmin = user.role === 'admin';
-  const canDelete = isAdmin || (user.permissions?.includes('Auftrag loeschen') ?? false);
-  const tabs: { id: Tab; label: string; requireAdmin?: boolean; requireDeletePerm?: boolean }[] = [
+  const canDelete = isAdmin;
+  const tabs: { id: Tab; label: string; requireAdmin?: boolean }[] = [
     { id: 'dashboard', label: '📊 Dashboard' },
     { id: 'appointments', label: '📅 Termine' },
     { id: 'tour', label: '🗺️ Tour' },
-    { id: 'booking-requests', label: '📬 Anfragen', requireDeletePerm: true },
+    { id: 'booking-requests', label: '📬 Anfragen', requireAdmin: true },
     { id: 'timelogs', label: '⏱ Zeiten' },
     { id: 'employees', label: '👥 Mitarbeiter', requireAdmin: true },
-    { id: 'assignments-admin', label: '🧾 Aufträge', requireDeletePerm: true },
-    { id: 'kunden', label: '👥 Kunden', requireDeletePerm: true },
+    { id: 'assignments-admin', label: '🧾 Aufträge', requireAdmin: true },
+    { id: 'kunden', label: '👥 Kunden', requireAdmin: true },
   ];
 
   return (
@@ -1430,7 +1389,6 @@ export default function Portal() {
       <nav className="portal-tabs">
         {tabs.filter(t => {
           if (t.requireAdmin) return isAdmin;
-          if (t.requireDeletePerm) return isAdmin || canDelete;
           return true;
         }).map(t => (
           <button key={t.id} className={`tab-btn ${activeTab === t.id ? 'tab-active' : ''}`} onClick={() => setActiveTab(t.id)}>
@@ -1452,11 +1410,11 @@ export default function Portal() {
                 <OsmMapView mine={assignments} unassigned={unassignedAssignments} filterDate={selectedDate} />
               </div>
             )}
-            {activeTab === 'booking-requests' && (isAdmin || canDelete) && <BookingRequestsTab canDelete={canDelete} />}
+            {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab canDelete={canDelete} />}
             {activeTab === 'timelogs' && <TimelogsTab timelogs={timelogs} assignments={assignments} />}
             {activeTab === 'employees' && isAdmin && <EmployeesTab />}
-            {activeTab === 'assignments-admin' && (isAdmin || canDelete) && <AssignmentsAdminTab canDelete={canDelete} />}
-            {activeTab === 'kunden' && (isAdmin || canDelete) && <KundenTab canDelete={canDelete} />}
+            {activeTab === 'assignments-admin' && isAdmin && <AssignmentsAdminTab canDelete={canDelete} />}
+            {activeTab === 'kunden' && isAdmin && <KundenTab canDelete={canDelete} />}
           </>
         )}
       </main>

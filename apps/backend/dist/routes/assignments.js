@@ -70,6 +70,19 @@ router.get('/map', auth_1.authenticateToken, async (req, res) => {
     ]);
     res.json({ mine: mineWithCustomer, unassigned: unassignedWithCustomer });
 });
+// POST /api/assignments/:id/self-assign — employee claims an unassigned order
+router.post('/:id/self-assign', auth_1.authenticateToken, async (req, res) => {
+    const userId = req.user?.id;
+    if (!userId)
+        return res.status(401).json({ message: 'Unauthorized' });
+    const assignment = await queries_1.AssignmentRepo.findById(String(req.params.id));
+    if (!assignment)
+        return res.status(404).json({ message: 'Auftrag nicht gefunden' });
+    if (assignment.assigned_user_id)
+        return res.status(409).json({ message: 'Auftrag ist bereits vergeben' });
+    await queries_1.AssignmentRepo.reassign(String(req.params.id), userId);
+    res.json({ ...assignment, assigned_user_id: userId });
+});
 // PATCH /api/assignments/:id — admin can reassign to a different employee
 router.patch('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
     const assignment = await queries_1.AssignmentRepo.findById(String(req.params.id));
@@ -92,10 +105,11 @@ router.patch('/:id/status', auth_1.authenticateToken, async (req, res) => {
     await queries_1.AssignmentRepo.updateStatus(String(req.params.id), String(status));
     res.json({ ...assignment, status });
 });
-router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requirePermission)('Auftrag loeschen'), async (req, res) => {
+router.delete('/:id', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
     try {
         const id = String(req.params.id);
-        // Cascade: remove reports and timelogs that reference this assignment before deleting
+        // Cascade: signatures → reports → time_logs → assignment
+        await (0, pool_1.query)('DELETE FROM signatures WHERE timelog_id IN (SELECT id FROM time_logs WHERE assignment_id = ?)', [id]);
         await (0, pool_1.query)('DELETE FROM reports WHERE assignment_id = ?', [id]);
         await (0, pool_1.query)('DELETE FROM time_logs WHERE assignment_id = ?', [id]);
         const success = await queries_1.AssignmentRepo.delete(id);

@@ -84,7 +84,7 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
   res.json(report);
 });
 
-router.delete('/:id', authenticateToken, requirePermission('Auftrag loeschen'), async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   const success = await ReportRepo.delete(String(req.params.id));
   if (!success) return res.status(404).json({ message: 'Not found' });
   res.status(204).send();

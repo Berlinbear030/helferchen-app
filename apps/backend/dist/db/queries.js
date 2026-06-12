@@ -118,6 +118,17 @@ exports.CustomerRepo = {
         const id = (0, crypto_1.randomUUID)();
         await (0, pool_1.query)('INSERT INTO customers (id, first_name, last_name, address, phone_number, notes) VALUES (?, ?, ?, ?, ?, ?)', [id, first_name, last_name, address, phone_number, notes]);
         return { id, first_name, last_name, address, phone_number, notes, created_at: new Date().toISOString() };
+    },
+    async delete(id) {
+        if (!useDb()) {
+            const idx = index_1.default.customers.findIndex(c => c.id === id);
+            if (idx === -1)
+                return false;
+            index_1.default.customers.splice(idx, 1);
+            return true;
+        }
+        const res = await (0, pool_1.query)('DELETE FROM customers WHERE id = ?', [id]);
+        return res.rowCount > 0;
     }
 };
 exports.AssignmentRepo = {
