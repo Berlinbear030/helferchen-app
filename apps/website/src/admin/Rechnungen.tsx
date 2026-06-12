@@ -26,6 +26,9 @@ interface Invoice {
   invoice_number: string | null;
   invoice_notes: string | null;
   invoice_amount_override: number | null;
+  voucher_code: string | null;
+  voucher_label: string | null;
+  voucher_discount_amount: number | null;
   start_time: string | null;
   end_time: string | null;
   duration_minutes: number | null;
@@ -51,9 +54,9 @@ function fmtDate(dt: string | null) {
   return new Date(dt).toLocaleDateString('de-DE');
 }
 
-function fmtMoney(n: number | null) {
+function fmtMoney(n: number | string | null) {
   if (n == null) return '—';
-  return n.toFixed(2).replace('.', ',') + ' €';
+  return Number(n).toFixed(2).replace('.', ',') + ' €';
 }
 
 function fmtDuration(min: number | null) {
@@ -62,8 +65,10 @@ function fmtDuration(min: number | null) {
 }
 
 function printInvoice(inv: Invoice, items: InvoiceItem[]) {
-  const totalItems = items.reduce((s, it) => s + it.quantity * it.unit_price, 0);
-  const amount = inv.invoice_amount_override != null ? inv.invoice_amount_override : (inv.total_price ?? totalItems);
+  const totalItems = items.reduce((s, it) => s + Number(it.quantity) * Number(it.unit_price), 0);
+  const grossAmount = inv.invoice_amount_override != null ? Number(inv.invoice_amount_override) : Number(inv.total_price ?? totalItems);
+  const voucherDiscount = inv.voucher_discount_amount ? Number(inv.voucher_discount_amount) : 0;
+  const amount = Math.max(0, grossAmount - voucherDiscount);
   const invoiceNum = inv.invoice_number || `RE-${inv.id.slice(-8).toUpperCase()}`;
   const html = `<!DOCTYPE html>
 <html lang="de">
@@ -121,9 +126,10 @@ function printInvoice(inv: Invoice, items: InvoiceItem[]) {
       <td>1</td>
       <td>Haushaltsservice — ${inv.assignment_title || 'Dienstleistung'}${inv.duration_minutes ? ` (${fmtDuration(inv.duration_minutes)})` : ''}</td>
       <td style="text-align:right">1</td>
-      <td style="text-align:right">${amount.toFixed(2).replace('.', ',')} €</td>
-      <td style="text-align:right">${amount.toFixed(2).replace('.', ',')} €</td>
+      <td style="text-align:right">${grossAmount.toFixed(2).replace('.', ',')} €</td>
+      <td style="text-align:right">${grossAmount.toFixed(2).replace('.', ',')} €</td>
     </tr>`}
+    ${voucherDiscount > 0 ? `<tr style="color:#16a34a"><td colspan="4">Gutschein: ${inv.voucher_label || inv.voucher_code} (${inv.voucher_code})</td><td style="text-align:right">−${voucherDiscount.toFixed(2).replace('.', ',')} €</td></tr>` : ''}
     <tr class="amount-row"><td colspan="4">Gesamtbetrag (inkl. MwSt.)</td><td style="text-align:right">${amount.toFixed(2).replace('.', ',')} €</td></tr>
   </tbody>
 </table>
@@ -195,8 +201,8 @@ function InvoiceEditor({ invoice, onBack }: { invoice: Invoice; onBack: () => vo
   };
 
   const invoiceNum = inv.invoice_number || `RE-${inv.id.slice(-8).toUpperCase()}`;
-  const totalItems = items.reduce((s, it) => s + it.quantity * it.unit_price, 0);
-  const displayAmount = inv.invoice_amount_override != null ? inv.invoice_amount_override : (inv.total_price ?? totalItems);
+  const totalItems = items.reduce((s, it) => s + Number(it.quantity) * Number(it.unit_price), 0);
+  const displayAmount = inv.invoice_amount_override != null ? Number(inv.invoice_amount_override) : Number(inv.total_price ?? totalItems);
 
   return (
     <div className="inv-editor">
@@ -346,7 +352,7 @@ export default function Rechnungen() {
         <tbody>
           {filtered.map(inv => {
             const invoiceNum = inv.invoice_number || `RE-${inv.id.slice(-8).toUpperCase()}`;
-            const amount = inv.invoice_amount_override != null ? inv.invoice_amount_override : inv.total_price;
+            const amount = inv.invoice_amount_override != null ? Number(inv.invoice_amount_override) : (inv.total_price != null ? Number(inv.total_price) : null);
             return (
               <tr key={inv.id}>
                 <td>

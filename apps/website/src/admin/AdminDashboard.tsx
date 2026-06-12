@@ -9,6 +9,7 @@ import FraudDetection from './FraudDetection';
 import Settings from './Settings';
 import Billing from './Billing';
 import Rechnungen from './Rechnungen';
+import Gutscheine from './Gutscheine';
 import './admin.css';
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
   { path: 'employees', label: 'Mitarbeiter' },
   { path: 'reports', label: 'Berichte' },
   { path: 'invoices', label: 'Rechnungen' },
+  { path: 'vouchers', label: 'Gutscheine' },
   { path: 'audit', label: 'Audit-Trail' },
   { path: 'export', label: 'Export' },
   { path: 'fraud', label: 'Betrugserkennung' },
@@ -131,6 +133,7 @@ export default function AdminDashboard() {
           <Route path="fraud" element={<FraudDetection />} />
           <Route path="settings" element={<Settings />} />
           <Route path="invoices" element={<Rechnungen />} />
+          <Route path="vouchers" element={<Gutscheine />} />
           <Route path="billing" element={<Billing />} />
         </Routes>
       </main>

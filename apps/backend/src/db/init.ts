@@ -151,6 +151,41 @@ export async function initDatabase(): Promise<void> {
   try { await query('ALTER TABLE reports ADD COLUMN invoice_number VARCHAR(50)'); } catch {}
   try { await query('ALTER TABLE reports ADD COLUMN invoice_notes TEXT'); } catch {}
   try { await query('ALTER TABLE reports ADD COLUMN invoice_amount_override DECIMAL(10,2) NULL'); } catch {}
+  // Voucher columns on reports
+  try { await query('ALTER TABLE reports ADD COLUMN voucher_code VARCHAR(50) NULL'); } catch {}
+  try { await query('ALTER TABLE reports ADD COLUMN voucher_label VARCHAR(255) NULL'); } catch {}
+  try { await query('ALTER TABLE reports ADD COLUMN voucher_discount_amount DECIMAL(10,2) NULL'); } catch {}
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS vouchers (
+      id CHAR(36) NOT NULL,
+      code VARCHAR(50) UNIQUE NOT NULL,
+      label VARCHAR(255) NOT NULL,
+      discount_type VARCHAR(20) NOT NULL DEFAULT 'percent',
+      discount_value DECIMAL(10,2) NOT NULL,
+      max_uses INT NULL,
+      used_count INT NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      expires_at DATETIME NULL,
+      notes TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS voucher_usages (
+      id CHAR(36) NOT NULL,
+      voucher_id CHAR(36) NOT NULL,
+      report_id CHAR(36) NOT NULL,
+      discount_amount DECIMAL(10,2) NOT NULL,
+      applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      FOREIGN KEY (voucher_id) REFERENCES vouchers(id),
+      FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_report_voucher (report_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
 
   // booking_requests migration: ensure all columns exist on older deployments
   for (const col of ['street', 'house_number', 'zip', 'city']) {

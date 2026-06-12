@@ -945,8 +945,65 @@ function ZahlungScreen({ flow, onBack, onDone, onEmail }: {
 }) {
   const { timelog } = flow;
   const mins = timelog ? calcMinutes(timelog.start_time, timelog.end_time) : 0;
-  const price = calcPrice(mins);
+  const basePrice = calcPrice(mins);
   const [selected, setSelected] = useState<'bar' | 'saved' | null>(null);
+
+  const [voucherCode, setVoucherCode] = useState('');
+  const [voucherStatus, setVoucherStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [voucherLabel, setVoucherLabel] = useState('');
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [voucherErr, setVoucherErr] = useState('');
+
+  const finalPrice = Math.max(0, basePrice - voucherDiscount);
+
+  const checkVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    setVoucherStatus('checking');
+    setVoucherErr('');
+    try {
+      const res = await fetch(`${API}/vouchers/validate`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ code: voucherCode.trim().toUpperCase(), gross_amount: basePrice }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        setVoucherStatus('invalid');
+        setVoucherErr(data.message || 'Ungültiger Code');
+        setVoucherDiscount(0);
+        setVoucherLabel('');
+      } else {
+        setVoucherStatus('valid');
+        setVoucherDiscount(data.discount_amount);
+        setVoucherLabel(data.voucher.label);
+        setVoucherErr('');
+      }
+    } catch {
+      setVoucherStatus('invalid');
+      setVoucherErr('Verbindungsfehler');
+    }
+  };
+
+  const removeVoucher = () => {
+    setVoucherCode(''); setVoucherStatus('idle');
+    setVoucherDiscount(0); setVoucherLabel(''); setVoucherErr('');
+  };
+
+  const applyVoucherToReport = async () => {
+    if (voucherStatus !== 'valid' || !flow.reportId) return;
+    try {
+      await fetch(`${API}/vouchers/apply`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ code: voucherCode.trim().toUpperCase(), report_id: flow.reportId, gross_amount: basePrice }),
+      });
+    } catch { /* non-blocking */ }
+  };
+
+  const handleSelect = async (method: 'bar' | 'saved') => {
+    if (voucherStatus === 'valid') await applyVoucherToReport();
+    setSelected(method);
+  };
 
   const handlePrint = async () => {
     if (flow.reportId) await downloadPdfBlob(flow.reportId);
@@ -961,9 +1018,14 @@ function ZahlungScreen({ flow, onBack, onDone, onEmail }: {
           <div style={{ background: '#E9F9EE', border: '1px solid #34C759', borderRadius: '16px', padding: '18px', marginBottom: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>{selected === 'bar' ? '✅' : '💾'}</div>
             <p style={{ margin: '0 0 2px', fontWeight: 700, color: '#1C7B37', fontSize: '1.05rem', ...F }}>
-              {selected === 'bar' ? `Bar bezahlt · ${euro(price)}` : 'Zwischengespeichert'}
+              {selected === 'bar' ? `Bar bezahlt · ${euro(finalPrice)}` : 'Zwischengespeichert'}
             </p>
-            <p style={{ margin: 0, color: '#2D9448', fontSize: '0.84rem', ...F }}>
+            {voucherDiscount > 0 && (
+              <p style={{ margin: '2px 0 0', color: '#2D9448', fontSize: '0.82rem', ...F }}>
+                Gutschein: {voucherLabel} (−{euro(voucherDiscount)})
+              </p>
+            )}
+            <p style={{ margin: '4px 0 0', color: '#2D9448', fontSize: '0.84rem', ...F }}>
               {selected === 'bar' ? 'Zahlung erhalten' : 'Kunde zahlt später'}
             </p>
           </div>
@@ -998,20 +1060,64 @@ function ZahlungScreen({ flow, onBack, onDone, onEmail }: {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: BG, overflow: 'hidden' }}>
       <NavBar title="Zahlung" onBack={onBack} />
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px', WebkitOverflowScrolling: 'touch' }}>
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ width: '72px', height: '72px', background: GREEN_LIGHT, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
             <span style={{ fontSize: '2.2rem' }}>💶</span>
           </div>
           <p style={{ margin: '0 0 5px', color: SUBLABEL, ...F }}>Offener Betrag</p>
-          <p style={{ margin: 0, fontSize: '2.8rem', fontWeight: 800, color: LABEL, ...F }}>{euro(price)}</p>
+          {voucherDiscount > 0 ? (
+            <>
+              <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600, color: SUBLABEL, textDecoration: 'line-through', ...F }}>{euro(basePrice)}</p>
+              <p style={{ margin: '2px 0 0', fontSize: '2.8rem', fontWeight: 800, color: '#16a34a', ...F }}>{euro(finalPrice)}</p>
+              <p style={{ margin: '4px 0 0', color: '#16a34a', fontSize: '0.82rem', fontWeight: 600, ...F }}>
+                🎟 {voucherLabel} · −{euro(voucherDiscount)}
+              </p>
+            </>
+          ) : (
+            <p style={{ margin: 0, fontSize: '2.8rem', fontWeight: 800, color: LABEL, ...F }}>{euro(basePrice)}</p>
+          )}
           <p style={{ margin: '5px 0 0', color: SUBLABEL, fontSize: '0.8rem', ...F }}>{mins} Min · {priceBreakdown(mins)}</p>
         </div>
+
+        {/* Voucher input */}
+        <div style={{ background: CARD, borderRadius: '16px', padding: '14px 16px', marginBottom: '16px' }}>
+          <p style={{ margin: '0 0 10px', fontWeight: 600, fontSize: '0.9rem', color: LABEL, ...F }}>Gutscheincode</p>
+          {voucherStatus === 'valid' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f0fdf4', borderRadius: '10px', padding: '10px 12px' }}>
+              <span style={{ fontSize: '1.4rem' }}>🎟</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 700, color: '#15803d', fontSize: '0.95rem', ...F }}>{voucherCode.toUpperCase()}</p>
+                <p style={{ margin: '2px 0 0', color: '#16a34a', fontSize: '0.8rem', ...F }}>{voucherLabel} · −{euro(voucherDiscount)}</p>
+              </div>
+              <button onClick={removeVoucher} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '1.2rem', cursor: 'pointer', padding: '2px 6px' }}>✕</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                value={voucherCode}
+                onChange={e => { setVoucherCode(e.target.value.toUpperCase()); if (voucherStatus !== 'idle') { setVoucherStatus('idle'); setVoucherErr(''); } }}
+                onKeyDown={e => e.key === 'Enter' && checkVoucher()}
+                placeholder="z.B. HELF-A3X7-K2P9"
+                style={{ flex: 1, padding: '10px 12px', border: `1.5px solid ${voucherStatus === 'invalid' ? '#ef4444' : SEP}`, borderRadius: '10px', fontSize: '0.9rem', fontFamily: 'monospace', textTransform: 'uppercase', outline: 'none', ...F }}
+              />
+              <button
+                onClick={checkVoucher}
+                disabled={!voucherCode.trim() || voucherStatus === 'checking'}
+                style={{ padding: '10px 16px', background: voucherCode.trim() ? GREEN : '#e5e7eb', color: voucherCode.trim() ? 'white' : '#9ca3af', border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: voucherCode.trim() ? 'pointer' : 'default', ...F }}
+              >
+                {voucherStatus === 'checking' ? '…' : 'Prüfen'}
+              </button>
+            </div>
+          )}
+          {voucherErr && <p style={{ margin: '6px 0 0', color: '#ef4444', fontSize: '0.82rem', ...F }}>{voucherErr}</p>}
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <button onClick={() => setSelected('bar')} style={{ padding: '20px 24px', background: GREEN, color: 'white', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', ...F }}>
+          <button onClick={() => handleSelect('bar')} style={{ padding: '20px 24px', background: GREEN, color: 'white', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', ...F }}>
             <span style={{ fontSize: '2rem' }}>💵</span>
             <div style={{ textAlign: 'left' }}>
               <p style={{ margin: 0, fontWeight: 700, fontSize: '1.05rem' }}>Bar bezahlt</p>
-              <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.75 }}>Auftrag abschließen</p>
+              <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.75 }}>Auftrag abschließen · {euro(finalPrice)}</p>
             </div>
           </button>
           <button disabled style={{ padding: '20px 24px', background: BG, color: '#C7C7CC', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'not-allowed', ...F }}>
@@ -1021,7 +1127,7 @@ function ZahlungScreen({ flow, onBack, onDone, onEmail }: {
               <p style={{ margin: 0, fontSize: '0.8rem' }}>Demnächst</p>
             </div>
           </button>
-          <button onClick={() => setSelected('saved')} style={{ padding: '18px 24px', background: CARD, color: LABEL, border: `1.5px solid ${SEP}`, borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', ...F }}>
+          <button onClick={() => handleSelect('saved')} style={{ padding: '18px 24px', background: CARD, color: LABEL, border: `1.5px solid ${SEP}`, borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', ...F }}>
             <span style={{ fontSize: '2rem' }}>💾</span>
             <div style={{ textAlign: 'left' }}>
               <p style={{ margin: 0, fontWeight: 600 }}>Zwischenspeichern</p>

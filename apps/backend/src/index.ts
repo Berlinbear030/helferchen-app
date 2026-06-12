@@ -14,6 +14,7 @@ import dashboardRoutes from './routes/dashboard';
 import cronRoutes from './routes/cron';
 import shopRoutes from './routes/shop';
 import invoiceRoutes from './routes/invoices';
+import voucherRoutes from './routes/vouchers';
 import telegramRoutes from './telegram';
 import { initDatabase } from './db/init';
 import { testConnection, startKeepalive } from './db/pool';
@@ -40,6 +41,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/shop', shopRoutes);
 app.use('/api/invoices', invoiceRoutes);
+app.use('/api/vouchers', voucherRoutes);
 app.use('/api/telegram', telegramRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
