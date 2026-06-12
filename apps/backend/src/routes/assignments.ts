@@ -83,6 +83,17 @@ router.get('/map', authenticateToken, async (req: AuthRequest, res: Response) =>
   res.json({ mine: mineWithCustomer, unassigned: unassignedWithCustomer });
 });
 
+// POST /api/assignments/:id/self-assign — employee claims an unassigned order
+router.post('/:id/self-assign', authenticateToken, async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  const assignment = await AssignmentRepo.findById(String(req.params.id));
+  if (!assignment) return res.status(404).json({ message: 'Auftrag nicht gefunden' });
+  if (assignment.assigned_user_id) return res.status(409).json({ message: 'Auftrag ist bereits vergeben' });
+  await AssignmentRepo.reassign(String(req.params.id), userId);
+  res.json({ ...assignment, assigned_user_id: userId });
+});
+
 // PATCH /api/assignments/:id — admin can reassign to a different employee
 router.patch('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   const assignment = await AssignmentRepo.findById(String(req.params.id));

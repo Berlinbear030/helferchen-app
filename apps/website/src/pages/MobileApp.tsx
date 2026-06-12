@@ -3,6 +3,8 @@
  * Pricing: 20€ first 15min, +15€ per additional 15min block (rounded up)
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const API = '/api';
 const BG = '#F2F2F7';
@@ -34,7 +36,7 @@ interface FlowState {
   kundeNichtDa: boolean;
 }
 
-type Screen = 'list' | 'kunden' | 'kunde_detail' | 'detail' | 'timer' | 'bericht' | 'zusammenfassung' | 'zahlung' | 'quittung' | 'abschluss' | 'kunde_nicht_da';
+type Screen = 'list' | 'tour' | 'kunden' | 'kunde_detail' | 'detail' | 'timer' | 'bericht' | 'zusammenfassung' | 'zahlung' | 'quittung' | 'abschluss' | 'kunde_nicht_da';
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,29 @@ function priceBreakdown(minutes: number): string {
   return `Grundgebühr + ${Math.ceil((minutes - 15) / 15)} × 15 Min`;
 }
 function euro(n: number) { return n.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €'; }
+
+// ── Geocoding (Nominatim, module-level cache) ──────────────────────────────────
+
+const geocodeCache = new Map<string, [number, number] | null>();
+
+async function geocodeAddress(address: string): Promise<[number, number] | null> {
+  if (geocodeCache.has(address)) return geocodeCache.get(address)!;
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+      { headers: { 'Accept-Language': 'de' } }
+    );
+    const data = await r.json();
+    const result: [number, number] | null = data.length > 0
+      ? [parseFloat(data[0].lat), parseFloat(data[0].lon)]
+      : null;
+    geocodeCache.set(address, result);
+    return result;
+  } catch {
+    geocodeCache.set(address, null);
+    return null;
+  }
+}
 
 // ── PDF download with auth ─────────────────────────────────────────────────────
 async function downloadPdfBlob(reportId: string): Promise<void> {
@@ -197,15 +222,196 @@ function DateScroller({ selected, onChange }: { selected: string; onChange: (d: 
 
 // ── Bottom Tab Bar ─────────────────────────────────────────────────────────────
 
-function TabBar({ active, onChange }: { active: 'heute' | 'kunden'; onChange: (t: 'heute' | 'kunden') => void }) {
+const TAB_CONFIG = [
+  { key: 'heute', icon: '📅', label: 'Heute' },
+  { key: 'tour',  icon: '🗺️', label: 'Tour' },
+  { key: 'kunden', icon: '👥', label: 'Kunden' },
+] as const;
+
+type Tab = 'heute' | 'tour' | 'kunden';
+
+function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
   return (
     <div style={{ display: 'flex', background: 'rgba(242,242,247,0.95)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: `1px solid ${SEP}`, paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
-      {(['heute', 'kunden'] as const).map(t => (
-        <button key={t} onClick={() => onChange(t)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: active === t ? GREEN : SUBLABEL, ...F }}>
-          <span style={{ fontSize: '1.4rem' }}>{t === 'heute' ? '📅' : '👥'}</span>
-          <span style={{ fontSize: '0.68rem', fontWeight: active === t ? 700 : 400, marginTop: '2px' }}>{t === 'heute' ? 'Heute' : 'Kunden'}</span>
+      {TAB_CONFIG.map(({ key, icon, label }) => (
+        <button key={key} onClick={() => onChange(key)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: 'none', background: 'transparent', cursor: 'pointer', color: active === key ? GREEN : SUBLABEL, ...F }}>
+          <span style={{ fontSize: '1.4rem' }}>{icon}</span>
+          <span style={{ fontSize: '0.68rem', fontWeight: active === key ? 700 : 400, marginTop: '2px' }}>{label}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+// ── Tour (map with flag markers) ──────────────────────────────────────────────
+
+function TourScreen({ user: _user, onRefresh }: { user: User; onRefresh: () => void }) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const [mapData, setMapData] = useState<{ mine: Assignment[]; unassigned: Assignment[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/assignments/map`, { headers: authHeaders() });
+      if (r.ok) setMapData(await r.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Initialize Leaflet map (once, when container is mounted)
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+    const map = L.map(mapContainerRef.current, { zoomControl: true }).setView([51.1657, 10.4515], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 18,
+    }).addTo(map);
+    mapRef.current = map;
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  // Add markers whenever map data changes
+  useEffect(() => {
+    if (!mapData || !mapRef.current) return;
+
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+
+    let cancelled = false;
+    const currentMap = mapRef.current;
+
+    const makeFlag = (fill: string, stroke: string) => L.divIcon({
+      html: `<svg width="28" height="38" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg"><line x1="4" y1="1" x2="4" y2="38" stroke="#333" stroke-width="2.5" stroke-linecap="round"/><polygon points="4,2 26,9 4,18" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/></svg>`,
+      iconSize: [28, 38],
+      iconAnchor: [4, 38],
+      popupAnchor: [8, -38],
+      className: '',
+    });
+
+    const yellowFlag = makeFlag('#FFD60A', '#c8a600');
+    const greenFlag  = makeFlag('#34C759', '#1a8c38');
+
+    const addAll = async () => {
+      const all = [
+        ...mapData.unassigned.map(a => ({ ...a, _kind: 'unassigned' as const })),
+        ...mapData.mine.map(a => ({ ...a, _kind: 'mine' as const })),
+      ];
+      const bounds: L.LatLngTuple[] = [];
+
+      for (const a of all) {
+        if (cancelled || !a.customer?.address) continue;
+        const coords = await geocodeAddress(a.customer.address);
+        if (cancelled || !coords || !mapRef.current) continue;
+
+        bounds.push(coords);
+        const icon = a._kind === 'unassigned' ? yellowFlag : greenFlag;
+        const marker = L.marker(coords, { icon }).addTo(mapRef.current);
+
+        const dt = a.scheduled_at ? `${dateLabel(a.scheduled_at)} ${clock(a.scheduled_at)}` : '—';
+        const cust = `${a.customer.first_name} ${a.customer.last_name}`;
+
+        if (a._kind === 'unassigned') {
+          const btnId = `sa-${a.id}`;
+          marker.bindPopup(`
+            <div style="min-width:210px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:4px">
+              <div style="font-size:0.75rem;font-weight:700;color:#a07800;margin-bottom:6px">🚩 Nicht zugewiesen</div>
+              <div style="font-weight:700;font-size:0.95rem;margin-bottom:2px">${a.title}</div>
+              <div style="font-size:0.8rem;color:#555;margin-bottom:2px">${cust}</div>
+              <div style="font-size:0.8rem;color:#888;margin-bottom:10px">📅 ${dt}</div>
+              <button id="${btnId}" style="width:100%;padding:9px 0;background:#00454A;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.85rem;font-family:inherit">
+                ✋ Auftrag annehmen
+              </button>
+            </div>
+          `);
+          marker.on('popupopen', () => {
+            const btn = document.getElementById(btnId) as HTMLButtonElement | null;
+            if (!btn) return;
+            btn.onclick = async () => {
+              btn.disabled = true;
+              btn.textContent = 'Wird zugewiesen…';
+              const r = await fetch(`${API}/assignments/${a.id}/self-assign`, { method: 'POST', headers: authHeaders() });
+              if (r.ok) {
+                currentMap.closePopup();
+                onRefresh();
+                await fetchData();
+              } else {
+                const d = await r.json().catch(() => ({}));
+                btn.textContent = d.message || 'Fehler';
+                btn.style.background = '#FF3B30';
+              }
+            };
+          });
+        } else {
+          const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(a.customer.address)}`;
+          marker.bindPopup(`
+            <div style="min-width:210px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:4px">
+              <div style="font-size:0.75rem;font-weight:700;color:#1a7a38;margin-bottom:6px">✅ Mein Auftrag</div>
+              <div style="font-weight:700;font-size:0.95rem;margin-bottom:2px">${a.title}</div>
+              <div style="font-size:0.8rem;color:#555;margin-bottom:2px">${cust}</div>
+              <div style="font-size:0.8rem;color:#888;margin-bottom:10px">📅 ${dt}</div>
+              <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer"
+                style="display:block;text-align:center;padding:9px 0;background:#00454A;color:white;border-radius:8px;font-weight:600;font-size:0.85rem;font-family:inherit;text-decoration:none">
+                📍 Route planen ↗
+              </a>
+            </div>
+          `);
+        }
+
+        markersRef.current.push(marker);
+        await new Promise(r => setTimeout(r, 150)); // Nominatim rate-limit courtesy delay
+      }
+
+      if (!cancelled && bounds.length > 0 && mapRef.current) {
+        mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      }
+    };
+
+    addAll();
+    return () => { cancelled = true; };
+  }, [mapData, fetchData, onRefresh]);
+
+  const totalCount = (mapData?.mine.length ?? 0) + (mapData?.unassigned.length ?? 0);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: BG }}>
+      <div style={{ background: GREEN, paddingTop: 'env(safe-area-inset-top)', flexShrink: 0 }}>
+        <div style={{ padding: '14px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <h2 style={{ margin: 0, color: 'white', fontWeight: 800, fontSize: '1.5rem', ...F }}>Tour</h2>
+            <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: 'rgba(255,255,255,0.65)', ...F }}>
+              <span style={{ marginRight: '10px' }}>🚩 Gelb: verfügbar</span>
+              <span>🚩 Grün: meine Aufträge</span>
+            </p>
+          </div>
+          <button onClick={() => { geocodeCache.clear(); setMapData(null); fetchData(); }}
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: '12px', padding: '6px 14px', fontSize: '0.8rem', cursor: 'pointer', ...F }}>
+            ↻
+          </button>
+        </div>
+      </div>
+      <div style={{ position: 'relative', flex: 1 }}>
+        <div ref={mapContainerRef} style={{ position: 'absolute', inset: 0 }} />
+        {loading && !mapData && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: BG, zIndex: 10 }}>
+            <p style={{ color: SUBLABEL, ...F }}>Karte wird geladen…</p>
+          </div>
+        )}
+        {!loading && totalCount === 0 && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 5, pointerEvents: 'none' }}>
+            <div style={{ background: 'rgba(255,255,255,0.9)', borderRadius: '16px', padding: '20px 28px', textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
+              <p style={{ fontSize: '2.5rem', margin: '0 0 8px' }}>🗺️</p>
+              <p style={{ color: SUBLABEL, margin: 0, ...F }}>Keine Aufträge in der Karte.</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -901,7 +1107,7 @@ export default function MobileApp() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [screen, setScreen] = useState<Screen>('list');
-  const [tab, setTab] = useState<'heute' | 'kunden'>('heute');
+  const [tab, setTab] = useState<Tab>('heute');
   const [flow, setFlow] = useState<FlowState | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<{ customer: Customer; assignments: Assignment[] } | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -930,7 +1136,7 @@ export default function MobileApp() {
   }, []);
 
   const upd = (patch: Partial<FlowState>) => setFlow(f => f ? { ...f, ...patch } : f);
-  const reset = () => { setFlow(null); setSelectedCustomer(null); setScreen(tab === 'kunden' ? 'kunden' : 'list'); refresh(); };
+  const reset = () => { setFlow(null); setSelectedCustomer(null); setScreen(tab === 'kunden' ? 'kunden' : tab === 'tour' ? 'tour' : 'list'); refresh(); };
   const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); setUser(null); };
 
   const startFlow = (a: Assignment) => {
@@ -946,7 +1152,7 @@ export default function MobileApp() {
   if (screen === 'abschluss' && flow) return <AbschlussScreen flow={flow} onReset={reset} />;
 
   // Root tabs
-  const onRootScreen = screen === 'list' || screen === 'kunden';
+  const onRootScreen = screen === 'list' || screen === 'tour' || screen === 'kunden';
 
   return (
     <div style={{ minHeight: '100dvh', maxWidth: '520px', margin: '0 auto', display: 'flex', flexDirection: 'column', background: BG, ...F }}>
@@ -959,6 +1165,7 @@ export default function MobileApp() {
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {screen === 'list' && <HeuteScreen user={user} assignments={assignments} timelogs={timelogs} onSelect={startFlow} />}
+        {screen === 'tour' && <TourScreen user={user} onRefresh={refresh} />}
         {screen === 'kunden' && <KundenScreen assignments={assignments} reports={reports} onSelect={(c, ca) => { setSelectedCustomer({ customer: c, assignments: ca }); setScreen('kunde_detail'); }} />}
         {screen === 'kunde_detail' && selectedCustomer && (
           <KundeDetailScreen customer={selectedCustomer.customer} assignments={selectedCustomer.assignments} reports={reports}
@@ -994,7 +1201,7 @@ export default function MobileApp() {
       </div>
 
       {/* Bottom tab bar — only on root screens */}
-      {onRootScreen && <TabBar active={tab} onChange={t => { setTab(t); setScreen(t === 'kunden' ? 'kunden' : 'list'); }} />}
+      {onRootScreen && <TabBar active={tab} onChange={t => { setTab(t); setScreen(t === 'kunden' ? 'kunden' : t === 'tour' ? 'tour' : 'list'); }} />}
     </div>
   );
 }
