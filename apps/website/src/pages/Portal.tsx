@@ -23,10 +23,17 @@ interface Customer { id: string; first_name: string; last_name: string; address:
 interface Assignment { id: string; title: string; description: string; scheduled_at: string; status: string; customer: Customer; assigned_user_id?: string; assigned_user?: { id: string; full_name: string } | null; }
 interface Timelog { id: string; assignment_id: string; start_time: string; end_time: string | null; is_signed: boolean; }
 interface Report { id: string; assignment_id: string; timelog_id: string; notes: string; signature_id: string | null; created_at: string; }
+interface AssignmentWithRevenue extends Assignment {
+  assigned_user?: { id: string; full_name: string } | null;
+  revenue?: number;
+}
 interface DashboardStats {
   today_appointments: number; open_assignments: number; completed_today: number;
   daily_revenue: number; monthly_revenue: number; open_booking_requests: number;
   recent_assignments: Assignment[];
+  daily_completed: AssignmentWithRevenue[];
+  monthly_completed: AssignmentWithRevenue[];
+  open_assignments_list: AssignmentWithRevenue[];
 }
 interface BookingRequest {
   id: string; name: string; phone: string; email: string;
@@ -58,49 +65,29 @@ function DashboardTab({ user }: { user: User }) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailType, setDetailType] = useState<DetailType | null>(null);
-  const [detailAssignments, setDetailAssignments] = useState<Assignment[]>([]);
   const [detailBookings, setDetailBookings] = useState<BookingRequest[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/dashboard/stats`, { headers: authHeaders() })
       .then(r => r.json()).then(setStats).finally(() => setLoading(false));
   }, []);
 
-  const loadDetail = async (type: DetailType) => {
+  const handleCardClick = async (type: DetailType) => {
     if (detailType === type) { setDetailType(null); return; }
     setDetailType(type);
-    setDetailLoading(true);
-    try {
-      if (type === 'booking') {
-        const r = await fetch(`${API}/booking-requests?status=open`, { headers: authHeaders() });
-        if (r.ok) setDetailBookings(await r.json());
-        setDetailAssignments([]);
-      } else {
-        const url = user.role === 'admin' ? `${API}/assignments/all` : `${API}/assignments/my`;
-        const r = await fetch(url, { headers: authHeaders() });
-        if (r.ok) {
-          const all: Assignment[] = await r.json();
-          const todayStr = new Date().toISOString().slice(0, 10);
-          const monthStr = new Date().toISOString().slice(0, 7);
-          if (type === 'daily') {
-            setDetailAssignments(all.filter(a => a.status === 'completed' && String(a.scheduled_at).startsWith(todayStr)));
-          } else if (type === 'monthly') {
-            setDetailAssignments(all.filter(a => a.status === 'completed' && String(a.scheduled_at).startsWith(monthStr)));
-          } else {
-            setDetailAssignments(all.filter(a => a.status === 'pending' || a.status === 'in_progress'));
-          }
-        }
-        setDetailBookings([]);
-      }
-    } finally { setDetailLoading(false); }
+    if (type === 'booking' && !detailBookings.length) {
+      setBookingLoading(true);
+      const r = await fetch(`${API}/booking-requests?status=open`, { headers: authHeaders() });
+      if (r.ok) setDetailBookings(await r.json());
+      setBookingLoading(false);
+    }
   };
 
   if (loading) return <div className="loading-text">Lade Dashboard…</div>;
   if (!stats) return <div className="error-banner">Dashboard konnte nicht geladen werden.</div>;
 
   const today = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const revenuePerJob = 35;
 
   const detailTitles: Record<DetailType, string> = {
     daily: 'Heutige Einnahmen – Details',
@@ -122,23 +109,23 @@ function DashboardTab({ user }: { user: User }) {
         </div>
         <div
           className={`stat-card stat-success stat-card--clickable${detailType === 'daily' ? ' stat-card--active' : ''}`}
-          onClick={() => loadDetail('daily')}
+          onClick={() => handleCardClick('daily')}
           role="button" tabIndex={0}
         >
-          <span className="stat-value">{stats.daily_revenue} €</span>
+          <span className="stat-value">{stats.daily_revenue.toFixed(2)} €</span>
           <span className="stat-label">Tageseinnahmen ▼</span>
         </div>
         <div
           className={`stat-card stat-accent stat-card--clickable${detailType === 'monthly' ? ' stat-card--active' : ''}`}
-          onClick={() => loadDetail('monthly')}
+          onClick={() => handleCardClick('monthly')}
           role="button" tabIndex={0}
         >
-          <span className="stat-value">{stats.monthly_revenue} €</span>
+          <span className="stat-value">{stats.monthly_revenue.toFixed(2)} €</span>
           <span className="stat-label">Monatseinnahmen ▼</span>
         </div>
         <div
           className={`stat-card stat-warning stat-card--clickable${detailType === 'open' ? ' stat-card--active' : ''}`}
-          onClick={() => loadDetail('open')}
+          onClick={() => handleCardClick('open')}
           role="button" tabIndex={0}
         >
           <span className="stat-value">{stats.open_assignments}</span>
@@ -147,7 +134,7 @@ function DashboardTab({ user }: { user: User }) {
         {user.role === 'admin' && (
           <div
             className={`stat-card stat-info stat-card--clickable${detailType === 'booking' ? ' stat-card--active' : ''}`}
-            onClick={() => loadDetail('booking')}
+            onClick={() => handleCardClick('booking')}
             role="button" tabIndex={0}
           >
             <span className="stat-value">{stats.open_booking_requests}</span>
@@ -162,9 +149,8 @@ function DashboardTab({ user }: { user: User }) {
             <h3>{detailTitles[detailType]}</h3>
             <button onClick={() => setDetailType(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>×</button>
           </div>
-          {detailLoading ? (
-            <div className="loading-text">Lade Details…</div>
-          ) : detailType === 'booking' ? (
+          {detailType === 'booking' ? (
+            bookingLoading ? <div className="loading-text">Lade Details…</div> :
             detailBookings.length === 0 ? (
               <p className="empty-state">Keine offenen Buchungsanfragen.</p>
             ) : (
@@ -187,8 +173,10 @@ function DashboardTab({ user }: { user: User }) {
                 </tbody>
               </table>
             )
-          ) : (detailType === 'daily' || detailType === 'monthly') ? (
-            detailAssignments.length === 0 ? (
+          ) : (detailType === 'daily' || detailType === 'monthly') ? (() => {
+            const rows = detailType === 'daily' ? stats.daily_completed : stats.monthly_completed;
+            const total = rows.reduce((s, a) => s + (a.revenue ?? 0), 0);
+            return rows.length === 0 ? (
               <p className="empty-state">Keine abgeschlossenen Aufträge für diesen Zeitraum.</p>
             ) : (
               <table className="admin-table" style={{ width: '100%' }}>
@@ -198,24 +186,25 @@ function DashboardTab({ user }: { user: User }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailAssignments.map(a => (
+                  {rows.map(a => (
                     <tr key={a.id}>
                       <td style={{ fontWeight: 600 }}>{a.title}</td>
                       <td>{a.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '–'}</td>
                       <td>{a.assigned_user?.full_name || <span style={{ color: '#9CA3AF' }}>–</span>}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A' }}>{revenuePerJob} €</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A' }}>{(a.revenue ?? 0).toFixed(2)} €</td>
                     </tr>
                   ))}
                   <tr>
                     <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700, borderTop: '2px solid #E5E7EB', paddingTop: '8px' }}>Gesamt:</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A', borderTop: '2px solid #E5E7EB', paddingTop: '8px' }}>{detailAssignments.length * revenuePerJob} €</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A', borderTop: '2px solid #E5E7EB', paddingTop: '8px' }}>{total.toFixed(2)} €</td>
                   </tr>
                 </tbody>
               </table>
-            )
-          ) : (
-            detailAssignments.length === 0 ? (
+            );
+          })() : (() => {
+            const rows = stats.open_assignments_list;
+            return rows.length === 0 ? (
               <p className="empty-state">Keine offenen Aufträge.</p>
             ) : (
               <table className="admin-table" style={{ width: '100%' }}>
@@ -225,7 +214,7 @@ function DashboardTab({ user }: { user: User }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailAssignments.map(a => (
+                  {rows.map(a => (
                     <tr key={a.id}>
                       <td style={{ fontWeight: 600 }}>{a.title}</td>
                       <td>{a.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '–'}</td>
@@ -236,8 +225,8 @@ function DashboardTab({ user }: { user: User }) {
                   ))}
                 </tbody>
               </table>
-            )
-          )}
+            );
+          })()}
         </div>
       )}
 

@@ -248,7 +248,15 @@ exports.TimelogRepo = {
                 t.end_time = new Date().toISOString();
             return t;
         }
-        await (0, pool_1.query)('UPDATE time_logs SET end_time = NOW() WHERE id = ?', [id]);
+        const existing = await (0, pool_1.query)('SELECT start_time FROM time_logs WHERE id = ?', [id]);
+        if (!existing.rows[0])
+            throw new Error('Timelog not found');
+        const startMs = new Date(existing.rows[0].start_time).getTime();
+        const durationMinutes = Math.max(1, Math.round((Date.now() - startMs) / 60000));
+        const blocksCount = Math.ceil(durationMinutes / 15);
+        // €20 first 15 min, +€15 per additional 15-min block (same as MobileApp calcPrice)
+        const totalPrice = durationMinutes <= 15 ? 20 : 20 + Math.ceil((durationMinutes - 15) / 15) * 15;
+        await (0, pool_1.query)('UPDATE time_logs SET end_time = NOW(), duration_minutes = ?, blocks_count = ?, total_price = ? WHERE id = ?', [durationMinutes, blocksCount, totalPrice, id]);
         const res = await (0, pool_1.query)('SELECT * FROM time_logs WHERE id = ?', [id]);
         return res.rows[0];
     },
