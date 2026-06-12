@@ -133,6 +133,25 @@ export async function initDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id CHAR(36) NOT NULL,
+      report_id CHAR(36) NOT NULL,
+      position INT NOT NULL DEFAULT 1,
+      description TEXT NOT NULL,
+      quantity DECIMAL(10,2) NOT NULL DEFAULT 1,
+      unit_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // Invoice columns on reports (migration-safe)
+  try { await query('ALTER TABLE reports ADD COLUMN invoice_number VARCHAR(50)'); } catch {}
+  try { await query('ALTER TABLE reports ADD COLUMN invoice_notes TEXT'); } catch {}
+  try { await query('ALTER TABLE reports ADD COLUMN invoice_amount_override DECIMAL(10,2) NULL'); } catch {}
+
   // booking_requests migration: ensure all columns exist on older deployments
   for (const col of ['street', 'house_number', 'zip', 'city']) {
     try { await query(`ALTER TABLE booking_requests ADD COLUMN ${col} VARCHAR(255)`); } catch {}
