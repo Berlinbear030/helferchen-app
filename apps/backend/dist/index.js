@@ -18,6 +18,7 @@ const bookingRequests_1 = __importDefault(require("./routes/bookingRequests"));
 const dashboard_1 = __importDefault(require("./routes/dashboard"));
 const cron_1 = __importDefault(require("./routes/cron"));
 const shop_1 = __importDefault(require("./routes/shop"));
+const invoices_1 = __importDefault(require("./routes/invoices"));
 const telegram_1 = __importDefault(require("./telegram"));
 const init_1 = require("./db/init");
 const pool_1 = require("./db/pool");
@@ -39,6 +40,7 @@ app.use('/api/booking-requests', bookingRequests_1.default);
 app.use('/api/dashboard', dashboard_1.default);
 app.use('/api/cron', cron_1.default);
 app.use('/api/shop', shop_1.default);
+app.use('/api/invoices', invoices_1.default);
 app.use('/api/telegram', telegram_1.default);
 app.get('/', (_req, res) => {
     res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });

@@ -165,7 +165,11 @@ export async function initDatabase(): Promise<void> {
     await query('ALTER TABLE users ADD COLUMN qualification TEXT');
   } catch (e) {}
   try {
-    await query("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'");
+    await query("ALTER TABLE users ADD COLUMN permissions TEXT NULL"); // MySQL 8: no DEFAULT on TEXT
+  } catch (e) {}
+  // Populate permissions for any rows added before this migration
+  try {
+    await query("UPDATE users SET permissions = '[]' WHERE permissions IS NULL");
   } catch (e) {}
   try {
     await query('ALTER TABLE users ADD COLUMN deleted_at DATETIME NULL DEFAULT NULL');

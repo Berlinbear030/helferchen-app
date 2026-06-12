@@ -138,6 +138,32 @@ async function initDatabase() {
       FOREIGN KEY (created_by_user_id) REFERENCES users(id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+    await (0, pool_1.query)(`
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id CHAR(36) NOT NULL,
+      report_id CHAR(36) NOT NULL,
+      position INT NOT NULL DEFAULT 1,
+      description TEXT NOT NULL,
+      quantity DECIMAL(10,2) NOT NULL DEFAULT 1,
+      unit_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+    // Invoice columns on reports (migration-safe)
+    try {
+        await (0, pool_1.query)('ALTER TABLE reports ADD COLUMN invoice_number VARCHAR(50)');
+    }
+    catch { }
+    try {
+        await (0, pool_1.query)('ALTER TABLE reports ADD COLUMN invoice_notes TEXT');
+    }
+    catch { }
+    try {
+        await (0, pool_1.query)('ALTER TABLE reports ADD COLUMN invoice_amount_override DECIMAL(10,2) NULL');
+    }
+    catch { }
     // booking_requests migration: ensure all columns exist on older deployments
     for (const col of ['street', 'house_number', 'zip', 'city']) {
         try {
@@ -155,7 +181,12 @@ async function initDatabase() {
     }
     catch (e) { }
     try {
-        await (0, pool_1.query)("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]'");
+        await (0, pool_1.query)("ALTER TABLE users ADD COLUMN permissions TEXT NULL"); // MySQL 8: no DEFAULT on TEXT
+    }
+    catch (e) { }
+    // Populate permissions for any rows added before this migration
+    try {
+        await (0, pool_1.query)("UPDATE users SET permissions = '[]' WHERE permissions IS NULL");
     }
     catch (e) { }
     try {
