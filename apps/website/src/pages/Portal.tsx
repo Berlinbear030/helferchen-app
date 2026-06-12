@@ -941,6 +941,7 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
           </form>
         )}
 
+        <div className="table-scroll-wrap">
         <table className="admin-table" style={{ width: '100%', tableLayout: 'auto' }}>
           <thead>
             <tr>
@@ -1014,6 +1015,7 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="assignments-sidebar" style={{ width: '300px', flexShrink: 0, background: '#F3F4F6', padding: '16px', borderRadius: '8px' }}>
@@ -1134,9 +1136,9 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
       {confirmDelReport && <ConfirmDialog message="Rechnung/Bericht wirklich löschen?" onConfirm={confirmDelReportExecute} onCancel={() => setConfirmDelReport(null)} />}
       {confirmDelCustomer && <ConfirmDialog message={`Kunde "${confirmDelCustomer.first_name} ${confirmDelCustomer.last_name}" und alle zugehörigen Aufträge, Berichte und Zeitnachweise unwiderruflich löschen? (DSGVO)`} onConfirm={confirmDelCustomerExecute} onCancel={() => setConfirmDelCustomer(null)} />}
       {delMsg && <div className={`msg-banner ${delMsg.startsWith('❌') ? 'msg-error' : 'msg-success'}`}>{delMsg}</div>}
-    <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', width: '100%' }}>
+    <div className="kunden-layout" style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', width: '100%' }}>
       {/* List */}
-      <div style={{ width: selected ? '340px' : '100%', flexShrink: 0 }}>
+      <div className="kunden-list-col" style={{ width: selected ? '340px' : '100%', flexShrink: 0 }}>
         <div style={{ marginBottom: '14px', display: 'flex', gap: '10px' }}>
           <input type="search" placeholder="🔍 Kunde suchen…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, padding: '8px 12px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem' }} />

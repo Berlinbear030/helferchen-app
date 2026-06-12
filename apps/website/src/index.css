@@ -1102,3 +1102,95 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   background: #003d42;
   border-color: #003d42;
 }
+
+/* ── Portal Mobile Responsive ───────────────────────────────── */
+
+/* Scrollbare Tabellen-Wrapper */
+.table-scroll-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.table-scroll-wrap .admin-table {
+  margin-bottom: 0;
+  min-width: 600px;
+}
+
+@media (max-width: 768px) {
+  /* Header */
+  .portal-header { padding: 10px 16px; }
+  .portal-user { font-size: 0.8rem; }
+
+  /* Action-Bar */
+  .portal-action-bar { padding: 8px 12px; gap: 8px; }
+  .portal-action-left { gap: 6px; }
+  .btn-action-outline { padding: 5px 10px; font-size: 0.78rem; white-space: nowrap; }
+  .btn-action-logout { padding: 5px 12px; font-size: 0.78rem; }
+
+  /* Tabs — horizontal scroll, kein Umbruch */
+  .portal-tabs {
+    overflow-x: auto;
+    padding: 0 12px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .portal-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { padding: 12px 14px; font-size: 0.82rem; white-space: nowrap; flex-shrink: 0; }
+
+  /* Content */
+  .portal-content { padding: 16px 12px; }
+
+  /* Stats-Grid: 2 Spalten */
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card { padding: 14px 10px; }
+  .stat-value { font-size: 1.5rem; }
+
+  /* Admin-Layout: vertikal stapeln */
+  .assignments-admin-layout { flex-direction: column !important; }
+  .assignments-sidebar { width: 100% !important; }
+
+  /* Kunden-Layout: vertikal stapeln */
+  .kunden-layout { flex-direction: column !important; }
+  .kunden-list-col { width: 100% !important; }
+
+  /* Tour-Header */
+  .tour-header { flex-direction: column; align-items: flex-start; }
+
+  /* Mitarbeiter-Header */
+  .employees-header { flex-direction: column; align-items: flex-start; }
+
+  /* Karte */
+  .map-container { height: 300px; }
+
+  /* Termin-Karten */
+  .appointment-card { padding: 14px 16px; }
+  .booking-request-header { flex-wrap: wrap; gap: 6px; }
+
+  /* Buchungs-Schritte */
+  .booking-steps { flex-wrap: wrap; gap: 6px; }
+  .booking-step-item { font-size: 0.8rem; padding: 5px 12px; }
+}
+
+@media (max-width: 480px) {
+  /* Header: Username ausblenden */
+  .portal-user { display: none; }
+
+  /* Action-Bar: kleiner */
+  .portal-action-bar { padding: 6px 10px; }
+  .btn-action-outline { font-size: 0.75rem; padding: 5px 8px; }
+
+  /* Tabs */
+  .tab-btn { padding: 10px 12px; font-size: 0.78rem; }
+
+  /* Content */
+  .portal-content { padding: 12px 10px; }
+
+  /* Stats */
+  .stats-grid { gap: 8px; }
+  .stat-value { font-size: 1.3rem; }
+
+  /* Karte */
+  .map-container { height: 260px; }
+}
