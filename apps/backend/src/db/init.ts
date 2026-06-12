@@ -37,6 +37,30 @@ export async function initDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // booking_requests must be created BEFORE assignments (FK dependency)
+  await query(`
+    CREATE TABLE IF NOT EXISTS booking_requests (
+      id CHAR(36) NOT NULL,
+      name TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      email TEXT NOT NULL,
+      address TEXT NOT NULL,
+      street VARCHAR(255),
+      house_number VARCHAR(255),
+      zip VARCHAR(255),
+      city VARCHAR(255),
+      service_description TEXT NOT NULL,
+      preferred_date TEXT,
+      preferred_time TEXT,
+      status VARCHAR(50) NOT NULL DEFAULT 'open',
+      assigned_user_id CHAR(36),
+      notes TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      FOREIGN KEY (assigned_user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS assignments (
       id CHAR(36) NOT NULL,
@@ -47,6 +71,7 @@ export async function initDatabase(): Promise<void> {
       scheduled_at DATETIME NOT NULL,
       status VARCHAR(50) NOT NULL DEFAULT 'pending',
       booking_request_id CHAR(36),
+      hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 65.00,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       FOREIGN KEY (customer_id) REFERENCES customers(id),
@@ -55,14 +80,10 @@ export async function initDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
-  // Ensure columns exist (for migration)
-  try {
-    await query('ALTER TABLE assignments ADD COLUMN booking_request_id CHAR(36) AFTER status');
-    await query('ALTER TABLE assignments ADD CONSTRAINT fk_booking_request FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id)');
-  } catch (e) {}
-  try {
-    await query('ALTER TABLE assignments ADD COLUMN hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 65.00');
-  } catch (e) {}
+  // Migration: ensure columns added after initial deploy exist on older DBs
+  try { await query('ALTER TABLE assignments ADD COLUMN booking_request_id CHAR(36)'); } catch {}
+  try { await query('ALTER TABLE assignments ADD CONSTRAINT fk_booking_request FOREIGN KEY (booking_request_id) REFERENCES booking_requests(id)'); } catch {}
+  try { await query('ALTER TABLE assignments ADD COLUMN hourly_rate DECIMAL(10,2) NOT NULL DEFAULT 65.00'); } catch {}
 
   await query(`
     CREATE TABLE IF NOT EXISTS time_logs (
@@ -112,38 +133,9 @@ export async function initDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
-  await query(`
-    CREATE TABLE IF NOT EXISTS booking_requests (
-      id CHAR(36) NOT NULL,
-      name TEXT NOT NULL,
-      phone TEXT NOT NULL,
-      email TEXT NOT NULL,
-      address TEXT NOT NULL,
-      service_description TEXT NOT NULL,
-      preferred_date TEXT,
-      preferred_time TEXT,
-      status VARCHAR(50) NOT NULL DEFAULT 'open',
-      assigned_user_id CHAR(36),
-      notes TEXT,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      FOREIGN KEY (assigned_user_id) REFERENCES users(id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
-  // Ensure address column exists (for existing tables)
-  try {
-    await query('ALTER TABLE booking_requests ADD COLUMN address TEXT AFTER email');
-  } catch (e) {
-    // Ignore error if column already exists
-  }
-
-  // Migrate booking_requests: add separate address fields for sorting by proximity
-  const addressCols = ['street', 'house_number', 'zip', 'city'];
-  for (const col of addressCols) {
-    try {
-      await query(`ALTER TABLE booking_requests ADD COLUMN ${col} VARCHAR(255)`);
-    } catch (e) {}
+  // booking_requests migration: ensure all columns exist on older deployments
+  for (const col of ['street', 'house_number', 'zip', 'city']) {
+    try { await query(`ALTER TABLE booking_requests ADD COLUMN ${col} VARCHAR(255)`); } catch {}
   }
 
   // Migrate users: add address, qualification, permissions, and soft-delete columns

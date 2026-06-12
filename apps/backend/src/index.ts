@@ -15,7 +15,7 @@ import cronRoutes from './routes/cron';
 import shopRoutes from './routes/shop';
 import telegramRoutes from './telegram';
 import { initDatabase } from './db/init';
-import { testConnection } from './db/pool';
+import { testConnection, startKeepalive } from './db/pool';
 
 dotenv.config();
 
@@ -58,8 +58,10 @@ async function start() {
       try {
         await initDatabase();
         console.log('Database connected and initialized.');
+        startKeepalive(); // keep connections alive on shared hosting
       } catch (err) {
         console.error('Database schema init failed (running with DB):', err);
+        startKeepalive(); // still start keepalive even if init had issues
       }
     } else {
       console.warn('Database unreachable — running with in-memory fallback.');
