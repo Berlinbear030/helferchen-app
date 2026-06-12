@@ -112,6 +112,7 @@ export default function AdminDashboard() {
           </button>
         </div>
         <div className="admin-sidebar-footer">
+          <button className="btn-portal" onClick={() => { navigate('/portal'); closeSidebar(); }}>← Zum Portal</button>
           <button className="btn-logout" onClick={handleLogout}>Abmelden</button>
         </div>
       </aside>

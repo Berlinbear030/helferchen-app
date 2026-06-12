@@ -129,6 +129,25 @@
   background: #b91c1c;
 }
 
+.btn-portal {
+  width: 100%;
+  padding: 0.4rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s, border-color 0.15s;
+  margin-bottom: 0.4rem;
+}
+
+.btn-portal:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.6);
+  color: #fff;
+}
+
 .admin-main {
   flex: 1;
   padding: 2rem;
