@@ -42,6 +42,17 @@ function fmtDiscount(v: Voucher) {
     : `${Number(v.discount_value).toFixed(2).replace('.', ',')} €`;
 }
 
+function isAvailable(v: Voucher): boolean {
+  if (!v.active) return false;
+  if (v.max_uses != null && v.used_count >= v.max_uses) return false;
+  if (v.expires_at && new Date(v.expires_at) < new Date()) return false;
+  return true;
+}
+
+function isUsed(v: Voucher): boolean {
+  return Number(v.actual_uses) > 0 || !v.active;
+}
+
 export default function Gutscheine() {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +60,8 @@ export default function Gutscheine() {
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'verfuegbar' | 'verwendet'>('verfuegbar');
+  const [search, setSearch] = useState('');
 
   const [label, setLabel] = useState('');
   const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
@@ -57,9 +70,6 @@ export default function Gutscheine() {
   const [maxUses, setMaxUses] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [notes, setNotes] = useState('');
-
-  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
-  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,6 +106,7 @@ export default function Gutscheine() {
       });
       setGeneratedCodes(res.codes);
       await load();
+      setActiveTab('verfuegbar');
     } catch (e: any) {
       alert('Fehler: ' + e.message);
     } finally {
@@ -122,32 +133,20 @@ export default function Gutscheine() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = (availableOnly: boolean) => {
     const token = localStorage.getItem('token');
-    const link = document.createElement('a');
-    link.href = `${API_BASE}/vouchers/export`;
-    link.setAttribute('download', 'gutscheine.csv');
-    // pass auth via URL trick: redirect then download
-    fetch(`${API_BASE}/vouchers/export`, { headers: { Authorization: `Bearer ${token}` } })
+    const url = `${API_BASE}/vouchers/export${availableOnly ? '?available=1' : ''}`;
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.blob())
       .then(blob => {
-        const url = URL.createObjectURL(blob);
-        link.href = url;
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = availableOnly ? 'gutscheine-verfuegbar.csv' : 'gutscheine-alle.csv';
         document.body.appendChild(link);
         link.click();
-        setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 2000);
+        setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(link.href); }, 2000);
       });
   };
-
-  const filtered = vouchers.filter(v => {
-    if (filterActive === 'active' && !v.active) return false;
-    if (filterActive === 'inactive' && v.active) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!v.code.toLowerCase().includes(q) && !v.label.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
 
   const resetForm = () => {
     setLabel(''); setDiscountValue(''); setCount('1');
@@ -155,21 +154,19 @@ export default function Gutscheine() {
     setDiscountType('percent'); setGeneratedCodes([]);
   };
 
+  const verfuegbar = vouchers.filter(v => isAvailable(v) && !isUsed(v));
+  const verwendet = vouchers.filter(v => isUsed(v));
+
+  const currentList = (activeTab === 'verfuegbar' ? verfuegbar : verwendet)
+    .filter(v => !search || v.code.toLowerCase().includes(search.toLowerCase()) || v.label.toLowerCase().includes(search.toLowerCase()));
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 style={{ margin: 0 }}>Gutscheine & Rabattcodes</h2>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn-primary" style={{ padding: '0.4rem 1rem' }} onClick={() => { setShowForm(f => !f); setGeneratedCodes([]); }}>
-            {showForm ? '✕ Schließen' : '+ Gutschein erstellen'}
-          </button>
-          <button
-            style={{ padding: '0.4rem 1rem', background: '#16a34a', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9rem' }}
-            onClick={handleExport}
-          >
-            CSV herunterladen
-          </button>
-        </div>
+        <button className="btn-primary" style={{ padding: '0.4rem 1rem' }} onClick={() => { setShowForm(f => !f); setGeneratedCodes([]); }}>
+          {showForm ? '✕ Schließen' : '+ Gutschein erstellen'}
+        </button>
       </div>
 
       {showForm && (
@@ -227,9 +224,14 @@ export default function Gutscheine() {
                   <code key={c} style={{ background: 'white', border: '1px solid #d1fae5', padding: '2px 8px', borderRadius: 4, fontSize: '0.85rem', fontFamily: 'monospace' }}>{c}</code>
                 ))}
               </div>
-              <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#16a34a' }}>
-                CSV herunterladen um alle Codes zu exportieren.
-              </p>
+              <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => handleExport(true)}
+                  style={{ padding: '0.35rem 0.75rem', background: '#16a34a', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.85rem' }}
+                >
+                  Verfügbare Codes als CSV
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -237,7 +239,50 @@ export default function Gutscheine() {
 
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
-      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: '1rem', borderBottom: '2px solid #e5e7eb' }}>
+        {[
+          { key: 'verfuegbar', label: `Verfügbar (${verfuegbar.length})`, color: '#15803d' },
+          { key: 'verwendet', label: `Eingelöst / Deaktiviert (${verwendet.length})`, color: '#dc2626' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as any)}
+            style={{
+              padding: '0.55rem 1.25rem',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === tab.key ? `3px solid ${tab.color}` : '3px solid transparent',
+              color: activeTab === tab.key ? tab.color : '#6b7280',
+              fontWeight: activeTab === tab.key ? 700 : 400,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              marginBottom: '-2px',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem', alignItems: 'center', paddingBottom: '0.4rem' }}>
+          {activeTab === 'verfuegbar' && (
+            <button
+              onClick={() => handleExport(true)}
+              style={{ padding: '0.3rem 0.75rem', background: '#16a34a', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}
+            >
+              CSV (verfügbar)
+            </button>
+          )}
+          <button
+            onClick={() => handleExport(false)}
+            style={{ padding: '0.3rem 0.75rem', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem' }}
+          >
+            CSV (alle)
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', alignItems: 'center' }}>
         <input
           className="admin-search"
           style={{ marginBottom: 0 }}
@@ -245,22 +290,15 @@ export default function Gutscheine() {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <select
-          value={filterActive}
-          onChange={e => setFilterActive(e.target.value as any)}
-          style={{ padding: '0.4rem 0.6rem', border: '1px solid #ced4da', borderRadius: 4, fontSize: '0.9rem' }}
-        >
-          <option value="all">Alle</option>
-          <option value="active">Aktiv</option>
-          <option value="inactive">Deaktiviert</option>
-        </select>
-        <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>{filtered.length} Codes</span>
+        <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>{currentList.length} Codes</span>
       </div>
 
       {loading ? (
         <p>Lädt…</p>
-      ) : filtered.length === 0 ? (
-        <p style={{ color: '#6b7280' }}>Keine Gutscheine gefunden.</p>
+      ) : currentList.length === 0 ? (
+        <p style={{ color: '#6b7280', padding: '1rem 0' }}>
+          {activeTab === 'verfuegbar' ? 'Keine verfügbaren Gutscheine.' : 'Noch keine eingelösten Gutscheine.'}
+        </p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="admin-table">
@@ -276,47 +314,48 @@ export default function Gutscheine() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(v => (
-                <tr key={v.id}>
-                  <td>
-                    <code style={{ fontFamily: 'monospace', fontSize: '0.9rem', background: '#f3f4f6', padding: '2px 6px', borderRadius: 3 }}>
-                      {v.code}
-                    </code>
-                  </td>
-                  <td>{v.label}</td>
-                  <td>{fmtDiscount(v)}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    {v.actual_uses}{v.max_uses ? ` / ${v.max_uses}` : ''}
-                  </td>
-                  <td>{fmtDate(v.expires_at)}</td>
-                  <td>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '2px 8px',
-                      borderRadius: 12,
-                      fontSize: '0.78rem',
-                      fontWeight: 600,
-                      background: v.active ? '#dcfce7' : '#fee2e2',
-                      color: v.active ? '#15803d' : '#dc2626',
-                    }}>
-                      {v.active ? 'Aktiv' : 'Deaktiviert'}
-                    </span>
-                  </td>
-                  <td style={{ whiteSpace: 'nowrap', display: 'flex', gap: '0.4rem' }}>
-                    <button
-                      onClick={() => handleToggleActive(v)}
-                      style={{
-                        padding: '3px 8px', fontSize: '0.78rem', border: 'none', borderRadius: 4, cursor: 'pointer',
-                        background: v.active ? '#fef3c7' : '#d1fae5',
-                        color: v.active ? '#92400e' : '#065f46',
-                      }}
-                    >
-                      {v.active ? 'Deaktivieren' : 'Aktivieren'}
-                    </button>
-                    <button className="btn-danger-sm" onClick={() => handleDelete(v)}>Löschen</button>
-                  </td>
-                </tr>
-              ))}
+              {currentList.map(v => {
+                const avail = isAvailable(v);
+                const used = Number(v.actual_uses) > 0;
+                let statusLabel = avail ? 'Verfügbar' : (used ? 'Eingelöst' : 'Deaktiviert');
+                let statusBg = avail ? '#dcfce7' : (used ? '#fee2e2' : '#f3f4f6');
+                let statusColor = avail ? '#15803d' : (used ? '#dc2626' : '#6b7280');
+
+                return (
+                  <tr key={v.id}>
+                    <td>
+                      <code style={{ fontFamily: 'monospace', fontSize: '0.9rem', background: '#f3f4f6', padding: '2px 6px', borderRadius: 3 }}>
+                        {v.code}
+                      </code>
+                    </td>
+                    <td>{v.label}</td>
+                    <td>{fmtDiscount(v)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {Number(v.actual_uses)}{v.max_uses ? ` / ${v.max_uses}` : ''}
+                      {Number(v.actual_uses) > 0 && <span style={{ marginLeft: 4, fontSize: '0.75rem', color: '#dc2626' }}>✓ verwendet</span>}
+                    </td>
+                    <td>{fmtDate(v.expires_at)}</td>
+                    <td>
+                      <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontSize: '0.78rem', fontWeight: 600, background: statusBg, color: statusColor }}>
+                        {statusLabel}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        onClick={() => handleToggleActive(v)}
+                        style={{
+                          padding: '3px 8px', fontSize: '0.78rem', border: 'none', borderRadius: 4, cursor: 'pointer',
+                          background: v.active ? '#fef3c7' : '#d1fae5',
+                          color: v.active ? '#92400e' : '#065f46',
+                        }}
+                      >
+                        {v.active ? 'Deaktivieren' : 'Aktivieren'}
+                      </button>
+                      <button className="btn-danger-sm" onClick={() => handleDelete(v)}>Löschen</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

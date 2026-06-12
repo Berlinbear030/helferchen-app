@@ -30,10 +30,14 @@ router.get('/', authenticate, requireAdmin, async (_req, res) => {
   }
 });
 
-// GET /api/vouchers/export — CSV download
-router.get('/export', authenticate, requireAdmin, async (_req, res) => {
+// GET /api/vouchers/export — CSV download (?available=1 for unused only)
+router.get('/export', authenticate, requireAdmin, async (req, res) => {
+  const onlyAvailable = req.query.available === '1';
   try {
-    const result = await query(`SELECT * FROM vouchers ORDER BY created_at DESC`);
+    const sql = onlyAvailable
+      ? `SELECT * FROM vouchers WHERE active = TRUE AND used_count = 0 AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY created_at DESC`
+      : `SELECT * FROM vouchers ORDER BY created_at DESC`;
+    const result = await query(sql);
     const rows = result.rows as any[];
     const lines = [
       'Code,Label,Rabatttyp,Rabattwert,Max.Nutzungen,Genutzt,Aktiv,Läuft ab,Erstellt',
@@ -50,7 +54,7 @@ router.get('/export', authenticate, requireAdmin, async (_req, res) => {
       ].join(','))
     ];
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="gutscheine.csv"');
+    res.setHeader('Content-Disposition', `attachment; filename="${onlyAvailable ? 'gutscheine-verfuegbar' : 'gutscheine-alle'}.csv"`);
     res.send('﻿' + lines.join('\r\n'));
   } catch (err: any) {
     res.status(500).json({ message: err.message });

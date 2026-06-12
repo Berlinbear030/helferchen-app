@@ -65,10 +65,12 @@ async function buildPdf(reportId: string): Promise<Buffer> {
   const minutes = (timelog?.start_time && timelog?.end_time)
     ? Math.max(0, Math.round((utcMs(timelog.end_time as any) - utcMs(timelog.start_time as any)) / 60000))
     : 0;
-  const price = calcPrice(minutes);
+  const basePrice = calcPrice(minutes);
+  const voucherDiscount = report.voucher_discount_amount ? Number(report.voucher_discount_amount) : 0;
+  const price = Math.max(0, basePrice - voucherDiscount);
   const extraBlocks = minutes > 15 ? Math.ceil((minutes - 15) / 15) : 0;
   const extraCost = extraBlocks * 15;
-  const invoiceNum = `HCH-${reportId.slice(0, 8).toUpperCase()}`;
+  const invoiceNum = report.invoice_number || `HCH-${reportId.slice(0, 8).toUpperCase()}`;
   const invoiceDate = report.created_at ? fmtDate(report.created_at) : new Date().toLocaleDateString('de-DE');
 
   return new Promise((resolve, reject) => {
@@ -189,6 +191,15 @@ async function buildPdf(reportId: string): Promise<Buffer> {
     if (extraBlocks > 0) {
       rowY(`Zusatzzeit: ${extraBlocks} × 15 Min à 15,00 €`, euro(extraBlocks * 15));
     }
+    if (voucherDiscount > 0) {
+      const vLabel = report.voucher_label || 'Gutschein';
+      const vCode = report.voucher_code || '';
+      doc.font('Helvetica').fontSize(9).fillColor('#16a34a')
+        .text(`${vLabel} (Code: ${vCode})`, M, y, { width: CW - 80 });
+      doc.fillColor('#16a34a')
+        .text(`−${euro(voucherDiscount)}`, W - M - 70, y, { width: 70, align: 'right' });
+      y += 14;
+    }
 
     y += 6;
     doc.moveTo(M, y).lineTo(W - M, y).stroke(SEP_COLOR);
@@ -198,7 +209,7 @@ async function buildPdf(reportId: string): Promise<Buffer> {
     // Design: dark teal box, GESAMTBETRAG label left, Zwischensumme/MwSt/Total right
     const netto = price / (1 + TAX_RATE);
     const mwstAmount = price - netto;
-    const boxH = 44;
+    const boxH = voucherDiscount > 0 ? 56 : 44;
     doc.rect(M, y, CW, boxH).fill(GREEN);
 
     // Left: big GESAMTBETRAG label
@@ -208,14 +219,27 @@ async function buildPdf(reportId: string): Promise<Buffer> {
     // Right: summary column
     const summaryX = M + CW * 0.5;
     const summaryW = CW * 0.5 - 10;
+    let sy = y + 5;
+    if (voucherDiscount > 0) {
+      doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
+        .text(`Brutto:`, summaryX, sy, { width: summaryW - 60 })
+        .text(euro(basePrice), summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+      sy += 12;
+      doc.fillColor('#86efac').font('Helvetica').fontSize(9)
+        .text(`Rabatt (${report.voucher_label || 'Gutschein'}):`, summaryX, sy, { width: summaryW - 60 })
+        .text(`−${euro(voucherDiscount)}`, summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+      sy += 12;
+    }
     doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
-      .text(`Zwischensumme:`, summaryX, y + 5, { width: summaryW - 60 })
-      .text(euro(price), summaryX + summaryW - 60, y + 5, { width: 60, align: 'right' });
+      .text(`Zwischensumme:`, summaryX, sy, { width: summaryW - 60 })
+      .text(euro(price), summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+    sy += 13;
     doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
-      .text(`inkl. ${Math.round(TAX_RATE * 100)} % MwSt.:`, summaryX, y + 18, { width: summaryW - 60 })
-      .text(euro(mwstAmount), summaryX + summaryW - 60, y + 18, { width: 60, align: 'right' });
+      .text(`inkl. ${Math.round(TAX_RATE * 100)} % MwSt.:`, summaryX, sy, { width: summaryW - 60 })
+      .text(euro(mwstAmount), summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+    sy += 13;
     doc.fillColor('white').font('Helvetica-Bold').fontSize(10)
-      .text(`GESAMTBETRAG: ${euro(price)}`, summaryX, y + 31, { width: summaryW });
+      .text(`GESAMTBETRAG: ${euro(price)}`, summaryX, sy, { width: summaryW });
 
     y += boxH + 14;
 

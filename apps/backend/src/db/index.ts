@@ -65,6 +65,12 @@ export interface Report {
   signature_id: string | null;
   pdf_generated: boolean;
   email_sent: boolean;
+  invoice_number?: string | null;
+  invoice_notes?: string | null;
+  invoice_amount_override?: number | null;
+  voucher_code?: string | null;
+  voucher_label?: string | null;
+  voucher_discount_amount?: number | null;
   created_at: string;
 }
 
