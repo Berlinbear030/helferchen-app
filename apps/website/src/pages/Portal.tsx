@@ -52,19 +52,62 @@ function statusLabel(s: string) {
 
 // ── Dashboard Tab ──────────────────────────────────────────────────────────────
 
+type DetailType = 'daily' | 'monthly' | 'open' | 'booking';
+
 function DashboardTab({ user }: { user: User }) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailType, setDetailType] = useState<DetailType | null>(null);
+  const [detailAssignments, setDetailAssignments] = useState<Assignment[]>([]);
+  const [detailBookings, setDetailBookings] = useState<BookingRequest[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/dashboard/stats`, { headers: authHeaders() })
       .then(r => r.json()).then(setStats).finally(() => setLoading(false));
   }, []);
 
+  const loadDetail = async (type: DetailType) => {
+    if (detailType === type) { setDetailType(null); return; }
+    setDetailType(type);
+    setDetailLoading(true);
+    try {
+      if (type === 'booking') {
+        const r = await fetch(`${API}/booking-requests?status=open`, { headers: authHeaders() });
+        if (r.ok) setDetailBookings(await r.json());
+        setDetailAssignments([]);
+      } else {
+        const url = user.role === 'admin' ? `${API}/assignments/all` : `${API}/assignments/my`;
+        const r = await fetch(url, { headers: authHeaders() });
+        if (r.ok) {
+          const all: Assignment[] = await r.json();
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const monthStr = new Date().toISOString().slice(0, 7);
+          if (type === 'daily') {
+            setDetailAssignments(all.filter(a => a.status === 'completed' && String(a.scheduled_at).startsWith(todayStr)));
+          } else if (type === 'monthly') {
+            setDetailAssignments(all.filter(a => a.status === 'completed' && String(a.scheduled_at).startsWith(monthStr)));
+          } else {
+            setDetailAssignments(all.filter(a => a.status === 'pending' || a.status === 'in_progress'));
+          }
+        }
+        setDetailBookings([]);
+      }
+    } finally { setDetailLoading(false); }
+  };
+
   if (loading) return <div className="loading-text">Lade Dashboard…</div>;
   if (!stats) return <div className="error-banner">Dashboard konnte nicht geladen werden.</div>;
 
   const today = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const revenuePerJob = 35;
+
+  const detailTitles: Record<DetailType, string> = {
+    daily: 'Heutige Einnahmen – Details',
+    monthly: 'Monatliche Einnahmen – Details',
+    open: 'Offene Aufträge',
+    booking: 'Neue Buchungsanfragen',
+  };
 
   return (
     <div className="dashboard-tab">
@@ -77,25 +120,127 @@ function DashboardTab({ user }: { user: User }) {
           <span className="stat-value">{stats.today_appointments}</span>
           <span className="stat-label">Heutige Termine</span>
         </div>
-        <div className="stat-card stat-success">
+        <div
+          className={`stat-card stat-success stat-card--clickable${detailType === 'daily' ? ' stat-card--active' : ''}`}
+          onClick={() => loadDetail('daily')}
+          role="button" tabIndex={0}
+        >
           <span className="stat-value">{stats.daily_revenue} €</span>
-          <span className="stat-label">Tageseinnahmen</span>
+          <span className="stat-label">Tageseinnahmen ▼</span>
         </div>
-        <div className="stat-card stat-accent">
+        <div
+          className={`stat-card stat-accent stat-card--clickable${detailType === 'monthly' ? ' stat-card--active' : ''}`}
+          onClick={() => loadDetail('monthly')}
+          role="button" tabIndex={0}
+        >
           <span className="stat-value">{stats.monthly_revenue} €</span>
-          <span className="stat-label">Monatseinnahmen</span>
+          <span className="stat-label">Monatseinnahmen ▼</span>
         </div>
-        <div className="stat-card stat-warning">
+        <div
+          className={`stat-card stat-warning stat-card--clickable${detailType === 'open' ? ' stat-card--active' : ''}`}
+          onClick={() => loadDetail('open')}
+          role="button" tabIndex={0}
+        >
           <span className="stat-value">{stats.open_assignments}</span>
-          <span className="stat-label">Offene Aufträge</span>
+          <span className="stat-label">Offene Aufträge ▼</span>
         </div>
         {user.role === 'admin' && (
-          <div className="stat-card stat-info">
+          <div
+            className={`stat-card stat-info stat-card--clickable${detailType === 'booking' ? ' stat-card--active' : ''}`}
+            onClick={() => loadDetail('booking')}
+            role="button" tabIndex={0}
+          >
             <span className="stat-value">{stats.open_booking_requests}</span>
-            <span className="stat-label">Neue Buchungsanfragen</span>
+            <span className="stat-label">Neue Buchungsanfragen ▼</span>
           </div>
         )}
       </div>
+
+      {detailType && (
+        <div className="detail-panel">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3>{detailTitles[detailType]}</h3>
+            <button onClick={() => setDetailType(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>×</button>
+          </div>
+          {detailLoading ? (
+            <div className="loading-text">Lade Details…</div>
+          ) : detailType === 'booking' ? (
+            detailBookings.length === 0 ? (
+              <p className="empty-state">Keine offenen Buchungsanfragen.</p>
+            ) : (
+              <table className="admin-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Telefon</th><th>Dienstleistung</th><th>Wunschdatum</th><th>Eingegangen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailBookings.map(b => (
+                    <tr key={b.id}>
+                      <td style={{ fontWeight: 600 }}>{b.name}</td>
+                      <td>{b.phone}</td>
+                      <td>{b.service_description.length > 50 ? b.service_description.slice(0, 50) + '…' : b.service_description}</td>
+                      <td>{b.preferred_date} {b.preferred_time && `${b.preferred_time} Uhr`}</td>
+                      <td>{new Date(b.created_at).toLocaleDateString('de-DE')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          ) : (detailType === 'daily' || detailType === 'monthly') ? (
+            detailAssignments.length === 0 ? (
+              <p className="empty-state">Keine abgeschlossenen Aufträge für diesen Zeitraum.</p>
+            ) : (
+              <table className="admin-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Auftrag</th><th>Kunde</th><th>Mitarbeiter</th><th>Termin</th><th style={{ textAlign: 'right' }}>Einnahmen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailAssignments.map(a => (
+                    <tr key={a.id}>
+                      <td style={{ fontWeight: 600 }}>{a.title}</td>
+                      <td>{a.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '–'}</td>
+                      <td>{a.assigned_user?.full_name || <span style={{ color: '#9CA3AF' }}>–</span>}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A' }}>{revenuePerJob} €</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700, borderTop: '2px solid #E5E7EB', paddingTop: '8px' }}>Gesamt:</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16A34A', borderTop: '2px solid #E5E7EB', paddingTop: '8px' }}>{detailAssignments.length * revenuePerJob} €</td>
+                  </tr>
+                </tbody>
+              </table>
+            )
+          ) : (
+            detailAssignments.length === 0 ? (
+              <p className="empty-state">Keine offenen Aufträge.</p>
+            ) : (
+              <table className="admin-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Auftrag</th><th>Kunde</th><th>Status</th><th>Mitarbeiter</th><th>Termin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailAssignments.map(a => (
+                    <tr key={a.id}>
+                      <td style={{ fontWeight: 600 }}>{a.title}</td>
+                      <td>{a.customer ? `${a.customer.first_name} ${a.customer.last_name}` : '–'}</td>
+                      <td><span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span></td>
+                      <td>{a.assigned_user?.full_name || <span style={{ color: '#9CA3AF' }}>Nicht zugewiesen</span>}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+        </div>
+      )}
+
       <h3 style={{ marginTop: 32, marginBottom: 12 }}>Aktuelle Aufträge</h3>
       {stats.recent_assignments.length === 0 ? (
         <p className="empty-state">Keine Aufträge vorhanden.</p>
@@ -120,10 +265,12 @@ function DashboardTab({ user }: { user: User }) {
 
 // ── Appointments Tab ───────────────────────────────────────────────────────────
 
-function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]; onRefresh: () => void }) {
+function AppointmentsTab({ assignments, onRefresh, canDelete }: { assignments: Assignment[]; onRefresh: () => void; canDelete?: boolean }) {
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
+  const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(null);
+  const [delMsg, setDelMsg] = useState('');
 
   const handleStatus = async (id: string, status: string) => {
     await fetch(`${API}/assignments/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }) });
@@ -133,6 +280,18 @@ function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]
     setRefreshing(true);
     await onRefresh();
     setRefreshing(false);
+  };
+  const confirmDelExecute = async () => {
+    if (!confirmDel) return;
+    const r = await fetch(`${API}/assignments/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
+    setConfirmDel(null);
+    if (r.ok) {
+      onRefresh();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      setDelMsg('❌ ' + (d.message || 'Löschen fehlgeschlagen'));
+      setTimeout(() => setDelMsg(''), 5000);
+    }
   };
 
   const now = new Date();
@@ -156,6 +315,8 @@ function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]
 
   return (
     <div className="appointments-list">
+      {confirmDel && <ConfirmDialog message={`Auftrag "${confirmDel.title}" wirklich löschen? Alle Zeitnachweise und Berichte werden ebenfalls gelöscht.`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
+      {delMsg && <div className="msg-banner msg-error">{delMsg}</div>}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={filterRowSt}>
@@ -178,7 +339,12 @@ function AppointmentsTab({ assignments, onRefresh }: { assignments: Assignment[]
         <div key={a.id} className={`appointment-card status-${a.status}`} style={{ borderLeft: '4px solid #00454A', padding: '16px', marginBottom: '16px', background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
           <div className="appointment-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
             <strong style={{ fontSize: '1.1rem' }}>{a.title}</strong>
-            <span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span>
+              {canDelete && (
+                <button className="btn-danger btn-sm btn-icon" onClick={() => setConfirmDel({ id: a.id, title: a.title })} title="Auftrag löschen">✕</button>
+              )}
+            </div>
           </div>
           <div className="appointment-details" style={{ marginBottom: '12px' }}>
             <p style={{ margin: '4px 0', fontSize: '0.95rem' }}>📍 <strong>{a.customer?.address || 'Keine Adresse'}</strong></p>
@@ -1404,7 +1570,7 @@ export default function Portal() {
         {loading && activeTab !== 'dashboard' ? <div className="loading-text">Daten werden geladen…</div> : (
           <>
             {activeTab === 'dashboard' && <DashboardTab user={user} />}
-            {activeTab === 'appointments' && <AppointmentsTab assignments={assignments} onRefresh={loadData} />}
+            {activeTab === 'appointments' && <AppointmentsTab assignments={assignments} onRefresh={loadData} canDelete={canDelete} />}
             {activeTab === 'tour' && (
               <div>
                 <TourTab assignments={assignments} unassigned={unassignedAssignments} selectedDate={selectedDate} setSelectedDate={setSelectedDate} user={user} />

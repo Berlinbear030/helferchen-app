@@ -933,6 +933,15 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .stat-accent .stat-value { color: var(--color-accent); }
 .stat-warning .stat-value { color: #EF4444; }
 .stat-info .stat-value { color: #3B82F6; }
+.stat-card--clickable { cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.stat-card--clickable:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.13); }
+.stat-card--active { box-shadow: 0 0 0 3px var(--color-primary) !important; }
+.detail-panel {
+  margin-top: 20px; background: white; border-radius: 12px;
+  padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  overflow-x: auto;
+}
+.detail-panel h3 { margin: 0 0 12px; color: var(--color-primary); }
 
 /* ── Tour Tab ─────────────────────────────────────────────── */
 .tour-tab { padding: 8px 0; }
