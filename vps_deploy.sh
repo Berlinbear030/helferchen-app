@@ -110,5 +110,38 @@ ln -sf /etc/nginx/sites-available/helferchen /etc/nginx/sites-enabled/helferchen
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx'"
 
+echo "=== 10. Securing SnappyMail — disable additional accounts ==="
+eval "$SSH_CMD << 'SNAPPY_EOF'
+SNAPPY_CFG_DIR=\$(find /var/www -name 'application.ini' -path '*snappymail*' 2>/dev/null | head -1 | xargs -I{} dirname {} 2>/dev/null)
+if [ -n "\$SNAPPY_CFG_DIR" ] && [ -f "\$SNAPPY_CFG_DIR/application.ini" ]; then
+  # Disable additional accounts so users can only access their own mailbox
+  sed -i 's/^allow_additional_accounts\s*=.*/allow_additional_accounts = Off/' "\$SNAPPY_CFG_DIR/application.ini"
+  sed -i 's/^allow_additional_identities\s*=.*/allow_additional_identities = Off/' "\$SNAPPY_CFG_DIR/application.ini"
+  # Add settings if not present
+  grep -q 'allow_additional_accounts' "\$SNAPPY_CFG_DIR/application.ini" || echo -e '\n[security]\nallow_additional_accounts = Off\nallow_additional_identities = Off' >> "\$SNAPPY_CFG_DIR/application.ini"
+  echo "SnappyMail: additional accounts disabled"
+else
+  echo "SnappyMail config not found — skip (webmail may not be installed yet)"
+fi
+SNAPPY_EOF"
+
+echo "=== 11. Securing Dovecot — ensure no shared mailbox namespace ==="
+eval "$SSH_CMD << 'DOVECOT_EOF'
+if [ -d /etc/dovecot ]; then
+  # Remove any shared namespace config that would let users browse other mailboxes
+  for f in /etc/dovecot/conf.d/*.conf; do
+    if grep -q 'type = shared' "\$f" 2>/dev/null; then
+      echo "WARNING: shared namespace found in \$f — commenting out"
+      sed -i 's/^\(\s*type\s*=\s*shared\)/# EIS-352-disabled \1/' "\$f"
+    fi
+  done
+  systemctl reload dovecot 2>/dev/null || true
+  echo "Dovecot: shared namespace check complete"
+else
+  echo "Dovecot not installed — skip"
+fi
+DOVECOT_EOF"
+
 echo "=== Deploy complete! ==="
 echo "Test: curl http://helferchen.info/api/auth/login -X POST -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}'"
+echo "Mail accounts: curl -s http://helferchen.info/api/admin/mail-users -H 'Authorization: Bearer <token>'"

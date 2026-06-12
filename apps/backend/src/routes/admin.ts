@@ -289,11 +289,35 @@ router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
     }
 
     await UserRepo.update(req.params.id as string, updateFields);
+
+    // Sync mail password when portal password changes
+    if (password) {
+      const freshUser = await UserRepo.findById(req.params.id as string);
+      const mailLocal = normalizeLastName(freshUser?.full_name || '');
+      if (mailLocal) {
+        const mailAddress = `${mailLocal}@${MAIL_DOMAIN}`;
+        const hash = hashForDovecot(password);
+        if (hash) {
+          await query('UPDATE mail_users SET password = ? WHERE email = ?', [hash, mailAddress]);
+        }
+      }
+    }
+
     await AuditRepo.create('user', req.params.id as string, 'updated', req.user!.id, changes.join(', '));
     res.json({ message: 'Updated' });
   } catch (err: any) {
     console.error('PATCH /admin/users error:', err);
     res.status(500).json({ message: 'Fehler beim Aktualisieren des Mitarbeiters', detail: err.message });
+  }
+});
+
+// GET /api/admin/mail-users — list all mail accounts (email only, no password hashes)
+router.get('/mail-users', async (_req: AuthRequest, res: Response) => {
+  try {
+    const rows = await query('SELECT email, created_at FROM mail_users ORDER BY email');
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ message: 'Fehler beim Laden der Mailkonten', detail: err.message });
   }
 });
 

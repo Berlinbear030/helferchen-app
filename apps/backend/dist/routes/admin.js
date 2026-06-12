@@ -284,12 +284,34 @@ router.patch('/users/:id', async (req, res) => {
             return res.status(400).json({ message: 'No fields to update' });
         }
         await queries_1.UserRepo.update(req.params.id, updateFields);
+        // Sync mail password when portal password changes
+        if (password) {
+            const freshUser = await queries_1.UserRepo.findById(req.params.id);
+            const mailLocal = normalizeLastName(freshUser?.full_name || '');
+            if (mailLocal) {
+                const mailAddress = `${mailLocal}@${MAIL_DOMAIN}`;
+                const hash = hashForDovecot(password);
+                if (hash) {
+                    await (0, pool_1.query)('UPDATE mail_users SET password = ? WHERE email = ?', [hash, mailAddress]);
+                }
+            }
+        }
         await queries_1.AuditRepo.create('user', req.params.id, 'updated', req.user.id, changes.join(', '));
         res.json({ message: 'Updated' });
     }
     catch (err) {
         console.error('PATCH /admin/users error:', err);
         res.status(500).json({ message: 'Fehler beim Aktualisieren des Mitarbeiters', detail: err.message });
+    }
+});
+// GET /api/admin/mail-users — list all mail accounts (email only, no password hashes)
+router.get('/mail-users', async (_req, res) => {
+    try {
+        const rows = await (0, pool_1.query)('SELECT email, created_at FROM mail_users ORDER BY email');
+        res.json(rows);
+    }
+    catch (err) {
+        res.status(500).json({ message: 'Fehler beim Laden der Mailkonten', detail: err.message });
     }
 });
 exports.default = router;
