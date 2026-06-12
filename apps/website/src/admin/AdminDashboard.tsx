@@ -101,6 +101,9 @@ export default function AdminDashboard() {
           })}
         </nav>
         <div className="admin-sidebar-actions">
+          <button className="btn-sidebar-outline" onClick={() => window.open('/webmail/', '_blank')}>
+            <span className="btn-icon">✉️</span> Webmail
+          </button>
           <button className="btn-sidebar-outline" onClick={handleInstallApp}>
             <span className="btn-icon">📱</span> App laden
           </button>
