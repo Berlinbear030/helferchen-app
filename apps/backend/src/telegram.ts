@@ -4,7 +4,14 @@ import express, { Request, Response } from 'express';
 const token = process.env.TELEGRAM_BOT_TOKEN || '8652428094:AAFLv4DkINSWa3TBhYq50IQP1zTpqK_Aaac';
 
 // We enable polling for simplicity
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(token, { polling: { interval: 1000, autoStart: true } });
+
+// Suppress 409 Conflict errors — they happen when another dev instance is running
+// or during restart overlap; they're harmless and don't need to spam the log
+bot.on('polling_error', (err: any) => {
+  if (err?.code === 'ETELEGRAM' && err?.message?.includes('409 Conflict')) return;
+  console.error('Telegram polling error:', err?.message || err);
+});
 
 // Listen for any kind of message
 bot.on('message', async (msg) => {
