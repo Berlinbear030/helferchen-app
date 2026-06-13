@@ -64,10 +64,12 @@ async function buildPdf(reportId) {
     const minutes = (timelog?.start_time && timelog?.end_time)
         ? Math.max(0, Math.round((utcMs(timelog.end_time) - utcMs(timelog.start_time)) / 60000))
         : 0;
-    const price = calcPrice(minutes);
+    const basePrice = calcPrice(minutes);
+    const voucherDiscount = report.voucher_discount_amount ? Number(report.voucher_discount_amount) : 0;
+    const price = Math.max(0, basePrice - voucherDiscount);
     const extraBlocks = minutes > 15 ? Math.ceil((minutes - 15) / 15) : 0;
     const extraCost = extraBlocks * 15;
-    const invoiceNum = `HCH-${reportId.slice(0, 8).toUpperCase()}`;
+    const invoiceNum = report.invoice_number || `HCH-${reportId.slice(0, 8).toUpperCase()}`;
     const invoiceDate = report.created_at ? fmtDate(report.created_at) : new Date().toLocaleDateString('de-DE');
     return new Promise((resolve, reject) => {
         const doc = new pdfkit_1.default({ margin: 0, size: 'A4' });
@@ -80,15 +82,18 @@ async function buildPdf(reportId) {
         const CW = W - M * 2;
         // ── HELFERCHEN header ───────────────────────────────────────────────────────
         doc.rect(0, 0, W, 78).fill('#FFFFFF');
+        let logoDrawn = false;
         if (fs_1.default.existsSync(LOGO_PATH)) {
             try {
                 doc.image(LOGO_PATH, W / 2 - 65, 14, { height: 50, fit: [130, 50] });
+                logoDrawn = true;
             }
-            catch { /* fallback to text */ }
+            catch { /* fallback to text below */ }
         }
-        // Big brand title
-        doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(34)
-            .text('HELFERCHEN', 0, 18, { width: W, align: 'center' });
+        if (!logoDrawn) {
+            doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(34)
+                .text('HELFERCHEN', 0, 18, { width: W, align: 'center' });
+        }
         doc.moveTo(M, 72).lineTo(W - M, 72).stroke(SEP_COLOR);
         // ── Title strip ────────────────────────────────────────────────────────────
         doc.rect(0, 76, W, 30).fill(GREEN);
@@ -174,6 +179,15 @@ async function buildPdf(reportId) {
         if (extraBlocks > 0) {
             rowY(`Zusatzzeit: ${extraBlocks} × 15 Min à 15,00 €`, euro(extraBlocks * 15));
         }
+        if (voucherDiscount > 0) {
+            const vLabel = report.voucher_label || 'Gutschein';
+            const vCode = report.voucher_code || '';
+            doc.font('Helvetica').fontSize(9).fillColor('#16a34a')
+                .text(`${vLabel} (Code: ${vCode})`, M, y, { width: CW - 80 });
+            doc.fillColor('#16a34a')
+                .text(`−${euro(voucherDiscount)}`, W - M - 70, y, { width: 70, align: 'right' });
+            y += 14;
+        }
         y += 6;
         doc.moveTo(M, y).lineTo(W - M, y).stroke(SEP_COLOR);
         y += 8;
@@ -181,22 +195,36 @@ async function buildPdf(reportId) {
         // Design: dark teal box, GESAMTBETRAG label left, Zwischensumme/MwSt/Total right
         const netto = price / (1 + TAX_RATE);
         const mwstAmount = price - netto;
-        const boxH = 44;
+        // Without discount: 5+13+13+14 = ~45 → 48px; with discount: +12+12 = ~69 → 74px
+        const boxH = voucherDiscount > 0 ? 74 : 48;
         doc.rect(M, y, CW, boxH).fill(GREEN);
-        // Left: big GESAMTBETRAG label
+        // Left: big GESAMTBETRAG label — vertically centred
         doc.fillColor('white').font('Helvetica-Bold').fontSize(13)
-            .text('GESAMTBETRAG', M + 10, y + 6, { width: CW * 0.45 });
+            .text('GESAMTBETRAG', M + 10, y + boxH / 2 - 8, { width: CW * 0.45 });
         // Right: summary column
         const summaryX = M + CW * 0.5;
         const summaryW = CW * 0.5 - 10;
+        let sy = y + 5;
+        if (voucherDiscount > 0) {
+            doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
+                .text(`Brutto:`, summaryX, sy, { width: summaryW - 60 })
+                .text(euro(basePrice), summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+            sy += 12;
+            doc.fillColor('#86efac').font('Helvetica').fontSize(9)
+                .text(`Rabatt (${report.voucher_label || 'Gutschein'}):`, summaryX, sy, { width: summaryW - 60 })
+                .text(`−${euro(voucherDiscount)}`, summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+            sy += 12;
+        }
         doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
-            .text(`Zwischensumme:`, summaryX, y + 5, { width: summaryW - 60 })
-            .text(euro(price), summaryX + summaryW - 60, y + 5, { width: 60, align: 'right' });
+            .text(`Zwischensumme:`, summaryX, sy, { width: summaryW - 60 })
+            .text(euro(price), summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+        sy += 13;
         doc.fillColor(LIGHT_GREEN).font('Helvetica').fontSize(9)
-            .text(`inkl. ${Math.round(TAX_RATE * 100)} % MwSt.:`, summaryX, y + 18, { width: summaryW - 60 })
-            .text(euro(mwstAmount), summaryX + summaryW - 60, y + 18, { width: 60, align: 'right' });
+            .text(`inkl. ${Math.round(TAX_RATE * 100)} % MwSt.:`, summaryX, sy, { width: summaryW - 60 })
+            .text(euro(mwstAmount), summaryX + summaryW - 60, sy, { width: 60, align: 'right' });
+        sy += 13;
         doc.fillColor('white').font('Helvetica-Bold').fontSize(10)
-            .text(`GESAMTBETRAG: ${euro(price)}`, summaryX, y + 31, { width: summaryW });
+            .text(`GESAMTBETRAG: ${euro(price)}`, summaryX, sy, { width: summaryW });
         y += boxH + 14;
         // ── Arbeitsbericht ─────────────────────────────────────────────────────────
         if (report.notes) {

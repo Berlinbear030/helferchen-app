@@ -87,15 +87,17 @@ async function buildPdf(reportId: string): Promise<Buffer> {
     // ── HELFERCHEN header ───────────────────────────────────────────────────────
     doc.rect(0, 0, W, 78).fill('#FFFFFF');
 
+    let logoDrawn = false;
     if (fs.existsSync(LOGO_PATH)) {
       try {
         doc.image(LOGO_PATH, W / 2 - 65, 14, { height: 50, fit: [130, 50] });
-      } catch { /* fallback to text */ }
+        logoDrawn = true;
+      } catch { /* fallback to text below */ }
     }
-
-    // Big brand title
-    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(34)
-      .text('HELFERCHEN', 0, 18, { width: W, align: 'center' });
+    if (!logoDrawn) {
+      doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(34)
+        .text('HELFERCHEN', 0, 18, { width: W, align: 'center' });
+    }
     doc.moveTo(M, 72).lineTo(W - M, 72).stroke(SEP_COLOR);
 
     // ── Title strip ────────────────────────────────────────────────────────────
@@ -209,12 +211,13 @@ async function buildPdf(reportId: string): Promise<Buffer> {
     // Design: dark teal box, GESAMTBETRAG label left, Zwischensumme/MwSt/Total right
     const netto = price / (1 + TAX_RATE);
     const mwstAmount = price - netto;
-    const boxH = voucherDiscount > 0 ? 56 : 44;
+    // Without discount: 5+13+13+14 = ~45 → 48px; with discount: +12+12 = ~69 → 74px
+    const boxH = voucherDiscount > 0 ? 74 : 48;
     doc.rect(M, y, CW, boxH).fill(GREEN);
 
-    // Left: big GESAMTBETRAG label
+    // Left: big GESAMTBETRAG label — vertically centred
     doc.fillColor('white').font('Helvetica-Bold').fontSize(13)
-      .text('GESAMTBETRAG', M + 10, y + 6, { width: CW * 0.45 });
+      .text('GESAMTBETRAG', M + 10, y + boxH / 2 - 8, { width: CW * 0.45 });
 
     // Right: summary column
     const summaryX = M + CW * 0.5;
