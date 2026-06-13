@@ -85,7 +85,7 @@ async function buildPdf(reportId) {
         let logoDrawn = false;
         if (fs_1.default.existsSync(LOGO_PATH)) {
             try {
-                doc.image(LOGO_PATH, W / 2 - 65, 14, { height: 50, fit: [130, 50] });
+                doc.image(LOGO_PATH, M, 14, { fit: [CW, 50], align: 'center', valign: 'center' });
                 logoDrawn = true;
             }
             catch { /* fallback to text below */ }
