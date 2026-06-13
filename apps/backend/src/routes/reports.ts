@@ -67,7 +67,9 @@ router.get('/customer-stats', authenticateToken, requireRole('admin'), async (re
            new Date(String(timelog.start_time).replace(' ', 'T') + (String(timelog.start_time).includes('Z') ? '' : 'Z')).getTime()) / 60000
         ))
       : 0;
-    const price = calcPrice(minutes);
+    const grossPrice = report.invoice_amount_override != null ? Number(report.invoice_amount_override) : calcPrice(minutes);
+    const voucherDiscount = report.voucher_discount_amount ? Number(report.voucher_discount_amount) : 0;
+    const price = Math.max(0, grossPrice - voucherDiscount);
     const customerId = assignment.customer_id;
 
     if (!statsMap[customerId]) statsMap[customerId] = { total_revenue: 0, open_amount: 0 };

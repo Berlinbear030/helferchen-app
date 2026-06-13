@@ -226,12 +226,58 @@ router.get('/users/:id/stats', async (req, res) => {
     for (const a of assignments) {
         assignmentMap[a.id] = { title: a.title, customer_id: a.customer_id };
     }
+    // Fetch invoiced prices per timelog (applies invoice_amount_override and voucher discounts)
+    let invoicedPriceMap = {};
+    if (pool_1.dbConnected && timelogs.length > 0) {
+        const ph = timelogs.map(() => '?').join(',');
+        const invoicedRes = await (0, pool_1.query)(`
+      SELECT tl.id,
+        GREATEST(0,
+          COALESCE(r.invoice_amount_override,
+            CASE
+              WHEN tl.total_price IS NOT NULL THEN tl.total_price
+              WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 20
+              WHEN tl.duration_minutes IS NOT NULL THEN 20 + CEIL((tl.duration_minutes - 15.0) / 15) * 15
+              ELSE 0
+            END
+          ) - COALESCE(r.voucher_discount_amount, 0)
+        ) as invoiced_price
+      FROM time_logs tl
+      LEFT JOIN reports r ON r.timelog_id = tl.id
+      WHERE tl.id IN (${ph})
+    `, timelogs.map(t => t.id));
+        for (const row of invoicedRes.rows) {
+            invoicedPriceMap[row.id] = parseFloat(row.invoiced_price) || 0;
+        }
+    }
     const enrichedTimelogs = timelogs.map(t => ({
         ...t,
         assignment_title: assignmentMap[t.assignment_id]?.title ?? null,
         customer_name: assignmentMap[t.assignment_id] ? customerMap[assignmentMap[t.assignment_id].customer_id] ?? null : null,
+        total_price: pool_1.dbConnected ? (invoicedPriceMap[t.id] ?? t.total_price) : t.total_price,
     }));
-    const totalEarnings = timelogs.reduce((sum, t) => sum + (parseFloat(String(t.total_price ?? '0')) || 0), 0);
+    let totalEarnings = 0;
+    if (pool_1.dbConnected) {
+        const earningsRes = await (0, pool_1.query)(`
+      SELECT SUM(GREATEST(0,
+        COALESCE(r.invoice_amount_override,
+          CASE
+            WHEN tl.total_price IS NOT NULL THEN tl.total_price
+            WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 20
+            WHEN tl.duration_minutes IS NOT NULL THEN 20 + CEIL((tl.duration_minutes - 15.0) / 15) * 15
+            ELSE 0
+          END
+        ) - COALESCE(r.voucher_discount_amount, 0)
+      )) as total_earnings
+      FROM time_logs tl
+      LEFT JOIN reports r ON r.timelog_id = tl.id
+      WHERE tl.user_id = ? AND tl.end_time IS NOT NULL
+    `, [userId]);
+        totalEarnings = parseFloat(earningsRes.rows[0]?.total_earnings ?? '0') || 0;
+    }
+    else {
+        totalEarnings = timelogs.reduce((sum, t) => sum + (parseFloat(String(t.total_price ?? '0')) || 0), 0);
+    }
     res.json({
         total_assignments: assignments.length,
         completed_assignments: assignments.filter(a => a.status === 'completed').length,

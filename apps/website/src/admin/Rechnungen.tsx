@@ -202,7 +202,9 @@ function InvoiceEditor({ invoice, onBack }: { invoice: Invoice; onBack: () => vo
 
   const invoiceNum = inv.invoice_number || `RE-${inv.id.slice(-8).toUpperCase()}`;
   const totalItems = items.reduce((s, it) => s + Number(it.quantity) * Number(it.unit_price), 0);
-  const displayAmount = inv.invoice_amount_override != null ? Number(inv.invoice_amount_override) : Number(inv.total_price ?? totalItems);
+  const grossAmount = inv.invoice_amount_override != null ? Number(inv.invoice_amount_override) : Number(inv.total_price ?? totalItems);
+  const voucherDiscount = inv.voucher_discount_amount ? Number(inv.voucher_discount_amount) : 0;
+  const displayAmount = Math.max(0, grossAmount - voucherDiscount);
 
   return (
     <div className="inv-editor">
@@ -352,7 +354,9 @@ export default function Rechnungen() {
         <tbody>
           {filtered.map(inv => {
             const invoiceNum = inv.invoice_number || `RE-${inv.id.slice(-8).toUpperCase()}`;
-            const amount = inv.invoice_amount_override != null ? Number(inv.invoice_amount_override) : (inv.total_price != null ? Number(inv.total_price) : null);
+            const gross = inv.invoice_amount_override != null ? Number(inv.invoice_amount_override) : (inv.total_price != null ? Number(inv.total_price) : null);
+            const voucherDiscount = inv.voucher_discount_amount ? Number(inv.voucher_discount_amount) : 0;
+            const amount = gross != null ? Math.max(0, gross - voucherDiscount) : null;
             return (
               <tr key={inv.id}>
                 <td>

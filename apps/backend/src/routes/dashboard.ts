@@ -12,21 +12,26 @@ function calcPriceFromMinutes(minutes: number): number {
   return 20 + Math.ceil((minutes - 15) / 15) * 15;
 }
 
-// Returns a map of assignment_id → actual revenue from stored time_logs data
+// Returns a map of assignment_id → actual invoiced revenue (after overrides and voucher discounts)
 async function fetchRevenueMap(ids: string[]): Promise<Record<string, number>> {
   if (!ids.length || !dbConnected) return {};
   const ph = ids.map(() => '?').join(',');
   const res = await query(`
-    SELECT assignment_id,
-      SUM(CASE
-        WHEN total_price IS NOT NULL THEN total_price
-        WHEN duration_minutes IS NOT NULL AND duration_minutes <= 15 THEN 20
-        WHEN duration_minutes IS NOT NULL THEN 20 + CEIL((duration_minutes - 15.0) / 15) * 15
-        ELSE NULL
-      END) as revenue
-    FROM time_logs
-    WHERE assignment_id IN (${ph}) AND end_time IS NOT NULL
-    GROUP BY assignment_id
+    SELECT tl.assignment_id,
+      SUM(GREATEST(0,
+        COALESCE(r.invoice_amount_override,
+          CASE
+            WHEN tl.total_price IS NOT NULL THEN tl.total_price
+            WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 20
+            WHEN tl.duration_minutes IS NOT NULL THEN 20 + CEIL((tl.duration_minutes - 15.0) / 15) * 15
+            ELSE 0
+          END
+        ) - COALESCE(r.voucher_discount_amount, 0)
+      )) as revenue
+    FROM time_logs tl
+    LEFT JOIN reports r ON r.timelog_id = tl.id
+    WHERE tl.assignment_id IN (${ph}) AND tl.end_time IS NOT NULL
+    GROUP BY tl.assignment_id
   `, ids);
   const map: Record<string, number> = {};
   for (const row of res.rows) {
