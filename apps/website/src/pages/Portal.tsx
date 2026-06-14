@@ -677,6 +677,7 @@ function EmployeesTab() {
 
 interface MapAssignment extends Assignment {
   _pinColor?: 'green' | 'yellow';
+  _type?: 'booking_request';
 }
 
 function loadLeaflet(): Promise<void> {
@@ -717,6 +718,8 @@ function makeAssignmentPopupHtml(a: MapAssignment, isAssigned: boolean, showAcce
   const title = escHtml(a.title || '');
   const addr = customer ? escHtml(customer.address) : '';
   const name = customer ? `${escHtml(customer.first_name)} ${escHtml(customer.last_name)}` : '';
+  const isBookingRequest = a._type === 'booking_request';
+  const itemType = isBookingRequest ? 'booking_request' : 'assignment';
 
   if (isAssigned) {
     const assignee = escHtml(a.assigned_user?.full_name || 'Mitarbeiter');
@@ -730,14 +733,17 @@ function makeAssignmentPopupHtml(a: MapAssignment, isAssigned: boolean, showAcce
     </div>`;
   } else {
     const acceptBtn = showAcceptBtn
-      ? `<button onclick="window.__acceptAssignment('${a.id}')" style="margin-top:10px;padding:7px 0;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.88rem;font-weight:600;width:100%">✓ Auftrag annehmen</button>`
+      ? `<button onclick="window.__acceptMapItem('${a.id}','${itemType}')" style="margin-top:10px;padding:7px 0;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.88rem;font-weight:600;width:100%">✓ Auftrag annehmen</button>`
       : '';
+    const label = isBookingRequest
+      ? `<div style="font-size:0.82rem;color:#ca8a04;font-weight:600">🟡 Anfrage – noch kein Auftrag</div>`
+      : `<div style="font-size:0.82rem;color:#ca8a04;font-weight:600">🟡 Offen – nicht zugewiesen</div>`;
     return `<div style="min-width:190px;font-family:system-ui,sans-serif;padding:2px">
       <strong style="font-size:0.95rem;display:block;margin-bottom:6px">${title}</strong>
       ${addr ? `<div style="font-size:0.83rem;color:#374151;margin-bottom:2px">📍 ${addr}</div>` : ''}
       ${name ? `<div style="font-size:0.83rem;color:#6B7280;margin-bottom:2px">👤 ${name}</div>` : ''}
       ${scheduledStr ? `<div style="font-size:0.83rem;color:#6B7280;margin-bottom:6px">📅 ${scheduledStr}</div>` : ''}
-      <div style="font-size:0.82rem;color:#ca8a04;font-weight:600">🟡 Offen – nicht zugewiesen</div>
+      ${label}
       ${acceptBtn}
     </div>`;
   }
@@ -772,13 +778,22 @@ function OsmMapView({ mine, unassigned, filterDate, user, onAccept }: {
   const [acceptMsg, setAcceptMsg] = useState('');
 
   useEffect(() => {
-    (window as any).__acceptAssignment = async (assignmentId: string) => {
+    (window as any).__acceptMapItem = async (id: string, type: string) => {
       if (!user) return;
       try {
-        const r = await fetch(`${API}/assignments/${assignmentId}/self-assign`, {
-          method: 'POST',
-          headers: authHeaders(),
-        });
+        let r: Response;
+        if (type === 'booking_request') {
+          r = await fetch(`${API}/booking-requests/${id}`, {
+            method: 'PATCH',
+            headers: authHeaders(),
+            body: JSON.stringify({ status: 'assigned', assigned_user_id: user.id }),
+          });
+        } else {
+          r = await fetch(`${API}/assignments/${id}/self-assign`, {
+            method: 'POST',
+            headers: authHeaders(),
+          });
+        }
         if (r.ok) {
           mapInstance.current?.closePopup();
           setAcceptMsg('✅ Auftrag angenommen!');
@@ -797,7 +812,7 @@ function OsmMapView({ mine, unassigned, filterDate, user, onAccept }: {
         setTimeout(() => setAcceptMsg(''), 3000);
       }
     };
-    return () => { delete (window as any).__acceptAssignment; };
+    return () => { delete (window as any).__acceptMapItem; };
   }, [user, onAccept]);
 
   useEffect(() => {
@@ -816,11 +831,11 @@ function OsmMapView({ mine, unassigned, filterDate, user, onAccept }: {
       markers.current = [];
 
       let mineFiltered = mine;
-      let unassignedFiltered = unassigned;
+      // Always show ALL unassigned/open orders regardless of date so employees can see and claim them
+      const unassignedFiltered = unassigned;
 
       if (filterDate) {
         mineFiltered = mine.filter(a => a.scheduled_at?.includes(filterDate));
-        unassignedFiltered = unassigned.filter(a => a.scheduled_at?.includes(filterDate));
       }
 
       const all: Array<{ a: MapAssignment; color: string; isAssigned: boolean }> = [];
@@ -892,9 +907,9 @@ function OsmMapView({ mine, unassigned, filterDate, user, onAccept }: {
       {acceptMsg && <div className={`msg-banner ${acceptMsg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: '8px' }}>{acceptMsg}</div>}
       {status && <p style={{ color: '#666', fontSize: '0.85rem', margin: '4px 0' }}>{status}</p>}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '0.85rem' }}>
-        <span>🟡 Offen ({unassigned.length})</span>
+        <span>🟡 Offen / Anfragen ({unassigned.length})</span>
         <span>🟢 Zugewiesen ({mine.length})</span>
-        {filterDate && <span style={{ fontWeight: 'bold', color: '#00454A' }}>📅 Filter: {filterDate}</span>}
+        {filterDate && <span style={{ fontWeight: 'bold', color: '#00454A' }}>📅 Meine Termine: {filterDate}</span>}
       </div>
       <div ref={mapRef} className="map-container" />
     </div>

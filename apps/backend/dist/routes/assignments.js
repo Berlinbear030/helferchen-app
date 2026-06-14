@@ -52,14 +52,20 @@ router.get('/all', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), a
     res.json(result);
 });
 // GET /api/assignments/map — returns mine (green) + unassigned (yellow) for map display
+// Includes open booking requests so ALL employees can see and self-assign
 router.get('/map', auth_1.authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     if (!userId)
         return res.status(401).json({ message: 'Unauthorized' });
-    const [mine, unassigned] = await Promise.all([
+    const [mine, unassigned, allBookingRequests] = await Promise.all([
         queries_1.AssignmentRepo.findByUserId(userId),
         queries_1.AssignmentRepo.findUnassigned(),
+        queries_1.BookingRequestRepo.findAll(),
     ]);
+    // Open/accepted booking requests with address that haven't been assigned yet
+    const openBookingRequests = allBookingRequests.filter(br => (br.status === 'open' || br.status === 'accepted') &&
+        !br.assigned_user_id &&
+        br.address);
     const withCustomer = async (a) => {
         const customer = await queries_1.CustomerRepo.findById(a.customer_id);
         return { ...a, customer };
@@ -68,7 +74,24 @@ router.get('/map', auth_1.authenticateToken, async (req, res) => {
         Promise.all(mine.map(withCustomer)),
         Promise.all(unassigned.map(withCustomer)),
     ]);
-    res.json({ mine: mineWithCustomer, unassigned: unassignedWithCustomer });
+    // Convert booking requests to an assignment-compatible shape for map rendering
+    const brMapItems = openBookingRequests.map(br => ({
+        id: br.id,
+        title: br.service_description.length > 50 ? br.service_description.slice(0, 50) + '…' : br.service_description,
+        description: br.service_description,
+        scheduled_at: `${br.preferred_date}T${br.preferred_time || '09:00'}:00`,
+        status: 'pending',
+        assigned_user_id: null,
+        customer: {
+            id: null,
+            first_name: br.name.split(' ')[0] || br.name,
+            last_name: br.name.split(' ').slice(1).join(' ') || '',
+            address: br.address,
+            phone_number: br.phone,
+        },
+        _type: 'booking_request',
+    }));
+    res.json({ mine: mineWithCustomer, unassigned: [...unassignedWithCustomer, ...brMapItems] });
 });
 // POST /api/assignments/:id/self-assign — employee claims an unassigned order
 router.post('/:id/self-assign', auth_1.authenticateToken, async (req, res) => {
