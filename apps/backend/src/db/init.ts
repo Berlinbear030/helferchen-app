@@ -215,7 +215,24 @@ export async function initDatabase(): Promise<void> {
       id INT AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
       password VARCHAR(255) NOT NULL,
+      active TINYINT(1) NOT NULL DEFAULT 1,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // Migration: add active column if missing (EIS-364 fix)
+  try {
+    await query('ALTER TABLE mail_users ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1');
+    await query('UPDATE mail_users SET active = 1 WHERE active IS NULL');
+  } catch (e) {}
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS mail_aliases (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      source VARCHAR(255) NOT NULL,
+      destination VARCHAR(255) NOT NULL,
+      active TINYINT(1) NOT NULL DEFAULT 1,
+      UNIQUE KEY unique_source (source)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
