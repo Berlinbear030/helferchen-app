@@ -698,10 +698,49 @@ function makePin(color: string) {
   const L = (window as any).L;
   return L.divIcon({
     className: '',
-    html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
+    html: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="38" viewBox="0 0 28 38" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4))"><path d="M14 0C6.3 0 0 6.3 0 14c0 5.3 2.9 9.9 7.2 12.3L14 38l6.8-11.7C25.1 23.9 28 19.3 28 14 28 6.3 21.7 0 14 0z" fill="${color}" stroke="rgba(255,255,255,0.9)" stroke-width="1.5"/><circle cx="14" cy="14" r="5.5" fill="white" opacity="0.7"/></svg>`,
+    iconSize: [28, 38],
+    iconAnchor: [14, 38],
+    popupAnchor: [0, -40],
   });
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function makeAssignmentPopupHtml(a: MapAssignment, isAssigned: boolean, showAcceptBtn: boolean): string {
+  const customer = a.customer;
+  const scheduledStr = a.scheduled_at
+    ? new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+    : '';
+  const title = escHtml(a.title || '');
+  const addr = customer ? escHtml(customer.address) : '';
+  const name = customer ? `${escHtml(customer.first_name)} ${escHtml(customer.last_name)}` : '';
+
+  if (isAssigned) {
+    const assignee = escHtml(a.assigned_user?.full_name || 'Mitarbeiter');
+    return `<div style="min-width:190px;font-family:system-ui,sans-serif;padding:2px">
+      <strong style="font-size:0.95rem;display:block;margin-bottom:6px">${title}</strong>
+      ${addr ? `<div style="font-size:0.83rem;color:#374151;margin-bottom:2px">📍 ${addr}</div>` : ''}
+      ${name ? `<div style="font-size:0.83rem;color:#6B7280;margin-bottom:2px">👤 ${name}</div>` : ''}
+      ${scheduledStr ? `<div style="font-size:0.83rem;color:#6B7280;margin-bottom:6px">📅 ${scheduledStr}</div>` : ''}
+      <div style="font-size:0.82rem;color:#15803d;font-weight:600">🟢 Zugewiesen an: ${assignee}</div>
+      <div style="font-size:0.82rem;color:#374151;margin-top:2px">Status: ${statusLabel(a.status)}</div>
+    </div>`;
+  } else {
+    const acceptBtn = showAcceptBtn
+      ? `<button onclick="window.__acceptAssignment('${a.id}')" style="margin-top:10px;padding:7px 0;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.88rem;font-weight:600;width:100%">✓ Auftrag annehmen</button>`
+      : '';
+    return `<div style="min-width:190px;font-family:system-ui,sans-serif;padding:2px">
+      <strong style="font-size:0.95rem;display:block;margin-bottom:6px">${title}</strong>
+      ${addr ? `<div style="font-size:0.83rem;color:#374151;margin-bottom:2px">📍 ${addr}</div>` : ''}
+      ${name ? `<div style="font-size:0.83rem;color:#6B7280;margin-bottom:2px">👤 ${name}</div>` : ''}
+      ${scheduledStr ? `<div style="font-size:0.83rem;color:#6B7280;margin-bottom:6px">📅 ${scheduledStr}</div>` : ''}
+      <div style="font-size:0.82rem;color:#ca8a04;font-weight:600">🟡 Offen – nicht zugewiesen</div>
+      ${acceptBtn}
+    </div>`;
+  }
 }
 
 const geoCache: Record<string, [number, number]> = {};
@@ -719,11 +758,47 @@ async function geocodeNominatim(address: string): Promise<[number, number] | nul
   } catch { return null; }
 }
 
-function OsmMapView({ mine, unassigned, filterDate }: { mine: MapAssignment[]; unassigned: MapAssignment[]; filterDate?: string }) {
+function OsmMapView({ mine, unassigned, filterDate, user, onAccept }: {
+  mine: MapAssignment[];
+  unassigned: MapAssignment[];
+  filterDate?: string;
+  user?: User;
+  onAccept?: () => void;
+}) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const markers = useRef<any[]>([]);
   const [status, setStatus] = useState('Karte wird geladen…');
+  const [acceptMsg, setAcceptMsg] = useState('');
+
+  useEffect(() => {
+    (window as any).__acceptAssignment = async (assignmentId: string) => {
+      if (!user) return;
+      try {
+        const r = await fetch(`${API}/assignments/${assignmentId}/self-assign`, {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+        if (r.ok) {
+          mapInstance.current?.closePopup();
+          setAcceptMsg('✅ Auftrag angenommen!');
+          setTimeout(() => setAcceptMsg(''), 3000);
+          onAccept?.();
+        } else if (r.status === 409) {
+          setAcceptMsg('⚠️ Auftrag wurde bereits vergeben.');
+          setTimeout(() => setAcceptMsg(''), 3000);
+          onAccept?.();
+        } else {
+          setAcceptMsg('❌ Fehler beim Annehmen.');
+          setTimeout(() => setAcceptMsg(''), 3000);
+        }
+      } catch {
+        setAcceptMsg('❌ Netzwerkfehler.');
+        setTimeout(() => setAcceptMsg(''), 3000);
+      }
+    };
+    return () => { delete (window as any).__acceptAssignment; };
+  }, [user, onAccept]);
 
   useEffect(() => {
     let cancelled = false;
@@ -748,15 +823,16 @@ function OsmMapView({ mine, unassigned, filterDate }: { mine: MapAssignment[]; u
         unassignedFiltered = unassigned.filter(a => a.scheduled_at?.includes(filterDate));
       }
 
-      const all: Array<{ a: MapAssignment; color: string }> = [];
-      
+      const all: Array<{ a: MapAssignment; color: string; isAssigned: boolean }> = [];
+
       mineFiltered.forEach(a => {
-        all.push({ a, color: a.assigned_user_id ? '#22c55e' : '#eab308' });
+        const isAssigned = !!a.assigned_user_id;
+        all.push({ a, color: isAssigned ? '#22c55e' : '#eab308', isAssigned });
       });
 
       unassignedFiltered.forEach(a => {
         if (!all.some(item => item.a.id === a.id)) {
-          all.push({ a, color: '#eab308' });
+          all.push({ a, color: '#eab308', isAssigned: false });
         }
       });
       
@@ -772,11 +848,11 @@ function OsmMapView({ mine, unassigned, filterDate }: { mine: MapAssignment[]; u
       const needsGeocode = all.filter(item => item.a.customer?.address && !geoCache[item.a.customer.address]);
 
       // Add cached immediately
-      cached.forEach(({ a, color }) => {
+      cached.forEach(({ a, color, isAssigned }) => {
         const coords = geoCache[a.customer.address];
         const marker = L.marker(coords, { icon: makePin(color) })
           .addTo(mapInstance.current)
-          .bindPopup(`<strong>${a.title}</strong><br>${a.customer.address}<br><small>${color === '#22c55e' ? '🟢 Zugewiesen' : '🟡 Nicht zugewiesen'}</small>`);
+          .bindPopup(makeAssignmentPopupHtml(a, isAssigned, !!user && !isAssigned), { maxWidth: 260 });
         markers.current.push(marker);
       });
 
@@ -788,31 +864,32 @@ function OsmMapView({ mine, unassigned, filterDate }: { mine: MapAssignment[]; u
 
       // Process non-cached with delay
       let done = 0;
-      needsGeocode.forEach(async ({ a, color }, i) => {
+      needsGeocode.forEach(async ({ a, color, isAssigned }, i) => {
         const address = a.customer.address;
         await new Promise(r => setTimeout(r, i * 1100)); // Respect Nominatim 1s limit
-        
+
         const coords = await geocodeNominatim(address);
         done++;
         if (done >= needsGeocode.length) setStatus('');
-        
+
         if (!coords || cancelled || !mapInstance.current) return;
-        
+
         const marker = L.marker(coords, { icon: makePin(color) })
           .addTo(mapInstance.current)
-          .bindPopup(`<strong>${a.title}</strong><br>${address}<br><small>${color === '#22c55e' ? '🟢 Zugewiesen' : '🟡 Nicht zugewiesen'}</small>`);
+          .bindPopup(makeAssignmentPopupHtml(a, isAssigned, !!user && !isAssigned), { maxWidth: 260 });
         markers.current.push(marker);
-        
+
         if (cached.length === 0 && i === 0) {
           mapInstance.current.setView(coords, 12);
         }
       });
     }).catch(e => setStatus(e.message));
     return () => { cancelled = true; };
-  }, [mine, unassigned, filterDate]);
+  }, [mine, unassigned, filterDate, user]);
 
   return (
     <div>
+      {acceptMsg && <div className={`msg-banner ${acceptMsg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: '8px' }}>{acceptMsg}</div>}
       {status && <p style={{ color: '#666', fontSize: '0.85rem', margin: '4px 0' }}>{status}</p>}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '0.85rem' }}>
         <span>🟡 Offen ({unassigned.length})</span>
@@ -1564,7 +1641,7 @@ export default function Portal() {
               <div>
                 <TourTab assignments={assignments} unassigned={unassignedAssignments} selectedDate={selectedDate} setSelectedDate={setSelectedDate} user={user} />
                 <h3 style={{ margin: '24px 0 12px' }}>Kartenansicht (OpenStreetMap)</h3>
-                <OsmMapView mine={assignments} unassigned={unassignedAssignments} filterDate={selectedDate} />
+                <OsmMapView mine={assignments} unassigned={unassignedAssignments} filterDate={selectedDate} user={user ?? undefined} onAccept={loadData} />
               </div>
             )}
             {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab canDelete={canDelete} />}
