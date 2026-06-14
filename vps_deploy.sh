@@ -69,7 +69,10 @@ NODE_ENV=production
 SMTP_HOST=localhost
 SMTP_PORT=25
 SMTP_SECURE=false
-SMTP_FROM=noreply@helferchen.info
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=no-reply@helferchen.info
+ADMIN_EMAIL=info@helferchen.info
 TELEGRAM_BOT_TOKEN=8652428094:AAFLv4DkINSWa3TBhYq50IQP1zTpqK_Aaac
 ENV_EOF'"
 

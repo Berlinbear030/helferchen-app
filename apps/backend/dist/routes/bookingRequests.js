@@ -27,21 +27,28 @@ router.post('/', async (req, res) => {
         preferred_date,
         preferred_time,
     });
-    // Send confirmation email asynchronously (don't block response)
+    // Send emails asynchronously (don't block response)
+    const emailData = {
+        name,
+        email: email || '',
+        phone,
+        preferred_date,
+        preferred_time,
+        service_description,
+        street,
+        house_number,
+        zip,
+        city,
+        address: entry.address,
+    };
     if (email) {
-        (0, email_1.sendBookingConfirmation)({
-            name,
-            email,
-            preferred_date,
-            preferred_time,
-            service_description,
-            street,
-            house_number,
-            zip,
-            city,
-            address: entry.address,
-        }).catch(() => { });
+        (0, email_1.sendBookingConfirmation)(emailData).catch((err) => {
+            console.error('[booking] Confirmation email error:', err?.message || err);
+        });
     }
+    (0, email_1.sendNewBookingAdminNotification)(emailData).catch((err) => {
+        console.error('[booking] Admin notification error:', err?.message || err);
+    });
     return res.status(201).json(entry);
 });
 // Auth: list all booking requests

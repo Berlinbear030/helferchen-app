@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { BookingRequestRepo, AuditRepo, CustomerRepo, AssignmentRepo } from '../db/queries';
 import { AuthRequest, authenticateToken, requireRole, requirePermission } from '../middleware/auth';
-import { sendBookingConfirmation } from '../services/email';
+import { sendBookingConfirmation, sendNewBookingAdminNotification } from '../services/email';
 import { query } from '../db/pool';
 
 const router = Router();
@@ -30,21 +30,28 @@ router.post('/', async (req: Request, res: Response) => {
     preferred_time,
   });
 
-  // Send confirmation email asynchronously (don't block response)
+  // Send emails asynchronously (don't block response)
+  const emailData = {
+    name,
+    email: email || '',
+    phone,
+    preferred_date,
+    preferred_time,
+    service_description,
+    street,
+    house_number,
+    zip,
+    city,
+    address: entry.address,
+  };
   if (email) {
-    sendBookingConfirmation({
-      name,
-      email,
-      preferred_date,
-      preferred_time,
-      service_description,
-      street,
-      house_number,
-      zip,
-      city,
-      address: entry.address,
-    }).catch(() => {});
+    sendBookingConfirmation(emailData).catch((err) => {
+      console.error('[booking] Confirmation email error:', err?.message || err);
+    });
   }
+  sendNewBookingAdminNotification(emailData).catch((err) => {
+    console.error('[booking] Admin notification error:', err?.message || err);
+  });
 
   return res.status(201).json(entry);
 });
