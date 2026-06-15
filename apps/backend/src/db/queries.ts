@@ -498,15 +498,15 @@ export const AuditRepo = {
       [id, entity_type, entity_id, action, actor_user_id, details]
     );
   },
-  async findAll(params?: { entity_type?: string, entity_id?: string, limit?: number }): Promise<AuditEntry[]> {
+  async findAll(params?: { entity_type?: string, entity_id?: string, limit?: number }): Promise<any[]> {
     if (!useDb()) {
       let entries = [...db.audit].reverse();
       if (params?.entity_type) entries = entries.filter(e => e.entity_type === params.entity_type);
       if (params?.entity_id) entries = entries.filter(e => e.entity_id === params.entity_id);
       if (params?.limit) entries = entries.slice(0, params.limit);
-      return entries;
+      return entries.map(e => ({ ...e, performed_by: e.actor_user_id, description: e.details }));
     }
-    let sql = 'SELECT id, entity_type, entity_id, action, actor_user_id, details, created_at as timestamp FROM audit_logs';
+    let sql = 'SELECT id, entity_type, entity_id, action, actor_user_id AS performed_by, details AS description, created_at AS timestamp FROM audit_logs';
     const conditions: string[] = [];
     const values: any[] = [];
     if (params?.entity_type) {
