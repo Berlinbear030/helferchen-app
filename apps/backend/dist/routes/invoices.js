@@ -23,6 +23,11 @@ router.get('/', authenticate, requireAdmin, async (_req, res) => {
         r.invoice_number,
         r.invoice_notes,
         r.invoice_amount_override,
+        r.voucher_code,
+        r.voucher_label,
+        r.voucher_discount_amount,
+        r.payment_method,
+        r.payment_due_days,
         r.created_at,
         tl.start_time,
         tl.end_time,
@@ -49,7 +54,7 @@ router.get('/', authenticate, requireAdmin, async (_req, res) => {
 // PATCH /api/invoices/:id — update invoice fields
 router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     const { id } = req.params;
-    const { invoice_number, invoice_notes, invoice_amount_override } = req.body;
+    const { invoice_number, invoice_notes, invoice_amount_override, payment_method, payment_due_days } = req.body;
     try {
         const sets = [];
         const vals = [];
@@ -64,6 +69,14 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         if (invoice_amount_override !== undefined) {
             sets.push('invoice_amount_override = ?');
             vals.push(invoice_amount_override);
+        }
+        if (payment_method !== undefined) {
+            sets.push('payment_method = ?');
+            vals.push(payment_method);
+        }
+        if (payment_due_days !== undefined) {
+            sets.push('payment_due_days = ?');
+            vals.push(payment_due_days);
         }
         if (sets.length === 0)
             return res.status(400).json({ message: 'No fields to update' });

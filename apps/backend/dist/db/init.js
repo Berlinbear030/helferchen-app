@@ -206,6 +206,15 @@ async function initDatabase() {
       UNIQUE KEY unique_report_voucher (report_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+    // EIS-365: payment method and due days on invoices
+    try {
+        await (0, pool_1.query)("ALTER TABLE reports ADD COLUMN payment_method VARCHAR(20) NOT NULL DEFAULT 'bar'");
+    }
+    catch { }
+    try {
+        await (0, pool_1.query)('ALTER TABLE reports ADD COLUMN payment_due_days INT NULL DEFAULT 14');
+    }
+    catch { }
     // booking_requests migration: ensure all columns exist on older deployments
     for (const col of ['street', 'house_number', 'zip', 'city']) {
         try {

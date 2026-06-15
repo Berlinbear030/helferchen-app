@@ -187,6 +187,10 @@ export async function initDatabase(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // EIS-365: payment method and due days on invoices
+  try { await query("ALTER TABLE reports ADD COLUMN payment_method VARCHAR(20) NOT NULL DEFAULT 'bar'"); } catch {}
+  try { await query('ALTER TABLE reports ADD COLUMN payment_due_days INT NULL DEFAULT 14'); } catch {}
+
   // booking_requests migration: ensure all columns exist on older deployments
   for (const col of ['street', 'house_number', 'zip', 'city']) {
     try { await query(`ALTER TABLE booking_requests ADD COLUMN ${col} VARCHAR(255)`); } catch {}
