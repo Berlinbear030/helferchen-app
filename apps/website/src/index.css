@@ -160,6 +160,8 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .nav-links a { text-decoration: none; color: var(--text-mid); font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
 .nav-links a:hover { color: var(--navy); }
 .header-actions { display: flex; gap: 12px; align-items: center; }
+.header-actions .btn-primary,
+.header-actions .btn-blue { padding: 14px 28px; font-size: 1rem; line-height: 1.2; }
 .header-cta { white-space: nowrap; }
 
 /* ── Hero ────────────────────────────────────────────────── */
@@ -775,18 +777,11 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .appointment-desc { font-size: 0.9rem; margin-bottom: 10px; }
 .appointment-actions { display: flex; gap: 10px; margin-top: 12px; }
 
-.btn-primary {
-  background: var(--orange);
-  color: #fff;
-  border: none;
+.appointment-actions .btn-primary {
   padding: 9px 20px;
-  border-radius: 50px;
-  font-weight: 700;
   font-size: 0.88rem;
-  cursor: pointer;
-  transition: background 0.15s;
 }
-.btn-primary:hover { background: #c75e08; }
+.appointment-actions .btn-primary:hover { background: #c75e08; }
 
 .btn-secondary {
   background: var(--navy);
