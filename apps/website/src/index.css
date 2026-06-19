@@ -66,6 +66,34 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .btn-lg  { padding: 18px 36px; font-size: 1.1rem; }
 .btn-xl  { padding: 22px 52px; font-size: 1.25rem; }
 
+.btn-blue {
+  display: inline-block;
+  background: #1d4ed8;
+  color: #fff;
+  padding: 14px 28px;
+  border-radius: 50px;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+.btn-blue:hover {
+  background: #1e40af;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(29,78,216,0.35);
+}
+
+.booking-cta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .badge {
   display: inline-block;
   background: rgba(232,112,10,0.12);

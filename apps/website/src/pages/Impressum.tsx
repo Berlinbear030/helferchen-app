@@ -39,7 +39,7 @@ function Impressum() {
           <section className="impressum-section">
             <h2>Kontakt</h2>
             <p>
-              Telefon: <a href="tel:01522074984">01522 07 49 84</a><br />
+              Telefon: <a href="tel:015222074984">0152 2207 4984</a><br />
               E-Mail: <a href="mailto:info@helferchen.info">info@helferchen.info</a>
             </p>
           </section>
@@ -128,7 +128,7 @@ function Impressum() {
           <div className="footer-links">
             <a href="/impressum">Impressum</a>
             <a href="/datenschutz">Datenschutz</a>
-            <a href="tel:01522074984">01522 07 49 84</a>
+            <a href="tel:015222074984">0152 2207 4984</a>
           </div>
           <p className="footer-copy">© 2026 Helferchen · Fabian Marquardt</p>
         </div>

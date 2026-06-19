@@ -157,8 +157,8 @@ function BookingPortal() {
 }
 
 function PublicHome() {
-  const phoneNumber = "01522 07 49 84";
-  const phoneHref = "tel:01522074984";
+  const phoneNumber = "0152 2207 4984";
+  const phoneHref = "tel:015222074984";
   const [showBooking, setShowBooking] = useState(false);
 
   const scrollToBooking = () => {
@@ -182,7 +182,7 @@ function PublicHome() {
             <a href="#preise">Preise</a>
           </nav>
           <div className="header-actions">
-            <a href="/login" className="btn-primary header-cta">Mitarbeiter-Login</a>
+            <a href="/login" className="btn-blue header-cta">Mitarbeiter-Login</a>
             <button onClick={scrollToBooking} className="btn-primary header-cta">Jetzt buchen</button>
           </div>
         </div>
@@ -237,15 +237,12 @@ function PublicHome() {
             Wählen Sie Ihren Wunschtermin — wir melden uns zur Bestätigung.
           </p>
           {!showBooking ? (
-            <div style={{ textAlign: 'center' }}>
-              <button className="btn-primary btn-xl" onClick={() => setShowBooking(true)}>Termin anfragen</button>
-              <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-                <span style={{ color: 'var(--text-mid)', fontSize: '0.95rem' }}>Oder direkt:</span>
-                <a href={phoneHref} className="btn-call" style={{ fontSize: '0.95rem', padding: '10px 20px' }}>
-                  <span className="btn-call-label">Anrufen</span>
-                  <span className="btn-call-number">{phoneNumber}</span>
-                </a>
-              </div>
+            <div className="booking-cta-row">
+              <button className="btn-primary btn-lg" onClick={() => setShowBooking(true)}>Termin anfragen</button>
+              <a href={phoneHref} className="btn-call btn-lg">
+                <span className="btn-call-label">Anrufen</span>
+                <span className="btn-call-number">{phoneNumber}</span>
+              </a>
             </div>
           ) : (
             <BookingPortal />
