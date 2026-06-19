@@ -5,6 +5,7 @@ import Portal from './pages/Portal';
 import Shop from './pages/Shop';
 import MobileApp from './pages/MobileApp';
 import AdminDashboard from './admin/AdminDashboard';
+import Impressum from './pages/Impressum';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
       <Route path="/app" element={<MobileApp />} />
       <Route path="/werbeartikel" element={<Shop />} />
       <Route path="/admin/*" element={<AdminDashboard />} />
+      <Route path="/impressum" element={<Impressum />} />
     </Routes>
   );
 }

@@ -173,10 +173,11 @@ function PublicHome() {
       <header className="header">
         <div className="header-inner">
           <div className="brand">
-            <img src="/logo.png" alt="Helferchen" className="header-logo" />
+            <img src="/logo.png" alt="Helferchen – Nachbarschaftshilfe Berlin" className="header-logo" />
           </div>
-          <nav className="nav-links">
+          <nav className="nav-links" aria-label="Hauptnavigation">
             <a href="#leistungen">Leistungen</a>
+            <a href="#ueber-uns">Über uns</a>
             <a href="#buchen">Termin</a>
             <a href="#preise">Preise</a>
             <a href="/login" className="btn-secondary">Mitarbeiter-Login</a>
@@ -189,7 +190,7 @@ function PublicHome() {
       <div className="hero-wrapper">
         <section className="hero container">
           <div className="hero-content">
-            <span className="badge">Ihr Helfer vor Ort</span>
+            <span className="badge">Ihr Helfer vor Ort in Berlin &amp; Brandenburg</span>
             <h1>Technik-Probleme?<br />Haushalt zu viel?</h1>
             <p className="hero-sub">
               Wir kommen zu Ihnen nach Hause — kompetent,
@@ -205,7 +206,7 @@ function PublicHome() {
             <p className="hero-hint">Mo–Fr · 9–17 Uhr</p>
           </div>
           <div className="hero-visual">
-            <img src="/service-social.png" alt="Helfer beim Kunden" className="hero-img" />
+            <img src="/service-social.png" alt="Helfer beim Kunden zuhause" className="hero-img" />
             <div className="floating-card">
               <span>⭐</span>
               <div>
@@ -250,48 +251,117 @@ function PublicHome() {
         </div>
       </section>
 
-      {/* SERVICES */}
+      {/* SERVICES — expanded */}
       <section className="section" id="leistungen">
         <div className="container">
           <span className="section-badge">Unsere Leistungen</span>
           <h2 className="section-heading">Was wir für Sie tun</h2>
+
+          {/* Category cards */}
           <div className="services-grid">
             <div className="service-card">
-              <img src="/hero-laptop.png" alt="Technik-Hilfe" className="service-img" />
+              <img src="/hero-laptop.png" alt="Technik-Hilfe für Senioren und Einsteiger" className="service-img" />
               <div className="service-body">
                 <h3>Technik-Hilfe</h3>
                 <ul>
-                  <li>TV, Fernbedienung &amp; WLAN einrichten</li>
-                  <li>Handy, Tablet &amp; Computer</li>
+                  <li>Smartphone einrichten &amp; erklären</li>
+                  <li>TV, Fernbedienung &amp; Sat-Anlage</li>
+                  <li>WLAN-Probleme lösen</li>
+                  <li>Computer &amp; Drucker einrichten</li>
                   <li>WhatsApp &amp; Videotelefonie</li>
                   <li>Sicher im Internet surfen</li>
+                  <li>Streaming (Netflix, ARD Mediathek…)</li>
+                  <li>Online-Banking einrichten</li>
                 </ul>
               </div>
             </div>
             <div className="service-card">
-              <img src="/service-repair.png" alt="Alltagshilfe" className="service-img" />
+              <img src="/service-repair.png" alt="Alltagshilfe und Besorgungen" className="service-img" />
               <div className="service-body">
-                <h3>Alltagshilfe</h3>
+                <h3>Alltagshilfe &amp; Besorgungen</h3>
                 <ul>
-                  <li>Fensterputzen &amp; leichte Reinigung</li>
-                  <li>Einkaufen &amp; Terminbegleitung</li>
-                  <li>Gardinen &amp; Leuchtmittel wechseln</li>
-                  <li>Gartenpflege &amp; kleine Reparaturen</li>
+                  <li>Einkaufen &amp; Lebensmitteleinkauf</li>
+                  <li>Apothekenbesorgungen</li>
+                  <li>Begleitung bei Arztbesuchen</li>
+                  <li>Postabholen &amp; Bankgänge</li>
+                  <li>Fahrdienste &amp; Terminbegleitung</li>
+                  <li>Tierpflege &amp; Gassi gehen</li>
+                  <li>Blumen gießen &amp; Pflanzen pflegen</li>
                 </ul>
               </div>
             </div>
             <div className="service-card">
-              <img src="/service-cleaning.png" alt="Haushalt & Reinigung" className="service-img" />
+              <img src="/service-cleaning.png" alt="Haushalt und Reinigung" className="service-img" />
               <div className="service-body">
                 <h3>Haushalt &amp; Reinigung</h3>
                 <ul>
-                  <li>Fensterputzen &amp; gründliche Reinigung</li>
+                  <li>Fenster putzen</li>
                   <li>Küche &amp; Bad auf Hochglanz</li>
-                  <li>Behördenpost verstehen</li>
-                  <li>Online-Anträge ausfüllen</li>
+                  <li>Staubsaugen &amp; Wischen</li>
+                  <li>Kühlschrank &amp; Backofen reinigen</li>
+                  <li>Gardinen ab- &amp; aufhängen</li>
+                  <li>Leuchtmittel wechseln</li>
+                  <li>Keller oder Dachboden aufräumen</li>
                 </ul>
               </div>
             </div>
+          </div>
+
+          {/* Additional service categories */}
+          <div className="services-extra-grid">
+            <div className="services-extra-card">
+              <div className="services-extra-icon">🔧</div>
+              <h3>Reparaturen &amp; Handwerk</h3>
+              <ul>
+                <li>Kleine Reparaturen &amp; Montage</li>
+                <li>Möbel aufbauen (IKEA &amp; Co.)</li>
+                <li>Bilder &amp; Regale aufhängen</li>
+                <li>Dichtungen wechseln</li>
+                <li>Türen &amp; Fenster einstellen</li>
+                <li>Rollläden &amp; Jalousien reparieren</li>
+              </ul>
+            </div>
+            <div className="services-extra-card">
+              <div className="services-extra-icon">🌿</div>
+              <h3>Garten &amp; Außenbereich</h3>
+              <ul>
+                <li>Rasen mähen &amp; trimmen</li>
+                <li>Hecken schneiden</li>
+                <li>Beete anlegen &amp; pflegen</li>
+                <li>Laub harken</li>
+                <li>Schnee räumen &amp; Streuen</li>
+                <li>Terrasse &amp; Balkon reinigen</li>
+              </ul>
+            </div>
+            <div className="services-extra-card">
+              <div className="services-extra-icon">📋</div>
+              <h3>Behördengänge &amp; Formulare</h3>
+              <ul>
+                <li>Behördengänge begleiten</li>
+                <li>Formulare ausfüllen (digital &amp; analog)</li>
+                <li>Online-Anträge stellen</li>
+                <li>Briefe verstehen &amp; beantworten</li>
+                <li>Renten- &amp; Sozialleistungen</li>
+                <li>Krankenkassen-Angelegenheiten</li>
+              </ul>
+            </div>
+            <div className="services-extra-card">
+              <div className="services-extra-icon">🛍️</div>
+              <h3>Seniorenhilfe &amp; Begleitung</h3>
+              <ul>
+                <li>Gesellschaft &amp; Gespräch</li>
+                <li>Spazierengehen &amp; Begleitung</li>
+                <li>Freizeitgestaltung &amp; Ausflüge</li>
+                <li>Lesen vorlesen &amp; Vorlesen</li>
+                <li>Gedächtnistraining &amp; Spiele</li>
+                <li>Krankenhaus- &amp; Rehaklinik-Besuch</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="services-cta">
+            <p>Sie haben eine andere Aufgabe? <strong>Kein Problem!</strong> Fragen Sie uns einfach — wir finden eine Lösung.</p>
+            <button className="btn-primary btn-lg" onClick={scrollToBooking}>Jetzt anfragen</button>
           </div>
         </div>
       </section>
@@ -373,16 +443,79 @@ function PublicHome() {
         </div>
       </section>
 
+      {/* ÜBER UNS */}
+      <section className="section ueber-uns-section" id="ueber-uns">
+        <div className="container">
+          <span className="section-badge">Über uns</span>
+          <h2 className="section-heading">Unsere Geschichte</h2>
+          <div className="ueber-uns-content">
+            <div className="ueber-uns-text">
+              <p>
+                Wir sind ein kleines Team aus Berlin und Brandenburg — Menschen mit
+                unterschiedlichen Fähigkeiten, die eines gemeinsam haben: den Wunsch,
+                anderen wirklich zu helfen.
+              </p>
+              <p>
+                Die Idee zu Helferchen entstand aus dem Alltag heraus. Wir haben
+                selbst erlebt, wie schwierig es für viele Menschen werden kann —
+                ob jung oder älter — wenn die kleinen Dinge des Alltags plötzlich
+                zur Herausforderung werden. Der neue Fernseher, den niemand einrichten
+                kann. Die Behördenpost, die kaum jemand versteht. Das vollgestellte
+                Zimmer, das seit Jahren wartet.
+              </p>
+              <p>
+                Wir haben festgestellt: Es gibt zu viele Menschen, die eigentlich
+                nur ein bisschen Unterstützung bräuchten — aber nicht wissen,
+                an wen sie sich wenden sollen. Professionelle Dienste sind oft
+                teuer, kompliziert oder schlicht übertrieben für das, was man
+                wirklich braucht.
+              </p>
+              <p>
+                Deshalb haben wir Helferchen gegründet. Eine unkomplizierte,
+                persönliche Alltagshilfe direkt aus der Nachbarschaft. Kein
+                Papierkram, keine langen Wartezeiten, keine versteckten Kosten.
+                Einfach anrufen oder online buchen — und schon kommt jemand
+                vorbei, der wirklich hilft.
+              </p>
+              <p>
+                Unser Team besteht aus engagierten Helfern mit verschiedenen
+                Stärken: von der Technik über den Haushalt bis hin zu Handwerk
+                und Behördengängen. Was uns alle verbindet, ist Geduld,
+                Zuverlässigkeit und echtes Interesse an den Menschen, denen
+                wir helfen dürfen.
+              </p>
+            </div>
+            <div className="ueber-uns-values">
+              <div className="value-card">
+                <span className="value-icon">❤️</span>
+                <h3>Mit Herz dabei</h3>
+                <p>Für uns ist jeder Auftrag mehr als ein Job — wir nehmen uns die Zeit, die Sie brauchen.</p>
+              </div>
+              <div className="value-card">
+                <span className="value-icon">🤝</span>
+                <h3>Vertrauen zuerst</h3>
+                <p>Wir kommen in Ihr Zuhause — das ist Vertrauen. Wir nehmen das sehr ernst.</p>
+              </div>
+              <div className="value-card">
+                <span className="value-icon">🌍</span>
+                <h3>Für alle Menschen</h3>
+                <p>Jung oder alt, technikaffin oder nicht — wir helfen jedem, ohne zu urteilen.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FOOTER */}
       <footer className="footer">
         <div className="footer-inner container">
           <img src="/logo.png" alt="Helferchen" className="footer-logo-img" />
           <div className="footer-links">
-            <a href="#">Impressum</a>
-            <a href="#">Datenschutz</a>
+            <a href="/impressum">Impressum</a>
+            <a href="/datenschutz">Datenschutz</a>
             <a href={phoneHref}>{phoneNumber}</a>
           </div>
-          <p className="footer-copy">© 2026 Helferchen · noreply@helferchen.info</p>
+          <p className="footer-copy">© 2026 Helferchen · Fabian Marquardt · noreply@helferchen.info</p>
         </div>
       </footer>
 

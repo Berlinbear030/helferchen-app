@@ -1203,3 +1203,140 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   /* Karte */
   .map-container { height: 260px; }
 }
+
+/* ── Über uns ────────────────────────────────────────────── */
+.ueber-uns-section { background: var(--white); }
+.ueber-uns-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
+  align-items: start;
+}
+.ueber-uns-text p {
+  color: var(--text-mid);
+  font-size: 1rem;
+  line-height: 1.75;
+  margin-bottom: 18px;
+}
+.ueber-uns-text p:last-child { margin-bottom: 0; }
+.ueber-uns-values {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.value-card {
+  background: var(--light-bg);
+  border-radius: var(--radius);
+  padding: 24px;
+  border-left: 4px solid var(--orange);
+}
+.value-card .value-icon { font-size: 2rem; display: block; margin-bottom: 10px; }
+.value-card h3 { color: var(--navy); margin-bottom: 8px; }
+.value-card p { color: var(--text-mid); font-size: 0.92rem; line-height: 1.6; margin: 0; }
+
+@media (max-width: 900px) {
+  .ueber-uns-content { grid-template-columns: 1fr; gap: 36px; }
+}
+
+/* ── Services Extra Grid ─────────────────────────────────── */
+.services-extra-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  margin-top: 40px;
+}
+.services-extra-card {
+  background: var(--light-bg);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  border: 1px solid rgba(0,0,0,0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.services-extra-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+}
+.services-extra-icon { font-size: 2.2rem; display: block; margin-bottom: 12px; }
+.services-extra-card h3 { color: var(--navy); font-size: 1.05rem; margin-bottom: 12px; }
+.services-extra-card ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.services-extra-card li {
+  color: var(--text-mid);
+  font-size: 0.88rem;
+  padding-left: 18px;
+  position: relative;
+  line-height: 1.45;
+}
+.services-extra-card li::before { content: '✓'; position: absolute; left: 0; color: var(--orange); font-weight: 700; }
+
+.services-cta {
+  margin-top: 48px;
+  text-align: center;
+  padding: 36px;
+  background: linear-gradient(135deg, var(--navy) 0%, #003a3f 100%);
+  border-radius: var(--radius);
+  color: #fff;
+}
+.services-cta p { font-size: 1.05rem; margin-bottom: 20px; color: rgba(255,255,255,0.85); }
+.services-cta strong { color: #fff; }
+
+/* ── Impressum Page ──────────────────────────────────────── */
+.impressum-page {
+  min-height: calc(100vh - 200px);
+  padding: 64px 0 96px;
+}
+.impressum-page h1 {
+  color: var(--navy);
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  margin-bottom: 8px;
+}
+.impressum-subtitle {
+  color: var(--text-mid);
+  font-size: 0.95rem;
+  margin-bottom: 48px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.impressum-section {
+  margin-bottom: 36px;
+  padding-bottom: 36px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.impressum-section:last-of-type { border-bottom: none; }
+.impressum-section h2 {
+  color: var(--navy);
+  font-size: 1.2rem;
+  margin-bottom: 12px;
+}
+.impressum-section h3 {
+  color: var(--navy);
+  font-size: 1rem;
+  margin: 18px 0 8px;
+}
+.impressum-section p {
+  color: var(--text-mid);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.impressum-section p:last-child { margin-bottom: 0; }
+.impressum-section a { color: var(--navy); }
+.impressum-section a:hover { color: var(--orange); }
+.impressum-back { margin-top: 48px; }
+
+.btn-secondary {
+  display: inline-block;
+  background: transparent;
+  color: var(--navy);
+  padding: 12px 24px;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  border: 2px solid var(--navy);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  background: var(--navy);
+  color: #fff;
+}
