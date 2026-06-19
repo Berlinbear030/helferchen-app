@@ -182,7 +182,7 @@ function PublicHome() {
             <a href="#preise">Preise</a>
           </nav>
           <div className="header-actions">
-            <a href="/login" className="btn-primary header-btn-login">Mitarbeiter-Login</a>
+            <a href="/login" className="btn-primary header-cta">Mitarbeiter-Login</a>
             <button onClick={scrollToBooking} className="btn-primary header-cta">Jetzt buchen</button>
           </div>
         </div>

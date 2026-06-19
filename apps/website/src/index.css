@@ -132,8 +132,6 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .nav-links a { text-decoration: none; color: var(--text-mid); font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
 .nav-links a:hover { color: var(--navy); }
 .header-actions { display: flex; gap: 12px; align-items: center; }
-.header-btn-login { font-size: 0.95rem !important; padding: 14px 22px !important; background: transparent !important; color: var(--navy) !important; border: 2px solid var(--navy) !important; text-decoration: none; }
-.header-btn-login:hover { background: var(--navy) !important; color: #fff !important; transform: translateY(-2px); }
 .header-cta { white-space: nowrap; }
 
 /* ── Hero ────────────────────────────────────────────────── */
@@ -320,29 +318,31 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .price-features li::before { content: '✓'; color: #27ae60; font-weight: 800; font-size: 1rem; }
 
 /* ── Trust ───────────────────────────────────────────────── */
-.trust-section {
+.trust-section { padding: 96px 0; background: var(--light-bg); }
+.trust-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 8px;
+}
+.trust-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 72px;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 96px 24px;
-}
-.trust-img-col { flex: 0 0 44%; }
-.trust-img-col img {
-  width: 100%;
+  text-align: center;
+  gap: 14px;
+  background: var(--white);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  object-fit: cover;
-  max-height: 500px;
+  padding: 36px 28px;
+  box-shadow: var(--shadow);
 }
-.trust-content-col { flex: 1; }
-.trust-content-col h2 { color: var(--navy); margin: 14px 0 32px; }
-.trust-list { display: flex; flex-direction: column; gap: 28px; }
-.trust-item { display: flex; gap: 16px; align-items: flex-start; }
-.trust-icon { font-size: 2rem; flex-shrink: 0; line-height: 1; margin-top: 4px; }
+.trust-icon { font-size: 2.8rem; line-height: 1; }
 .trust-item h3 { color: var(--navy); margin-bottom: 6px; }
-.trust-item p  { color: var(--text-mid); font-size: 0.93rem; }
+.trust-item p  { color: var(--text-mid); font-size: 0.93rem; line-height: 1.6; margin: 0; }
+.trust-item > div { text-align: center; }
+@media (max-width: 700px) {
+  .trust-list { grid-template-columns: 1fr; }
+}
 
 /* ── Partners ────────────────────────────────────────────── */
 .partners-section { padding: 48px 0; background: #f9f9f9; }
