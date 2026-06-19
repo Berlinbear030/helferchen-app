@@ -180,9 +180,11 @@ function PublicHome() {
             <a href="#ueber-uns">Über uns</a>
             <a href="#buchen">Termin</a>
             <a href="#preise">Preise</a>
-            <a href="/login" className="btn-secondary">Mitarbeiter-Login</a>
           </nav>
-          <button onClick={scrollToBooking} className="btn-primary header-cta">Jetzt buchen</button>
+          <div className="header-actions">
+            <a href="/login" className="btn-primary header-btn-login">Mitarbeiter-Login</a>
+            <button onClick={scrollToBooking} className="btn-primary header-cta">Jetzt buchen</button>
+          </div>
         </div>
       </header>
 
