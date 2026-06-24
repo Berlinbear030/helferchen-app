@@ -442,7 +442,7 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .footer-links { display: flex; gap: 24px; }
 .footer-links a { color: rgba(255,255,255,0.55); text-decoration: none; font-size: 0.88rem; transition: color 0.15s; }
 .footer-links a:hover { color: #fff; }
-.footer-copy { font-size: 0.82rem; color: rgba(255,255,255,0.35); }
+.footer-copy { font-size: 0.82rem; color: rgba(255,255,255,0.72); }
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -908,7 +908,7 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   background: white; border: 2px solid #E5E7EB; color: #9CA3AF;
 }
 .booking-step-item.active { border-color: var(--color-primary); color: var(--color-primary); }
-.booking-step-item.done { border-color: var(--color-success); background: #ECFDF5; color: var(--color-success); }
+.booking-step-item.done { border-color: #065f46; background: #ECFDF5; color: #065f46; }
 .step-dot {
   width: 22px; height: 22px; border-radius: 50%;
   background: currentColor; color: white; font-size: 0.75rem;
@@ -1370,4 +1370,116 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .btn-secondary:hover {
   background: var(--navy);
   color: #fff;
+}
+
+/* ── WCAG 2.1 AA Compliance (Startseite) ─────────────────── */
+
+/* Skip-Link (2.4.1) */
+.skip-to-main {
+  position: absolute;
+  top: -100%;
+  left: 8px;
+  background: #0d1e30;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1rem;
+  z-index: 9999;
+}
+.skip-to-main:focus { top: 8px; }
+
+/* Screen-reader-only utility (für versteckte Labels) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Farbkontrast btn-primary (1.4.3): Weißer Text auf #FFB300 schlägt fehl (1.7:1).
+   Dunkler Text erreicht 11:1. Nur im .app-Kontext (Startseite). */
+.app .btn-primary { color: #0d1e30; }
+.app .btn-primary:hover { background: #e6a200; color: #0d1e30; }
+
+/* Fokus-Sichtbarkeit (2.4.7) */
+:focus-visible {
+  outline: 3px solid #005fcc;
+  outline-offset: 2px;
+}
+.btn-primary:focus-visible,
+.btn-blue:focus-visible,
+.btn-call:focus-visible {
+  outline: 3px solid #0d1e30;
+  outline-offset: 3px;
+}
+.app .btn-primary:focus-visible { outline-color: #0d1e30; }
+.nav-links a:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+.time-slot:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 1px;
+}
+.footer-links a:focus-visible { outline-color: #fff; }
+
+/* Booking-Panel Label (für Gruppen ohne htmlFor) */
+.booking-panel-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin: 12px 0 6px;
+}
+
+/* Hamburger-Navigation (mobile, 2.1.1) */
+.nav-toggle {
+  display: none;
+  background: none;
+  border: 2px solid var(--navy);
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 6px 10px;
+  color: var(--navy);
+  font-size: 1.3rem;
+  line-height: 1;
+  align-items: center;
+  justify-content: center;
+}
+.nav-toggle:focus-visible { outline: 3px solid #005fcc; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .nav-toggle { display: flex; }
+  .header-inner { position: relative; }
+  /* Standardmäßig versteckt */
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    flex-direction: column;
+    gap: 0;
+    padding: 8px 0;
+    border-top: 1px solid rgba(0,0,0,0.07);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    z-index: 199;
+  }
+  /* Geöffnet */
+  .nav-links.nav-open {
+    display: flex;
+  }
+  .nav-links a {
+    padding: 14px 24px;
+    font-size: 1rem;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
 }

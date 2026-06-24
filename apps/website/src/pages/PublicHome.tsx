@@ -46,8 +46,8 @@ function BookingPortal() {
 
   if (submitted) {
     return (
-      <div className="booking-success">
-        <div className="booking-success-icon">✓</div>
+      <div className="booking-success" role="status" aria-live="polite">
+        <div className="booking-success-icon" aria-hidden="true">✓</div>
         <h3>Anfrage eingegangen!</h3>
         <p>Wir melden uns innerhalb von 24 Stunden bei Ihnen.</p>
         <button className="btn-primary" onClick={() => { setSubmitted(false); setStep(1); setForm({ preferred_date: '', preferred_time: '', service_description: '', name: '', phone: '', email: '', street: '', house_number: '', zip: '', city: '' }); }}>
@@ -59,10 +59,15 @@ function BookingPortal() {
 
   return (
     <form className="booking-form" onSubmit={handleSubmit}>
-      <div className="booking-steps">
+      <div className="booking-steps" role="list" aria-label="Buchungsschritte">
         {([1, 2, 3] as const).map(s => (
-          <div key={s} className={`booking-step-item ${step === s ? 'active' : step > s ? 'done' : ''}`}>
-            <span className="step-dot">{step > s ? '✓' : s}</span>
+          <div
+            key={s}
+            className={`booking-step-item ${step === s ? 'active' : step > s ? 'done' : ''}`}
+            role="listitem"
+            aria-current={step === s ? 'step' : undefined}
+          >
+            <span className="step-dot" aria-hidden="true">{step > s ? '✓' : s}</span>
             <span>{s === 1 ? 'Termin' : s === 2 ? 'Leistung' : 'Kontakt'}</span>
           </div>
         ))}
@@ -71,15 +76,23 @@ function BookingPortal() {
       {step === 1 && (
         <div className="booking-panel">
           <h3>Wann sollen wir kommen?</h3>
-          <label>Datum wählen</label>
-          <input type="date" min={today} value={form.preferred_date} onChange={e => set('preferred_date', e.target.value)} required />
-          <label>Uhrzeit wählen</label>
-          <div className="time-slot-grid">
-            {timeSlots.map(t => (
-              <button type="button" key={t} className={`time-slot ${form.preferred_time === t ? 'selected' : ''}`} onClick={() => set('preferred_time', t)}>
-                {t} Uhr
-              </button>
-            ))}
+          <label htmlFor="bp-date">Datum wählen</label>
+          <input id="bp-date" type="date" min={today} value={form.preferred_date} onChange={e => set('preferred_date', e.target.value)} required />
+          <div role="group" aria-labelledby="uhrzeit-label">
+            <p id="uhrzeit-label" className="booking-panel-label">Uhrzeit wählen</p>
+            <div className="time-slot-grid">
+              {timeSlots.map(t => (
+                <button
+                  type="button"
+                  key={t}
+                  className={`time-slot ${form.preferred_time === t ? 'selected' : ''}`}
+                  aria-pressed={form.preferred_time === t}
+                  onClick={() => set('preferred_time', t)}
+                >
+                  {t} Uhr
+                </button>
+              ))}
+            </div>
           </div>
           <button type="button" className="btn-primary btn-lg booking-next" disabled={!form.preferred_date || !form.preferred_time} onClick={() => setStep(2)}>
             Weiter →
@@ -90,8 +103,9 @@ function BookingPortal() {
       {step === 2 && (
         <div className="booking-panel">
           <h3>Was kann ich für Sie tun?</h3>
-          <label>Bitte beschreiben Sie Ihr Anliegen</label>
+          <label htmlFor="bp-desc">Bitte beschreiben Sie Ihr Anliegen</label>
           <textarea
+            id="bp-desc"
             placeholder="z.B. Hilfe beim Einrichten des Smartphones, TV-Sender sortieren, Fenster putzen…"
             value={form.service_description}
             onChange={e => set('service_description', e.target.value)}
@@ -110,40 +124,42 @@ function BookingPortal() {
           <h3>Ihre Kontaktdaten</h3>
           <div style={{ display: 'flex', gap: '12px' }}>
             <div style={{ flex: 1 }}>
-              <label>Name *</label>
-              <input type="text" placeholder="Ihr vollständiger Name" value={form.name} onChange={e => set('name', e.target.value)} required />
+              <label htmlFor="bp-name">Name *</label>
+              <input id="bp-name" type="text" placeholder="Ihr vollständiger Name" value={form.name} onChange={e => set('name', e.target.value)} required />
             </div>
             <div style={{ flex: 1 }}>
-              <label>Telefon *</label>
-              <input type="tel" placeholder="Ihre Telefonnummer" value={form.phone} onChange={e => set('phone', e.target.value)} required />
+              <label htmlFor="bp-phone">Telefon *</label>
+              <input id="bp-phone" type="tel" placeholder="Ihre Telefonnummer" value={form.phone} onChange={e => set('phone', e.target.value)} required />
             </div>
           </div>
-          <label>Adresse *</label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <div style={{ flex: 3 }}>
-              <input type="text" placeholder="Straße" value={form.street} onChange={e => set('street', e.target.value)} required />
+          <div role="group" aria-labelledby="adresse-label">
+            <p id="adresse-label" className="booking-panel-label">Adresse *</p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ flex: 3 }}>
+                <input aria-label="Straße" type="text" placeholder="Straße" value={form.street} onChange={e => set('street', e.target.value)} required />
+              </div>
+              <div style={{ flex: 1 }}>
+                <input aria-label="Hausnummer" type="text" placeholder="Nr." value={form.house_number} onChange={e => set('house_number', e.target.value)} required />
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <input type="text" placeholder="Nr." value={form.house_number} onChange={e => set('house_number', e.target.value)} required />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <div style={{ flex: 1 }}>
+                <input aria-label="Postleitzahl" type="text" placeholder="PLZ" value={form.zip} onChange={e => set('zip', e.target.value)} required pattern="[0-9]{5}" title="5-stellige Postleitzahl" maxLength={5} />
+              </div>
+              <div style={{ flex: 3 }}>
+                <input aria-label="Ort" type="text" placeholder="Ort" value={form.city} onChange={e => set('city', e.target.value)} required />
+              </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-            <div style={{ flex: 1 }}>
-              <input type="text" placeholder="PLZ" value={form.zip} onChange={e => set('zip', e.target.value)} required pattern="[0-9]{5}" title="5-stellige Postleitzahl" maxLength={5} />
-            </div>
-            <div style={{ flex: 3 }}>
-              <input type="text" placeholder="Ort" value={form.city} onChange={e => set('city', e.target.value)} required />
-            </div>
-          </div>
-          <label style={{ marginTop: '12px' }}>E-Mail (optional, für Bestätigungsmail)</label>
-          <input type="email" placeholder="ihre@email.de" value={form.email} onChange={e => set('email', e.target.value)} />
-          <div className="booking-summary">
+          <label htmlFor="bp-email" style={{ marginTop: '12px', display: 'block' }}>E-Mail (optional, für Bestätigungsmail)</label>
+          <input id="bp-email" type="email" placeholder="ihre@email.de" value={form.email} onChange={e => set('email', e.target.value)} />
+          <div className="booking-summary" aria-live="polite">
             <strong>Zusammenfassung:</strong>
-            <span>📅 {form.preferred_date} um {form.preferred_time} Uhr</span>
-            <span>📍 {form.street ? `${form.street} ${form.house_number}, ${form.zip} ${form.city}` : 'Keine Adresse angegeben'}</span>
-            <span>📝 {form.service_description.slice(0, 60)}{form.service_description.length > 60 ? '…' : ''}</span>
+            <span><span aria-hidden="true">📅</span> {form.preferred_date} um {form.preferred_time} Uhr</span>
+            <span><span aria-hidden="true">📍</span> {form.street ? `${form.street} ${form.house_number}, ${form.zip} ${form.city}` : 'Keine Adresse angegeben'}</span>
+            <span><span aria-hidden="true">📝</span> {form.service_description.slice(0, 60)}{form.service_description.length > 60 ? '…' : ''}</span>
           </div>
-          {error && <p className="booking-error">{error}</p>}
+          {error && <p className="booking-error" role="alert">{error}</p>}
           <div className="booking-nav">
             <button type="button" className="btn-secondary" onClick={() => setStep(2)}>← Zurück</button>
             <button type="submit" className="btn-primary" disabled={submitting || !form.name || !form.phone || !form.street || !form.zip || !form.city}>
@@ -160,6 +176,7 @@ function PublicHome() {
   const phoneNumber = "0152 2207 4984";
   const phoneHref = "tel:015222074984";
   const [showBooking, setShowBooking] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const scrollToBooking = () => {
     setShowBooking(true);
@@ -168,6 +185,7 @@ function PublicHome() {
 
   return (
     <div className="app">
+      <a href="#main-content" className="skip-to-main">Zum Hauptinhalt springen</a>
 
       {/* HEADER */}
       <header className="header">
@@ -175,18 +193,29 @@ function PublicHome() {
           <div className="brand">
             <img src="/logo.png" alt="Helferchen – Nachbarschaftshilfe Berlin" className="header-logo" />
           </div>
-          <nav className="nav-links" aria-label="Hauptnavigation">
-            <a href="#leistungen">Leistungen</a>
-            <a href="#ueber-uns">Über uns</a>
-            <a href="#buchen">Termin</a>
-            <a href="#preise">Preise</a>
+          <nav className={`nav-links${menuOpen ? ' nav-open' : ''}`} id="main-nav" aria-label="Hauptnavigation">
+            <a href="#leistungen" onClick={() => setMenuOpen(false)}>Leistungen</a>
+            <a href="#ueber-uns" onClick={() => setMenuOpen(false)}>Über uns</a>
+            <a href="#buchen" onClick={() => setMenuOpen(false)}>Termin</a>
+            <a href="#preise" onClick={() => setMenuOpen(false)}>Preise</a>
           </nav>
           <div className="header-actions">
+            <button
+              className="nav-toggle"
+              aria-label={menuOpen ? 'Navigation schließen' : 'Navigation öffnen'}
+              aria-expanded={menuOpen}
+              aria-controls="main-nav"
+              onClick={() => setMenuOpen(m => !m)}
+            >
+              <span aria-hidden="true">{menuOpen ? '✕' : '☰'}</span>
+            </button>
             <a href="/login" className="btn-blue header-cta">Mitarbeiter-Login</a>
             <button onClick={scrollToBooking} className="btn-primary header-cta">Jetzt buchen</button>
           </div>
         </div>
       </header>
+
+      <main id="main-content">
 
       {/* HERO */}
       <div className="hero-wrapper">
@@ -210,7 +239,7 @@ function PublicHome() {
           <div className="hero-visual">
             <img src="/service-social.png" alt="Helfer beim Kunden zuhause" className="hero-img" />
             <div className="floating-card">
-              <span>⭐</span>
+              <span aria-hidden="true">⭐</span>
               <div>
                 <strong>Ihre Nachbarschaftshilfe</strong>
                 <p>Persönlich &amp; zuverlässig</p>
@@ -309,7 +338,7 @@ function PublicHome() {
           {/* Additional service categories */}
           <div className="services-extra-grid">
             <div className="services-extra-card">
-              <div className="services-extra-icon">🔧</div>
+              <div className="services-extra-icon" aria-hidden="true">🔧</div>
               <h3>Reparaturen &amp; Handwerk</h3>
               <ul>
                 <li>Kleine Reparaturen &amp; Montage</li>
@@ -321,7 +350,7 @@ function PublicHome() {
               </ul>
             </div>
             <div className="services-extra-card">
-              <div className="services-extra-icon">🌿</div>
+              <div className="services-extra-icon" aria-hidden="true">🌿</div>
               <h3>Garten &amp; Außenbereich</h3>
               <ul>
                 <li>Rasen mähen &amp; trimmen</li>
@@ -333,7 +362,7 @@ function PublicHome() {
               </ul>
             </div>
             <div className="services-extra-card">
-              <div className="services-extra-icon">📋</div>
+              <div className="services-extra-icon" aria-hidden="true">📋</div>
               <h3>Behördengänge &amp; Formulare</h3>
               <ul>
                 <li>Behördengänge begleiten</li>
@@ -345,7 +374,7 @@ function PublicHome() {
               </ul>
             </div>
             <div className="services-extra-card">
-              <div className="services-extra-icon">🛍️</div>
+              <div className="services-extra-icon" aria-hidden="true">🛍️</div>
               <h3>Seniorenhilfe &amp; Begleitung</h3>
               <ul>
                 <li>Gesellschaft &amp; Gespräch</li>
@@ -427,15 +456,15 @@ function PublicHome() {
           <h2 style={{ marginBottom: 32 }}>Ihr Helfer aus der Nachbarschaft</h2>
           <div className="trust-list">
             <div className="trust-item">
-              <span className="trust-icon">🏘️</span>
+              <span className="trust-icon" aria-hidden="true">🏘️</span>
               <div><h3>Nah bei Ihnen</h3><p>Alle Helfer kommen aus Ihrer Nachbarschaft.</p></div>
             </div>
             <div className="trust-item">
-              <span className="trust-icon">🔒</span>
+              <span className="trust-icon" aria-hidden="true">🔒</span>
               <div><h3>Geprüft &amp; vertrauenswürdig</h3><p>Alle Helfer sind persönlich bekannt und sorgfältig ausgewählt.</p></div>
             </div>
             <div className="trust-item">
-              <span className="trust-icon">⚡</span>
+              <span className="trust-icon" aria-hidden="true">⚡</span>
               <div><h3>Flexibel &amp; schnell</h3><p>Oft noch am selben Tag — kein Papierkram, kein Warten.</p></div>
             </div>
           </div>
@@ -486,17 +515,17 @@ function PublicHome() {
             </div>
             <div className="ueber-uns-values">
               <div className="value-card">
-                <span className="value-icon">❤️</span>
+                <span className="value-icon" aria-hidden="true">❤️</span>
                 <h3>Mit Herz dabei</h3>
                 <p>Für uns ist jeder Auftrag mehr als ein Job — wir nehmen uns die Zeit, die Sie brauchen.</p>
               </div>
               <div className="value-card">
-                <span className="value-icon">🤝</span>
+                <span className="value-icon" aria-hidden="true">🤝</span>
                 <h3>Vertrauen zuerst</h3>
                 <p>Wir kommen in Ihr Zuhause — das ist Vertrauen. Wir nehmen das sehr ernst.</p>
               </div>
               <div className="value-card">
-                <span className="value-icon">🌍</span>
+                <span className="value-icon" aria-hidden="true">🌍</span>
                 <h3>Für alle Menschen</h3>
                 <p>Jung oder alt, technikaffin oder nicht — wir helfen jedem, ohne zu urteilen.</p>
               </div>
@@ -504,6 +533,8 @@ function PublicHome() {
           </div>
         </div>
       </section>
+
+      </main>
 
       {/* FOOTER */}
       <footer className="footer">
