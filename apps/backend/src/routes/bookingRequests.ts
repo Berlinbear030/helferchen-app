@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { BookingRequestRepo, AuditRepo, CustomerRepo, AssignmentRepo } from '../db/queries';
 import { AuthRequest, authenticateToken, requireRole, requirePermission } from '../middleware/auth';
 import { sendBookingConfirmation, sendNewBookingAdminNotification } from '../services/email';
@@ -6,14 +7,56 @@ import { query } from '../db/pool';
 
 const router = Router();
 
+const bookingRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Zu viele Anfragen. Bitte versuchen Sie es in einer Stunde erneut.' },
+});
+
+async function verifyTurnstile(token: string, ip: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true; // Skip verification when not configured (dev mode)
+
+  const formData = new URLSearchParams();
+  formData.append('secret', secret);
+  formData.append('response', token);
+  formData.append('remoteip', ip);
+
+  try {
+    const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await resp.json() as { success: boolean };
+    return data.success === true;
+  } catch (err) {
+    console.error('[booking] Turnstile verification error:', err);
+    return false;
+  }
+}
+
 // Public: submit a booking request
-router.post('/', async (req: Request, res: Response) => {
-  const { name, phone, email, address, street, house_number, zip, city, service_description, preferred_date, preferred_time } = req.body;
+router.post('/', bookingRateLimit, async (req: Request, res: Response) => {
+  const { name, phone, email, address, street, house_number, zip, city, service_description, preferred_date, preferred_time, turnstileToken } = req.body;
 
   // Require either the combined address or the split fields
   const hasAddress = address || (street && zip && city);
   if (!name || !phone || !hasAddress || !service_description || !preferred_date || !preferred_time) {
     return res.status(400).json({ error: 'Pflichtfelder fehlen.' });
+  }
+
+  // Verify CAPTCHA token
+  if (process.env.TURNSTILE_SECRET_KEY) {
+    if (!turnstileToken) {
+      return res.status(400).json({ error: 'CAPTCHA-Verifizierung erforderlich.' });
+    }
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+    const valid = await verifyTurnstile(turnstileToken, clientIp);
+    if (!valid) {
+      return res.status(400).json({ error: 'CAPTCHA-Verifizierung fehlgeschlagen. Bitte versuchen Sie es erneut.' });
+    }
   }
 
   const entry = await BookingRequestRepo.create({

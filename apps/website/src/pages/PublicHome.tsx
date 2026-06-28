@@ -1,7 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import '../index.css';
 
 const API = '/api';
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: HTMLElement, opts: { sitekey: string; callback: (token: string) => void; 'expired-callback': () => void; 'error-callback': () => void; theme: string }) => string;
+      reset: (widgetId: string) => void;
+      remove: (widgetId: string) => void;
+    };
+  }
+}
 
 function BookingPortal() {
   const today = new Date().toISOString().slice(0, 10);
@@ -21,24 +32,73 @@ function BookingPortal() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const turnstileRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (step !== 3 || !TURNSTILE_SITE_KEY || !turnstileRef.current) return;
+    if (widgetIdRef.current) return;
+
+    const renderWidget = () => {
+      if (!turnstileRef.current || !window.turnstile) return;
+      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token: string) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+        theme: 'light',
+      });
+    };
+
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+      script.async = true;
+      script.defer = true;
+      script.onload = renderWidget;
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      if (widgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(widgetIdRef.current);
+        widgetIdRef.current = null;
+      }
+    };
+  }, [step]);
 
   const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError('Bitte bestätigen Sie das CAPTCHA.');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
       const res = await fetch(`${API}/booking-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, turnstileToken }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || '');
+      }
       setSubmitted(true);
-    } catch {
-      setError('Fehler beim Absenden. Bitte rufen Sie uns an.');
+    } catch (err) {
+      const msg = err instanceof Error && err.message ? err.message : 'Fehler beim Absenden. Bitte rufen Sie uns an.';
+      setError(msg);
+      if (widgetIdRef.current && window.turnstile) {
+        window.turnstile.reset(widgetIdRef.current);
+        setTurnstileToken('');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -159,10 +219,13 @@ function BookingPortal() {
             <span><span aria-hidden="true">📍</span> {form.street ? `${form.street} ${form.house_number}, ${form.zip} ${form.city}` : 'Keine Adresse angegeben'}</span>
             <span><span aria-hidden="true">📝</span> {form.service_description.slice(0, 60)}{form.service_description.length > 60 ? '…' : ''}</span>
           </div>
+          {TURNSTILE_SITE_KEY && (
+            <div ref={turnstileRef} style={{ marginTop: '16px' }} aria-label="CAPTCHA-Sicherheitscheck" />
+          )}
           {error && <p className="booking-error" role="alert">{error}</p>}
           <div className="booking-nav">
             <button type="button" className="btn-secondary" onClick={() => setStep(2)}>← Zurück</button>
-            <button type="submit" className="btn-primary" disabled={submitting || !form.name || !form.phone || !form.street || !form.zip || !form.city}>
+            <button type="submit" className="btn-primary" disabled={submitting || !form.name || !form.phone || !form.street || !form.zip || !form.city || (!!TURNSTILE_SITE_KEY && !turnstileToken)}>
               {submitting ? 'Wird gesendet…' : 'Anfrage absenden'}
             </button>
           </div>

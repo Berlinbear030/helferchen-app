@@ -1,18 +1,61 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
+const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const queries_1 = require("../db/queries");
 const auth_1 = require("../middleware/auth");
 const email_1 = require("../services/email");
 const pool_1 = require("../db/pool");
 const router = (0, express_1.Router)();
+const bookingRateLimit = (0, express_rate_limit_1.default)({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Zu viele Anfragen. Bitte versuchen Sie es in einer Stunde erneut.' },
+});
+async function verifyTurnstile(token, ip) {
+    const secret = process.env.TURNSTILE_SECRET_KEY;
+    if (!secret)
+        return true; // Skip verification when not configured (dev mode)
+    const formData = new URLSearchParams();
+    formData.append('secret', secret);
+    formData.append('response', token);
+    formData.append('remoteip', ip);
+    try {
+        const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await resp.json();
+        return data.success === true;
+    }
+    catch (err) {
+        console.error('[booking] Turnstile verification error:', err);
+        return false;
+    }
+}
 // Public: submit a booking request
-router.post('/', async (req, res) => {
-    const { name, phone, email, address, street, house_number, zip, city, service_description, preferred_date, preferred_time } = req.body;
+router.post('/', bookingRateLimit, async (req, res) => {
+    const { name, phone, email, address, street, house_number, zip, city, service_description, preferred_date, preferred_time, turnstileToken } = req.body;
     // Require either the combined address or the split fields
     const hasAddress = address || (street && zip && city);
     if (!name || !phone || !hasAddress || !service_description || !preferred_date || !preferred_time) {
         return res.status(400).json({ error: 'Pflichtfelder fehlen.' });
+    }
+    // Verify CAPTCHA token
+    if (process.env.TURNSTILE_SECRET_KEY) {
+        if (!turnstileToken) {
+            return res.status(400).json({ error: 'CAPTCHA-Verifizierung erforderlich.' });
+        }
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+        const valid = await verifyTurnstile(turnstileToken, clientIp);
+        if (!valid) {
+            return res.status(400).json({ error: 'CAPTCHA-Verifizierung fehlgeschlagen. Bitte versuchen Sie es erneut.' });
+        }
     }
     const entry = await queries_1.BookingRequestRepo.create({
         name,
