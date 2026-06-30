@@ -1482,4 +1482,28 @@ h3 { font-size: 1.15rem; font-weight: 600; }
     font-size: 1rem;
     border-bottom: 1px solid rgba(0,0,0,0.05);
   }
+  /* Mitarbeiter-Login aus dem Header entfernen – kommt auf Mobile ganz unten */
+  .header-actions .btn-blue { display: none; }
+  /* Header-CTA auf Mobile etwas kompakter */
+  .header-actions .btn-primary { padding: 10px 18px; font-size: 0.9rem; }
+}
+
+/* Mobile: Mitarbeiter-Login am unteren Seitenrand */
+.mobile-login-bottom { display: none; }
+
+@media (max-width: 900px) {
+  .mobile-login-bottom {
+    display: block;
+    background: #0d1e30;
+    padding: 20px 24px 28px;
+    text-align: center;
+  }
+  .mobile-login-bottom .btn-blue {
+    display: inline-block;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    padding: 16px 24px;
+    font-size: 1rem;
+  }
 }

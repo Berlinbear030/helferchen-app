@@ -612,6 +612,11 @@ function PublicHome() {
         </div>
       </footer>
 
+      {/* Mobile-only: Mitarbeiter-Login ganz unten */}
+      <div className="mobile-login-bottom">
+        <a href="/login" className="btn-blue">Mitarbeiter-Login</a>
+      </div>
+
     </div>
   );
 }
