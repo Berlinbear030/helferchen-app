@@ -10,7 +10,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   res.json(customers);
 });
 
-router.post('/', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+router.post('/', authenticateToken, requireRole('admin', 'kundenbetreuer'), async (req: AuthRequest, res: Response) => {
   const { first_name, last_name, address, phone_number, notes } = req.body;
   if (!first_name || !last_name) return res.status(400).json({ message: 'first_name and last_name are required' });
 

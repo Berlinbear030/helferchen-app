@@ -1557,7 +1557,7 @@ function AnrufagentTab({ user }: { user: User }) {
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    fetch(`${API}/admin/users`, { headers: authHeaders() })
+    fetch(`${API}/assignments/employees`, { headers: authHeaders() })
       .then(r => r.json()).then(setEmployees).catch(() => {});
   }, []);
 
@@ -1960,9 +1960,9 @@ export default function Portal() {
 
   const isAdmin = user.role === 'admin';
   const canDelete = isAdmin;
-  const tabs: { id: Tab; label: string; requireAdmin?: boolean }[] = [
+  const tabs: { id: Tab; label: string; requireAdmin?: boolean; requireRoles?: string[] }[] = [
     { id: 'dashboard', label: '📊 Dashboard' },
-    { id: 'anruf', label: '📞 Anrufagent', requireAdmin: true },
+    { id: 'anruf', label: '📞 Anrufagent', requireRoles: ['admin', 'kundenbetreuer'] },
     { id: 'appointments', label: '📅 Termine' },
     { id: 'tour', label: '🗺️ Tour' },
     { id: 'booking-requests', label: '📬 Anfragen', requireAdmin: true },
@@ -2007,6 +2007,7 @@ export default function Portal() {
 
       <nav className="portal-tabs">
         {tabs.filter(t => {
+          if (t.requireRoles) return t.requireRoles.includes(user.role);
           if (t.requireAdmin) return isAdmin;
           return true;
         }).map(t => (
@@ -2021,7 +2022,7 @@ export default function Portal() {
         {loading && activeTab !== 'dashboard' ? <div className="loading-text">Daten werden geladen…</div> : (
           <>
             {activeTab === 'dashboard' && <DashboardTab user={user} />}
-            {activeTab === 'anruf' && isAdmin && <AnrufagentTab user={user} />}
+            {activeTab === 'anruf' && (isAdmin || user.role === 'kundenbetreuer') && <AnrufagentTab user={user} />}
             {activeTab === 'appointments' && <AppointmentsTab assignments={assignments} onRefresh={loadData} canDelete={canDelete} />}
             {activeTab === 'tour' && (
               <div>

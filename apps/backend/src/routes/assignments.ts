@@ -16,6 +16,12 @@ router.get('/', authenticateToken, requireRole('admin'), async (req: AuthRequest
   res.json(result);
 });
 
+// GET /api/assignments/employees — employee list for Anrufagent (admin + kundenbetreuer)
+router.get('/employees', authenticateToken, requireRole('admin', 'kundenbetreuer'), async (_req: AuthRequest, res: Response) => {
+  const users = await UserRepo.findAll();
+  res.json(users.map((u: any) => ({ id: u.id, full_name: u.full_name })));
+});
+
 router.get('/my', authenticateToken, async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -27,7 +33,7 @@ router.get('/my', authenticateToken, async (req: AuthRequest, res: Response) => 
   res.json(result);
 });
 
-router.post('/', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+router.post('/', authenticateToken, requireRole('admin', 'kundenbetreuer'), async (req: AuthRequest, res: Response) => {
   let { customer_id, assigned_user_id, title, description, scheduled_at, new_customer, hourly_rate } = req.body;
 
   if (customer_id === 'NEW_CUSTOMER' && new_customer) {
