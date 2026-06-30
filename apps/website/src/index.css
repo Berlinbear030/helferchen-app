@@ -1310,6 +1310,22 @@ h3 { font-size: 1.15rem; font-weight: 600; }
 .services-cta p { font-size: 1.05rem; margin-bottom: 20px; color: rgba(255,255,255,0.85); }
 .services-cta strong { color: #fff; }
 
+/* ── Booking Panel – flexible Zeilen (statt Inline-Styles) ── */
+.bp-row {
+  display: flex;
+  gap: 12px;
+}
+.bp-row-mt { margin-top: 8px; }
+.bp-col { flex: 1; }
+.bp-col-3 { flex: 3; }
+.bp-email-label { display: block; margin-top: 12px; }
+
+@media (max-width: 500px) {
+  .bp-row { flex-direction: column; gap: 0; }
+  .bp-col, .bp-col-3 { flex: unset; width: 100%; }
+  .bp-row-mt { margin-top: 0; }
+}
+
 /* ── Impressum Page ──────────────────────────────────────── */
 .impressum-page {
   min-height: calc(100vh - 200px);
@@ -1506,4 +1522,83 @@ h3 { font-size: 1.15rem; font-weight: 600; }
     padding: 16px 24px;
     font-size: 1rem;
   }
+}
+
+/* ── Umfassende Mobile-Responsive-Fixes ────────────────────── */
+
+/* Mittlere Mobile-Geräte (≤ 600 px) */
+@media (max-width: 600px) {
+  /* Abschnitte: weniger Padding */
+  .section { padding: 56px 0; }
+  .trust-section { padding: 56px 0; }
+  .app-section { padding: 48px 0; }
+
+  /* Container: kleinere Seitenränder */
+  .container { padding: 0 16px; }
+
+  /* Hero: zentriert, Bild verstecken */
+  .hero { padding: 40px 16px 48px; text-align: center; gap: 32px; }
+  .hero-content .badge { margin-left: auto; margin-right: auto; }
+  .hero-sub { margin-left: auto; margin-right: auto; }
+  .hero-cta-row { flex-direction: column; align-items: center; gap: 12px; }
+  .hero-cta-row .btn-primary,
+  .hero-cta-row .btn-call { width: 100%; max-width: 320px; justify-content: center; }
+  .hero-hint { text-align: center; }
+  .hero-visual { display: none; }
+
+  /* Stats-Bar: einspaltiger Modus */
+  .stats-bar { flex-direction: column; }
+  .stat { flex: unset; width: 100%; max-width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 18px 16px; }
+  .stat:last-child { border-bottom: none; }
+
+  /* Buchungsbereich */
+  .booking-cta-row { flex-direction: column; align-items: center; gap: 12px; }
+  .booking-cta-row .btn-primary,
+  .booking-cta-row .btn-call { width: 100%; max-width: 320px; justify-content: center; text-align: center; }
+
+  /* Buchungsformular */
+  .booking-form { padding: 0 4px; }
+  .booking-steps { gap: 4px; }
+  .booking-step-item { font-size: 0.75rem; padding: 4px 10px; }
+  .time-slot-grid { grid-template-columns: repeat(2, 1fr); }
+  .booking-panel { padding: 20px 16px; }
+
+  /* Services */
+  .section-heading { margin-bottom: 36px; }
+  .services-extra-grid { grid-template-columns: 1fr; }
+  .services-cta { padding: 24px 16px; border-radius: 12px; }
+  .services-cta p { font-size: 0.95rem; }
+
+  /* How it works */
+  .step { max-width: 100%; }
+
+  /* Pricing */
+  .pricing-card { padding: 28px 16px; }
+  .price-features { padding: 16px; }
+
+  /* Trust */
+  .trust-list { grid-template-columns: 1fr; gap: 16px; }
+  .trust-item { padding: 24px 20px; }
+
+  /* Über uns */
+  .ueber-uns-content { gap: 24px; }
+
+  /* Footer */
+  .footer-inner { padding: 32px 16px; gap: 14px; }
+  .footer-links { flex-wrap: wrap; justify-content: center; gap: 12px; }
+}
+
+/* Sehr kleine Geräte (≤ 380 px) */
+@media (max-width: 380px) {
+  h1 { font-size: 1.7rem; }
+  h2 { font-size: 1.3rem; }
+
+  .header-logo { height: 44px; }
+  .header-inner { padding: 10px 12px; gap: 12px; }
+
+  .hero { padding: 32px 12px 40px; }
+  .stat strong { font-size: 1.5rem; }
+
+  .booking-panel { padding: 16px 12px; }
+  .booking-steps { flex-direction: column; align-items: center; }
 }

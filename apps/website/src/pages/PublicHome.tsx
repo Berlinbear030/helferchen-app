@@ -182,36 +182,36 @@ function BookingPortal() {
       {step === 3 && (
         <div className="booking-panel">
           <h3>Ihre Kontaktdaten</h3>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{ flex: 1 }}>
+          <div className="bp-row">
+            <div className="bp-col">
               <label htmlFor="bp-name">Name *</label>
               <input id="bp-name" type="text" placeholder="Ihr vollständiger Name" value={form.name} onChange={e => set('name', e.target.value)} required />
             </div>
-            <div style={{ flex: 1 }}>
+            <div className="bp-col">
               <label htmlFor="bp-phone">Telefon *</label>
               <input id="bp-phone" type="tel" placeholder="Ihre Telefonnummer" value={form.phone} onChange={e => set('phone', e.target.value)} required />
             </div>
           </div>
           <div role="group" aria-labelledby="adresse-label">
             <p id="adresse-label" className="booking-panel-label">Adresse *</p>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <div style={{ flex: 3 }}>
+            <div className="bp-row">
+              <div className="bp-col bp-col-3">
                 <input aria-label="Straße" type="text" placeholder="Straße" value={form.street} onChange={e => set('street', e.target.value)} required />
               </div>
-              <div style={{ flex: 1 }}>
+              <div className="bp-col">
                 <input aria-label="Hausnummer" type="text" placeholder="Nr." value={form.house_number} onChange={e => set('house_number', e.target.value)} required />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <div style={{ flex: 1 }}>
+            <div className="bp-row bp-row-mt">
+              <div className="bp-col">
                 <input aria-label="Postleitzahl" type="text" placeholder="PLZ" value={form.zip} onChange={e => set('zip', e.target.value)} required pattern="[0-9]{5}" title="5-stellige Postleitzahl" maxLength={5} />
               </div>
-              <div style={{ flex: 3 }}>
+              <div className="bp-col bp-col-3">
                 <input aria-label="Ort" type="text" placeholder="Ort" value={form.city} onChange={e => set('city', e.target.value)} required />
               </div>
             </div>
           </div>
-          <label htmlFor="bp-email" style={{ marginTop: '12px', display: 'block' }}>E-Mail (optional, für Bestätigungsmail)</label>
+          <label htmlFor="bp-email" className="bp-email-label">E-Mail (optional, für Bestätigungsmail)</label>
           <input id="bp-email" type="email" placeholder="ihre@email.de" value={form.email} onChange={e => set('email', e.target.value)} />
           <div className="booking-summary" aria-live="polite">
             <strong>Zusammenfassung:</strong>
