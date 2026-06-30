@@ -41,7 +41,7 @@ interface BookingRequest {
   status: string; assigned_user_id: string | null; notes: string; created_at: string;
 }
 
-type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees' | 'assignments-admin' | 'kunden';
+type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees' | 'assignments-admin' | 'kunden' | 'anruf';
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
@@ -1517,6 +1517,375 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
   );
 }
 
+// ── Anrufagent Tab ─────────────────────────────────────────────────────────────
+
+const QUICK_SERVICES = [
+  'Einkaufshilfe', 'Reinigung', 'Gartenarbeit', 'Fahrdienst',
+  'Begleitung', 'Haushaltsunterstützung', 'Behördengänge', 'Sonstiges',
+];
+
+function AnrufagentTab({ user }: { user: User }) {
+  const [phone, setPhone] = useState('');
+  const [customerFound, setCustomerFound] = useState<Customer | null>(null);
+  const [customerSearchDone, setCustomerSearchDone] = useState(false);
+  const [customerSearching, setCustomerSearching] = useState(false);
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [address, setAddress] = useState('');
+  const [email, setEmail] = useState('');
+
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ display: string; short: string }>>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addressWrapRef = useRef<HTMLDivElement>(null);
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T09:00`;
+  });
+  const [assignedUserId, setAssignedUserId] = useState('');
+
+  const [employees, setEmployees] = useState<{ id: string; full_name: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    fetch(`${API}/admin/users`, { headers: authHeaders() })
+      .then(r => r.json()).then(setEmployees).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (addressWrapRef.current && !addressWrapRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const lookupByPhone = async () => {
+    if (!phone.trim()) return;
+    setCustomerSearching(true);
+    setCustomerSearchDone(false);
+    setCustomerFound(null);
+    setIsNewCustomer(false);
+    try {
+      const r = await fetch(`${API}/customers`, { headers: authHeaders() });
+      const customers: Customer[] = r.ok ? await r.json() : [];
+      const normalized = phone.replace(/[\s\-\(\)\+]/g, '');
+      const found = customers.find(c =>
+        c.phone_number?.replace(/[\s\-\(\)\+]/g, '') === normalized
+      );
+      if (found) {
+        setCustomerFound(found);
+        setFirstName(found.first_name);
+        setLastName(found.last_name);
+        setAddress(found.address);
+        setEmail(found.email || '');
+        setIsNewCustomer(false);
+      } else {
+        setIsNewCustomer(true);
+        setFirstName('');
+        setLastName('');
+        setAddress('');
+        setEmail('');
+      }
+    } finally {
+      setCustomerSearching(false);
+      setCustomerSearchDone(true);
+    }
+  };
+
+  function formatNominatimAddress(item: any): string {
+    const a = item.address || {};
+    const parts: string[] = [];
+    if (a.road) parts.push(a.house_number ? `${a.road} ${a.house_number}` : a.road);
+    if (a.postcode || a.city || a.town || a.village || a.municipality) {
+      const city = a.city || a.town || a.village || a.municipality || '';
+      parts.push(a.postcode ? `${a.postcode} ${city}`.trim() : city);
+    }
+    return parts.join(', ') || item.display_name;
+  }
+
+  const handleAddressInput = (value: string) => {
+    setAddress(value);
+    setShowSuggestions(false);
+    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    if (value.length < 3) { setAddressSuggestions([]); return; }
+    addressDebounceRef.current = setTimeout(async () => {
+      setAddressLoading(true);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=6&countrycodes=de&addressdetails=1`;
+        const r = await fetch(url, { headers: { 'Accept-Language': 'de' } });
+        const data: any[] = await r.json();
+        const suggestions = data.map(d => ({ display: formatNominatimAddress(d), short: d.display_name }));
+        setAddressSuggestions(suggestions);
+        setShowSuggestions(suggestions.length > 0);
+      } catch {
+        setAddressSuggestions([]);
+      } finally {
+        setAddressLoading(false);
+      }
+    }, 450);
+  };
+
+  const selectSuggestion = (s: { display: string; short: string }) => {
+    setAddress(s.display);
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+  };
+
+  const resetForm = () => {
+    setPhone('');
+    setCustomerFound(null);
+    setCustomerSearchDone(false);
+    setIsNewCustomer(false);
+    setFirstName(''); setLastName(''); setAddress(''); setEmail('');
+    setTitle(''); setDescription(''); setAssignedUserId('');
+    const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+    setScheduledAt(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T09:00`);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) { setMsg('❌ Bitte einen Titel/Dienstleistung eingeben.'); return; }
+    if (!address.trim()) { setMsg('❌ Bitte eine Adresse eingeben.'); return; }
+    setSaving(true); setMsg('');
+    try {
+      let customerId = customerFound?.id;
+      if (!customerId) {
+        const cRes = await fetch(`${API}/customers`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ first_name: firstName.trim(), last_name: lastName.trim(), address: address.trim(), phone_number: phone.trim(), notes: email.trim() }),
+        });
+        if (!cRes.ok) {
+          const d = await cRes.json().catch(() => ({}));
+          setMsg('❌ Fehler beim Anlegen des Kunden: ' + (d.message || ''));
+          return;
+        }
+        customerId = (await cRes.json()).id;
+      }
+      const aRes = await fetch(`${API}/assignments`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ customer_id: customerId, assigned_user_id: assignedUserId || null, title: title.trim(), description: description.trim(), scheduled_at: scheduledAt }),
+      });
+      if (aRes.ok) {
+        setMsg('✅ Auftrag erfolgreich eingebucht!');
+        setTimeout(() => { setMsg(''); resetForm(); }, 2500);
+      } else {
+        const d = await aRes.json().catch(() => ({}));
+        setMsg('❌ Fehler: ' + (d.message || 'Auftrag konnte nicht gespeichert werden.'));
+      }
+    } catch { setMsg('❌ Netzwerkfehler. Bitte Verbindung prüfen.'); }
+    finally { setSaving(false); }
+  };
+
+  const inputSt: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1.5px solid #D1D5DB', borderRadius: '8px', fontSize: '1rem', boxSizing: 'border-box', outline: 'none', background: '#fff' };
+  const labelSt: React.CSSProperties = { display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#374151', marginBottom: '4px' };
+  const fieldSt: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '4px' };
+
+  return (
+    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '8px 0' }}>
+      <div style={{ background: 'linear-gradient(135deg, #00454A 0%, #006B72 100%)', borderRadius: '12px', padding: '20px 24px', marginBottom: '24px', color: 'white' }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: '1.4rem' }}>📞 Anrufagent</h2>
+        <p style={{ margin: 0, opacity: 0.85, fontSize: '0.92rem' }}>Kunden direkt beim Anruf einbuchen – schnell und fehlerfrei.</p>
+      </div>
+
+      {msg && (
+        <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: '16px', borderRadius: '8px' }}>
+          {msg}
+        </div>
+      )}
+
+      {/* Step 1: Phone */}
+      <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>1</div>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Telefonnummer des Anrufers</h3>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <input
+            type="tel"
+            placeholder="+49 123 456789"
+            value={phone}
+            onChange={e => { setPhone(e.target.value); setCustomerSearchDone(false); setCustomerFound(null); setIsNewCustomer(false); }}
+            onKeyDown={e => e.key === 'Enter' && lookupByPhone()}
+            style={{ ...inputSt, flex: 1 }}
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={lookupByPhone}
+            disabled={!phone.trim() || customerSearching}
+            style={{ padding: '10px 18px', background: '#00454A', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', whiteSpace: 'nowrap', opacity: !phone.trim() ? 0.5 : 1 }}
+          >
+            {customerSearching ? '...' : '🔍 Suchen'}
+          </button>
+        </div>
+        {customerSearchDone && customerFound && (
+          <div style={{ marginTop: '10px', padding: '10px 14px', background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.2rem' }}>✅</span>
+            <div>
+              <span style={{ fontWeight: 700, color: '#15803D' }}>Bekannter Kunde gefunden: </span>
+              <span style={{ color: '#1F2937' }}>{customerFound.first_name} {customerFound.last_name}</span>
+              <span style={{ color: '#6B7280', fontSize: '0.85rem', marginLeft: '8px' }}>{customerFound.address}</span>
+            </div>
+          </div>
+        )}
+        {customerSearchDone && isNewCustomer && (
+          <div style={{ marginTop: '10px', padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.2rem' }}>🆕</span>
+            <span style={{ color: '#92400E', fontWeight: 600 }}>Nummer nicht gefunden – neuer Kunde wird angelegt.</span>
+          </div>
+        )}
+      </div>
+
+      {/* Step 2: Customer data */}
+      {(customerFound || isNewCustomer) && (
+        <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>2</div>
+            <h3 style={{ margin: 0, fontSize: '1rem' }}>Kundendaten</h3>
+            {customerFound && <span style={{ fontSize: '0.78rem', background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>Vorausgefüllt</span>}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+            <div style={fieldSt}>
+              <label style={labelSt}>Vorname *</label>
+              <input style={inputSt} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Max" disabled={!!customerFound} required />
+            </div>
+            <div style={fieldSt}>
+              <label style={labelSt}>Nachname *</label>
+              <input style={inputSt} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Mustermann" disabled={!!customerFound} required />
+            </div>
+          </div>
+
+          <div style={{ ...fieldSt, marginBottom: '14px' }}>
+            <label style={labelSt}>E-Mail (optional)</label>
+            <input style={inputSt} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="max@beispiel.de" disabled={!!customerFound} />
+          </div>
+
+          <div style={fieldSt} ref={addressWrapRef}>
+            <label style={labelSt}>
+              Adresse *
+              {addressLoading && <span style={{ fontWeight: 400, color: '#6B7280', marginLeft: '8px', fontSize: '0.8rem' }}>Suche…</span>}
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                style={{ ...inputSt, paddingRight: addressLoading ? '36px' : '12px', borderColor: showSuggestions ? '#00454A' : '#D1D5DB' }}
+                value={address}
+                onChange={e => handleAddressInput(e.target.value)}
+                onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                placeholder="Musterstraße 1, 12345 Berlin"
+                autoComplete="off"
+              />
+              {showSuggestions && addressSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1.5px solid #00454A', borderTop: 'none', borderRadius: '0 0 8px 8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: '220px', overflowY: 'auto' }}>
+                  {addressSuggestions.map((s, i) => (
+                    <div
+                      key={i}
+                      onMouseDown={() => selectSuggestion(s)}
+                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: i < addressSuggestions.length - 1 ? '1px solid #F3F4F6' : 'none', transition: 'background 0.1s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#F0FDF4')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#111827' }}>📍 {s.display}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#9CA3AF' }}>Tipp: Straße + Hausnummer + Ort eingeben – Vorschläge erscheinen automatisch.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Assignment */}
+      {(customerFound || isNewCustomer) && (
+        <form onSubmit={handleSubmit} style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>3</div>
+            <h3 style={{ margin: 0, fontSize: '1rem' }}>Auftragsdetails</h3>
+          </div>
+
+          <div style={{ ...fieldSt, marginBottom: '14px' }}>
+            <label style={labelSt}>Dienstleistung / Titel *</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+              {QUICK_SERVICES.map(s => (
+                <button
+                  key={s} type="button"
+                  onClick={() => setTitle(s)}
+                  style={{ padding: '5px 12px', border: `1.5px solid ${title === s ? '#00454A' : '#D1D5DB'}`, borderRadius: '16px', cursor: 'pointer', fontSize: '0.82rem', background: title === s ? '#00454A' : '#fff', color: title === s ? '#fff' : '#374151', fontWeight: title === s ? 700 : 400, transition: 'all 0.15s' }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <input style={inputSt} value={title} onChange={e => setTitle(e.target.value)} placeholder="Oder eigenen Titel eingeben…" required />
+          </div>
+
+          <div style={{ ...fieldSt, marginBottom: '14px' }}>
+            <label style={labelSt}>Beschreibung / Notizen</label>
+            <textarea
+              style={{ ...inputSt, resize: 'vertical', minHeight: '80px', fontFamily: 'inherit' }}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Details zum Auftrag, besondere Wünsche des Kunden…"
+              rows={3}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+            <div style={fieldSt}>
+              <label style={labelSt}>Datum & Uhrzeit *</label>
+              <input style={inputSt} type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} required />
+            </div>
+            <div style={fieldSt}>
+              <label style={labelSt}>Mitarbeiter zuweisen</label>
+              <select style={{ ...inputSt, cursor: 'pointer' }} value={assignedUserId} onChange={e => setAssignedUserId(e.target.value)}>
+                <option value="">– Noch nicht zuweisen –</option>
+                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              type="submit"
+              disabled={saving || !title.trim() || !address.trim() || (!customerFound && (!firstName.trim() || !lastName.trim()))}
+              style={{ flex: 1, padding: '14px', background: '#00454A', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '1.05rem', cursor: 'pointer', opacity: saving ? 0.7 : 1, transition: 'opacity 0.15s' }}
+            >
+              {saving ? '⏳ Wird eingebucht…' : '✅ Auftrag einbuchen'}
+            </button>
+            <button
+              type="button"
+              onClick={resetForm}
+              style={{ padding: '14px 20px', background: '#fff', color: '#6B7280', border: '1.5px solid #D1D5DB', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' }}
+            >
+              Zurücksetzen
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!customerFound && !isNewCustomer && (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📞</div>
+          <p style={{ fontSize: '1rem', fontWeight: 500 }}>Telefonnummer eingeben und auf Suchen klicken, um zu starten.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Portal ────────────────────────────────────────────────────────────────
 
 export default function Portal() {
@@ -1593,6 +1962,7 @@ export default function Portal() {
   const canDelete = isAdmin;
   const tabs: { id: Tab; label: string; requireAdmin?: boolean }[] = [
     { id: 'dashboard', label: '📊 Dashboard' },
+    { id: 'anruf', label: '📞 Anrufagent', requireAdmin: true },
     { id: 'appointments', label: '📅 Termine' },
     { id: 'tour', label: '🗺️ Tour' },
     { id: 'booking-requests', label: '📬 Anfragen', requireAdmin: true },
@@ -1651,6 +2021,7 @@ export default function Portal() {
         {loading && activeTab !== 'dashboard' ? <div className="loading-text">Daten werden geladen…</div> : (
           <>
             {activeTab === 'dashboard' && <DashboardTab user={user} />}
+            {activeTab === 'anruf' && isAdmin && <AnrufagentTab user={user} />}
             {activeTab === 'appointments' && <AppointmentsTab assignments={assignments} onRefresh={loadData} canDelete={canDelete} />}
             {activeTab === 'tour' && (
               <div>
