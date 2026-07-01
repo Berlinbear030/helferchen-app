@@ -61,10 +61,9 @@ router.post('/:id/callback', authenticateToken, requireRole('admin', 'kundenbetr
     };
 
     // AMI_PORT 5039 = SSH reverse tunnel → home Asterisk (port 5038)
-    // Originate via pyur-out: local Asterisk dials forward number (mobile) directly,
-    // after answering, helferchen-callback context dials customer via pyur-out
+    // Originate via vps-trunk: local Asterisk dials VPS which rings Linphone (fabian)
+    // After Linphone answers, helferchen-callback context dials customer via pyur-out
     const AMI_PORT = parseInt(process.env.AMI_PORT || '5039', 10);
-    const FORWARD_NUMBER = process.env.AMI_FORWARD_NUMBER || '015222074984';
     const client = net.createConnection({ host: '127.0.0.1', port: AMI_PORT }, () => {
       let buf = '';
       client.on('data', (data: Buffer) => {
@@ -75,7 +74,7 @@ router.post('/:id/callback', authenticateToken, requireRole('admin', 'kundenbetr
         if (buf.includes('Authentication accepted')) {
           client.write(
             `Action: Originate\r\n` +
-            `Channel: PJSIP/${FORWARD_NUMBER}@pyur-out\r\n` +
+            `Channel: PJSIP/99@vps-trunk\r\n` +
             `Context: helferchen-callback\r\n` +
             `Exten: s\r\n` +
             `Priority: 1\r\n` +
@@ -88,7 +87,7 @@ router.post('/:id/callback', authenticateToken, requireRole('admin', 'kundenbetr
             client.write('Action: Logoff\r\n\r\n');
             client.destroy();
             query('UPDATE call_logs SET status=? WHERE id=?', ['callback_initiated', req.params.id]).catch(() => {});
-            finish(200, { ok: true, message: `Handy (${FORWARD_NUMBER}) klingelt – nach Abheben wird Kunde verbunden` });
+            finish(200, { ok: true, message: 'Linphone klingelt – nach Abheben wird Kunde verbunden' });
           }, 1500);
         }
       });
