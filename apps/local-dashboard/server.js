@@ -71,42 +71,90 @@ const PROJECTS = [
   },
 ];
 
-// Credentials/access data per project (extracted from documentation)
+// Credentials/access data per project (extracted from documentation and .env files)
 const CREDENTIALS = {
   '694b9b83-22d9-4b83-bf82-5f1b8c2bfa56': [
-    { label: 'Server IP', value: '85.190.98.5', type: 'ip' },
-    { label: 'Domain', value: 'helferchen.info', type: 'url' },
-    { label: 'SSH Benutzer', value: 'root', type: 'text' },
-    { label: 'SSH Befehl', value: 'ssh root@85.190.98.5', type: 'command' },
-    { label: 'SFTP Host', value: '85.190.98.5', type: 'ip' },
-    { label: 'SFTP Port', value: '22', type: 'text' },
-    { label: 'SFTP Benutzer', value: 'root', type: 'text' },
-    { label: 'Backend Port', value: '3001', type: 'port' },
-    { label: 'Datenbank', value: 'MySQL', type: 'text' },
-    { label: 'DB Config', value: '/opt/helferchen/apps/backend/.env', type: 'path' },
-    { label: 'Frontend Pfad', value: '/var/www/helferchen/', type: 'path' },
-    { label: 'Backend Pfad', value: '/opt/helferchen/apps/backend/', type: 'path' },
-    { label: 'Repo Pfad', value: '/opt/helferchen/', type: 'path' },
-    { label: 'Admin Login', value: 'admin', type: 'text' },
-    { label: 'Admin Passwort', value: 'admin123', type: 'password' },
-    { label: 'Mitarbeiter Login', value: 'employee1', type: 'text' },
-    { label: 'Mitarbeiter Passwort', value: 'employee123', type: 'password' },
-    { label: 'PM2 Neustart', value: 'pm2 restart helferchen-backend', type: 'command' },
-    { label: 'PM2 Logs', value: 'pm2 logs helferchen-api', type: 'command' },
-    { label: 'Nginx Konfiguration', value: '/etc/nginx/sites-available/helferchen', type: 'path' },
+    // === SERVER / SSH / SFTP ===
+    { group: 'Server & SSH', label: 'Server IP', value: '85.190.98.5', type: 'ip' },
+    { group: 'Server & SSH', label: 'Domain', value: 'helferchen.info', type: 'url' },
+    { group: 'Server & SSH', label: 'SSH Benutzer', value: 'root', type: 'text' },
+    { group: 'Server & SSH', label: 'SSH Befehl', value: 'ssh root@85.190.98.5', type: 'command' },
+    { group: 'Server & SSH', label: 'SFTP Host', value: '85.190.98.5', type: 'ip' },
+    { group: 'Server & SSH', label: 'SFTP Benutzer', value: 'root', type: 'text' },
+    { group: 'Server & SSH', label: 'SFTP Port', value: '22', type: 'text' },
+    // === SERVER-PFADE ===
+    { group: 'Server-Pfade', label: 'Frontend Pfad', value: '/var/www/helferchen/', type: 'path' },
+    { group: 'Server-Pfade', label: 'Backend Pfad', value: '/opt/helferchen/apps/backend/', type: 'path' },
+    { group: 'Server-Pfade', label: 'Repo Pfad', value: '/opt/helferchen/', type: 'path' },
+    { group: 'Server-Pfade', label: 'Nginx Config', value: '/etc/nginx/sites-available/helferchen', type: 'path' },
+    { group: 'Server-Pfade', label: '.env Pfad', value: '/opt/helferchen/apps/backend/.env', type: 'path' },
+    // === DATENBANK ===
+    { group: 'MySQL Datenbank', label: 'DB Name', value: 'helferchen', type: 'text' },
+    { group: 'MySQL Datenbank', label: 'DB Benutzer', value: 'helferchen', type: 'text' },
+    { group: 'MySQL Datenbank', label: 'DB Passwort', value: 'LF!zb$V1&rcgLq065$&uDuM8', type: 'password' },
+    { group: 'MySQL Datenbank', label: 'DB Host', value: 'localhost:3306', type: 'text' },
+    { group: 'MySQL Datenbank', label: 'DB URL', value: 'mysql://helferchen:LF!zb$V1&rcgLq065$&uDuM8@localhost:3306/helferchen', type: 'password' },
+    // === APP-LOGINS ===
+    { group: 'App-Logins (helferchen.info)', label: 'Admin – Benutzername', value: 'admin', type: 'text' },
+    { group: 'App-Logins (helferchen.info)', label: 'Admin – Passwort', value: 'admin123', type: 'password' },
+    { group: 'App-Logins (helferchen.info)', label: 'Board – Benutzername', value: 'board', type: 'text' },
+    { group: 'App-Logins (helferchen.info)', label: 'Board – Passwort', value: 'board2026', type: 'password' },
+    { group: 'App-Logins (helferchen.info)', label: 'Mitarbeiter – Benutzername', value: 'employee1', type: 'text' },
+    { group: 'App-Logins (helferchen.info)', label: 'Mitarbeiter – Passwort', value: 'employee123', type: 'password' },
+    // === E-MAIL / SMTP ===
+    { group: 'E-Mail / SMTP', label: 'SMTP Host', value: 'helferchen.info', type: 'text' },
+    { group: 'E-Mail / SMTP', label: 'SMTP Port', value: '587', type: 'port' },
+    { group: 'E-Mail / SMTP', label: 'SMTP Benutzer', value: 'no-reply@helferchen.info', type: 'text' },
+    { group: 'E-Mail / SMTP', label: 'SMTP Passwort', value: 'jl2rz3#vhCXnVClEUW*Wge&J', type: 'password' },
+    { group: 'E-Mail / SMTP', label: 'Admin E-Mail', value: 'info@helferchen.info', type: 'text' },
+    // === TELEGRAM ===
+    { group: 'Telegram Bot', label: 'Bot Token', value: '8652428094:AAFLv4DkINSWa3TBhYq50IQP1zTpqK_Aaac', type: 'password' },
+    // === SECRETS ===
+    { group: 'App-Secrets', label: 'JWT Secret', value: 'd9e55fe867da66464d8a1a2a5a1b69e89e44a14d5ca978553967337b93c6f12c175e5429c82084981bcc4a5ac7aaf7c46dcb0019cc316f2700013dfb25b30d36', type: 'password' },
+    { group: 'App-Secrets', label: 'Cron Secret', value: 'W^qPbN&&cZ%tsOyA3ctEIGnrAQi42W48', type: 'password' },
+    // === PM2 BEFEHLE ===
+    { group: 'PM2 Befehle', label: 'Backend neu starten', value: 'pm2 restart helferchen-backend', type: 'command' },
+    { group: 'PM2 Befehle', label: 'Backend Logs', value: 'pm2 logs helferchen-api', type: 'command' },
+    { group: 'PM2 Befehle', label: 'Status anzeigen', value: 'pm2 status', type: 'command' },
+  ],
+  '2e4dfab4-ed4a-4df7-8cb5-fd75c01467aa': [
+    { group: 'Server', label: 'Domain', value: 'fahrschulpro.helferchen.info', type: 'url' },
+    { group: 'Server', label: 'Server IP', value: '85.190.98.5', type: 'ip' },
+    { group: 'Server', label: 'Port', value: '8080', type: 'port' },
+    { group: 'Datenbank', label: 'DB Passwort', value: 'FahrSchulPro2026!', type: 'password' },
+    { group: 'App-Secrets', label: 'Secret Key', value: 'fcbfc426653401d7e965ab0f3bb07747d2566e8f25a2899efdae1cf344f6ba11', type: 'password' },
+    { group: 'App-Secrets', label: 'Umgebung', value: 'production', type: 'text' },
   ],
   '7f11f7bc-7262-4e39-901d-451a1a19d207': [
-    { label: 'JARVIS Verzeichnis', value: '/home/fabian/jarvis/', type: 'path' },
-    { label: 'Bot starten', value: 'python3 /home/fabian/jarvis/bot.py', type: 'command' },
-    { label: 'Wissen Verzeichnis', value: '/home/fabian/jarvis/wissen/', type: 'path' },
-    { label: 'Ollama Host', value: '127.0.0.1:11434', type: 'url' },
-    { label: 'Bevorzugtes Coding-Modell', value: 'qwen2.5-coder:7b', type: 'text' },
-    { label: 'Bevorzugtes Reasoning-Modell', value: 'llama3.2:3b', type: 'text' },
+    { group: 'JARVIS', label: 'JARVIS Verzeichnis', value: '/home/fabian/jarvis/', type: 'path' },
+    { group: 'JARVIS', label: 'Bot starten', value: 'python3 /home/fabian/jarvis/bot.py', type: 'command' },
+    { group: 'JARVIS', label: 'Wissen Verzeichnis', value: '/home/fabian/jarvis/wissen/', type: 'path' },
+    { group: 'Ollama / KI-Modelle', label: 'Ollama Host', value: '127.0.0.1:11434', type: 'url' },
+    { group: 'Ollama / KI-Modelle', label: 'Coding-Modell', value: 'qwen2.5-coder:7b', type: 'text' },
+    { group: 'Ollama / KI-Modelle', label: 'Reasoning-Modell', value: 'llama3.2:3b', type: 'text' },
   ],
   'global': [
-    { label: 'Paperclip API', value: '127.0.0.1:3100', type: 'url' },
-    { label: 'Ollama API', value: '127.0.0.1:11434', type: 'url' },
-    { label: 'Agent Modell wechseln', value: './switch_agent_model.sh <agent_id> <tier>', type: 'command' },
+    // === DOMAIN-REGISTRAR INWX ===
+    { group: 'INWX (Domain-Registrar)', label: 'URL', value: 'https://www.inwx.de', type: 'url' },
+    { group: 'INWX (Domain-Registrar)', label: 'Benutzername', value: 'berlinbear030', type: 'text' },
+    { group: 'INWX (Domain-Registrar)', label: 'Passwort', value: '29913041Ma!?', type: 'password' },
+    { group: 'INWX (Domain-Registrar)', label: 'API URL', value: 'https://api.domrobot.com/xmlrpc/', type: 'url' },
+    // === FROXLOR HOSTING-PANEL ===
+    { group: 'Froxlor (Hosting-Panel)', label: 'URL', value: 'https://prod0.webspace.bz', type: 'url' },
+    { group: 'Froxlor (Hosting-Panel)', label: 'Benutzername', value: 'kd250524', type: 'text' },
+    { group: 'Froxlor (Hosting-Panel)', label: 'Passwort', value: '29913041Ma!?', type: 'password' },
+    // === FTP (WEBSPACE) ===
+    { group: 'FTP (Webspace)', label: 'FTP Host', value: 'ftp.webspace.bz', type: 'text' },
+    { group: 'FTP (Webspace)', label: 'FTP Benutzer', value: 'kd250524ftp1', type: 'text' },
+    { group: 'FTP (Webspace)', label: 'FTP Passwort', value: 'Helferchen2026!', type: 'password' },
+    // === DOGADO VPS-PANEL ===
+    { group: 'Dogado VPS-Panel', label: 'URL', value: 'https://onehome.dogado.de/servers/771117/setup', type: 'url' },
+    { group: 'Dogado VPS-Panel', label: 'Hinweis', value: 'Root-Passwort hier zurücksetzen', type: 'text' },
+    // === LOKALE INFRASTRUKTUR ===
+    { group: 'Lokale Infrastruktur', label: 'Paperclip API', value: 'http://127.0.0.1:3100', type: 'url' },
+    { group: 'Lokale Infrastruktur', label: 'Ollama API', value: 'http://127.0.0.1:11434', type: 'url' },
+    { group: 'Lokale Infrastruktur', label: 'Lokaler PC', value: 'root / 29913041', type: 'password' },
+    { group: 'Lokale Infrastruktur', label: 'Agent Modell wechseln', value: './switch_agent_model.sh <agent_id> <tier>', type: 'command' },
   ],
 };
 

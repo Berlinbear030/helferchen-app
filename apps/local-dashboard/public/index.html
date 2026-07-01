@@ -819,19 +819,11 @@ async function renderCredentials(area) {
   let html = '';
 
   if (creds.length > 0) {
-    html += `<div class="cred-section"><h3>🔑 Zugangsdaten – ${escHtml(currentProject.name)}</h3><div class="cred-list">`;
-    for (const c of creds) {
-      html += renderCredItem(c);
-    }
-    html += '</div></div>';
+    html += renderCredGroup(creds, `🔑 Zugangsdaten – ${escHtml(currentProject.name)}`);
   }
 
   if (global.length > 0) {
-    html += `<div class="cred-section"><h3>🌐 Globale Infrastruktur</h3><div class="cred-list">`;
-    for (const c of global) {
-      html += renderCredItem(c);
-    }
-    html += '</div></div>';
+    html += renderCredGroup(global, '🌐 Externe Dienste & Infrastruktur');
   }
 
   area.innerHTML = html;
@@ -843,6 +835,30 @@ async function renderCredentials(area) {
   area.querySelectorAll('.cred-value.password').forEach(el => {
     el.addEventListener('click', () => el.classList.toggle('revealed'));
   });
+}
+
+function renderCredGroup(items, sectionTitle) {
+  // Group by .group field
+  const groups = {};
+  for (const c of items) {
+    const g = c.group || 'Allgemein';
+    (groups[g] = groups[g] || []).push(c);
+  }
+
+  let html = `<div class="cred-section"><h3>${sectionTitle}</h3>`;
+
+  for (const [groupName, groupItems] of Object.entries(groups)) {
+    html += `<div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent);margin:10px 0 6px;padding-left:2px;letter-spacing:0.04em;">${escHtml(groupName)}</div>
+      <div class="cred-list">`;
+    for (const c of groupItems) {
+      html += renderCredItem(c);
+    }
+    html += `</div></div>`;
+  }
+
+  html += '</div>';
+  return html;
 }
 
 function renderCredItem(c) {
