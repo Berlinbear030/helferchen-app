@@ -543,12 +543,101 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 12px 14px;
+      cursor: pointer;
+      transition: border-color 0.15s;
     }
+
+    .issue-item:hover { border-color: var(--primary-light); }
 
     .issue-item-header {
       display: flex;
       align-items: center;
       gap: 10px;
+    }
+
+    /* === ISSUE-DOCS VIEWER === */
+    #issue-viewer {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #issue-viewer.open { display: flex; }
+
+    #issue-viewer-inner {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 90vw;
+      max-width: 900px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #issue-viewer-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    #issue-viewer-title { font-size: 15px; font-weight: 700; flex: 1; }
+
+    #issue-viewer-close {
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 20px; padding: 2px 8px; border-radius: 4px;
+    }
+    #issue-viewer-close:hover { background: var(--border); color: var(--text); }
+
+    #issue-viewer-body {
+      overflow-y: auto;
+      flex: 1;
+      padding: 20px 24px;
+    }
+
+    .comment-block {
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .comment-block:last-child { border-bottom: none; }
+
+    .comment-meta {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px; font-size: 12px; color: var(--text-muted);
+    }
+
+    .comment-meta .agent-tag {
+      background: var(--primary); color: white;
+      padding: 2px 8px; border-radius: 10px; font-size: 11px;
+    }
+
+    /* Issue docs search */
+    .issue-search-bar {
+      display: flex; gap: 8px; margin-bottom: 16px;
+    }
+
+    .issue-search-input {
+      flex: 1; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 8px 12px; font-size: 13px; outline: none;
+    }
+
+    .issue-search-input:focus { border-color: var(--primary-light); }
+
+    .issue-filter-select {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 13px;
+      cursor: pointer; outline: none;
     }
 
     .issue-id {
@@ -608,7 +697,8 @@
     <div class="tabs">
       <button class="tab-btn active" data-tab="overview">Übersicht</button>
       <button class="tab-btn" data-tab="credentials">Zugänge</button>
-      <button class="tab-btn" data-tab="docs">Dokumentation</button>
+      <button class="tab-btn" data-tab="docs">Dateien</button>
+      <button class="tab-btn" data-tab="issuedocs">📋 Issue-Docs</button>
       <button class="tab-btn" data-tab="issues">Aufgaben</button>
     </div>
   </div>
@@ -616,6 +706,20 @@
     <div class="loading-state"><span class="spinner"></span> Lade Daten…</div>
   </div>
 </main>
+
+<!-- ISSUE VIEWER OVERLAY -->
+<div id="issue-viewer">
+  <div id="issue-viewer-inner">
+    <div id="issue-viewer-header">
+      <span id="issue-viewer-id" style="font-family:monospace;font-size:12px;color:var(--text-muted)"></span>
+      <span id="issue-viewer-title">Issue</span>
+      <button id="issue-viewer-close">✕</button>
+    </div>
+    <div id="issue-viewer-body">
+      <div class="loading-state"><span class="spinner"></span> Lade…</div>
+    </div>
+  </div>
+</div>
 
 <!-- DOC VIEWER OVERLAY -->
 <div id="doc-viewer">
@@ -687,12 +791,19 @@ function renderSidebar() {
   const filtered = projects.filter(p => !q || p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
 
   let html = `
-    <div class="project-item ${!currentProject ? 'active' : ''}" data-id="__overview">
+    <div class="project-item ${!currentProject && currentTab === 'overview' ? 'active' : ''}" data-id="__overview">
       <div class="project-item-header">
         <span class="project-icon">🏠</span>
         Übersicht
         <span class="project-badge">${projects.length}</span>
       </div>
+    </div>
+    <div class="project-item ${currentTab === 'issuedocs' ? 'active' : ''}" data-id="__issuedocs">
+      <div class="project-item-header">
+        <span class="project-icon">📋</span>
+        Issue-Dokumentation
+      </div>
+      <div class="project-desc">Alle Agent-Berichte & Pläne aus Issues</div>
     </div>
   `;
 
@@ -718,6 +829,10 @@ function renderSidebar() {
       if (id === '__overview') {
         currentProject = null;
         currentTab = 'overview';
+      } else if (id === '__issuedocs') {
+        currentProject = null;
+        currentTab = 'issuedocs';
+        issuedocsCache = null; // refresh
       } else {
         currentProject = projects.find(p => p.id === id);
         currentTab = 'credentials';
@@ -750,6 +865,10 @@ function updateTabs() {
 
 function renderContent() {
   const area = document.getElementById('content-area');
+  if (currentTab === 'issuedocs') {
+    renderIssueDocs(area);
+    return;
+  }
   if (!currentProject && currentTab === 'overview') {
     renderOverview(area);
     return;
@@ -758,6 +877,8 @@ function renderContent() {
     renderCredentials(area);
   } else if (currentTab === 'docs') {
     renderDocs(area);
+  } else if (currentTab === 'issuedocs') {
+    renderIssueDocs(area);
   } else if (currentTab === 'issues') {
     renderIssues(area);
   } else {
@@ -959,6 +1080,208 @@ async function openDoc(fullPath, name) {
   }
 }
 
+// =================== ISSUE DOCS TAB ===================
+let issuedocsCache = null;
+let issuedocsFilter = '';
+let issuedocsSearch = '';
+
+async function renderIssueDocs(area) {
+  area.innerHTML = `
+    <div class="issue-search-bar">
+      <input class="issue-search-input" id="issuedocs-search" type="text" placeholder="Issues durchsuchen…" value="${escAttr(issuedocsSearch)}" autocomplete="off" />
+      <select class="issue-filter-select" id="issuedocs-filter">
+        <option value="">Alle Status</option>
+        <option value="done" ${issuedocsFilter==='done'?'selected':''}>✓ Fertig</option>
+        <option value="in_progress" ${issuedocsFilter==='in_progress'?'selected':''}>⚡ In Arbeit</option>
+        <option value="in_review" ${issuedocsFilter==='in_review'?'selected':''}>👁 Review</option>
+        <option value="blocked" ${issuedocsFilter==='blocked'?'selected':''}>🚫 Blockiert</option>
+        <option value="todo" ${issuedocsFilter==='todo'?'selected':''}>○ Todo</option>
+      </select>
+    </div>
+    <div id="issuedocs-list"><div class="loading-state"><span class="spinner"></span> Lade alle Issues…</div></div>
+  `;
+
+  document.getElementById('issuedocs-search').addEventListener('input', (e) => {
+    issuedocsSearch = e.target.value;
+    renderIssuedocsList();
+  });
+
+  document.getElementById('issuedocs-filter').addEventListener('change', (e) => {
+    issuedocsFilter = e.target.value;
+    renderIssuedocsList();
+  });
+
+  if (!issuedocsCache) {
+    try {
+      const projectParam = currentProject ? `&projectId=${currentProject.id}` : '';
+      const res = await fetch(`/api/paperclip/all-issues?limit=200${projectParam}`);
+      issuedocsCache = await res.json();
+      if (!Array.isArray(issuedocsCache)) issuedocsCache = [];
+    } catch {
+      issuedocsCache = [];
+    }
+  }
+
+  renderIssuedocsList();
+}
+
+function renderIssuedocsList() {
+  const listEl = document.getElementById('issuedocs-list');
+  if (!listEl) return;
+
+  let issues = issuedocsCache || [];
+
+  if (issuedocsFilter) {
+    issues = issues.filter(i => i.status === issuedocsFilter);
+  }
+
+  if (issuedocsSearch.length > 1) {
+    const q = issuedocsSearch.toLowerCase();
+    issues = issues.filter(i =>
+      (i.identifier||'').toLowerCase().includes(q) ||
+      (i.title||'').toLowerCase().includes(q) ||
+      (i.description||'').toLowerCase().includes(q)
+    );
+  }
+
+  if (issues.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">Keine Issues gefunden</div>';
+    return;
+  }
+
+  const statusOrder = ['in_progress', 'in_review', 'todo', 'blocked', 'backlog', 'done', 'cancelled'];
+  const sorted = [...issues].sort((a, b) =>
+    (statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)) ||
+    (b.issueNumber - a.issueNumber)
+  );
+
+  let html = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${sorted.length} Issues</div>`;
+  html += '<div class="issue-list">';
+  for (const issue of sorted) {
+    const hasDesc = issue.description && issue.description.length > 30;
+    html += `
+      <div class="issue-item" data-issue-id="${escAttr(issue.id)}" data-issue-identifier="${escAttr(issue.identifier||'')}">
+        <div class="issue-item-header">
+          <span class="issue-id">${escHtml(issue.identifier||'')}</span>
+          <span class="issue-title">${escHtml(issue.title)}</span>
+          <span class="issue-status status-${issue.status}">${statusLabel(issue.status)}</span>
+          ${hasDesc ? '<span style="font-size:10px;color:var(--accent);margin-left:4px">📝 Dokumentation</span>' : ''}
+        </div>
+        ${issue.description && issue.description.length > 80 ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;padding-left:2px;overflow:hidden;max-height:36px;line-height:1.5;">${escHtml(issue.description.replace(/[#*`\[\]]/g,'').substring(0,180))}…</div>` : ''}
+      </div>
+    `;
+  }
+  html += '</div>';
+  listEl.innerHTML = html;
+
+  listEl.querySelectorAll('.issue-item[data-issue-id]').forEach(el => {
+    el.addEventListener('click', () => openIssueViewer(el.dataset.issueId, el.dataset.issueIdentifier));
+  });
+}
+
+async function openIssueViewer(issueId, identifier) {
+  const viewer = document.getElementById('issue-viewer');
+  const body = document.getElementById('issue-viewer-body');
+  const title = document.getElementById('issue-viewer-title');
+  const idSpan = document.getElementById('issue-viewer-id');
+
+  idSpan.textContent = identifier || '';
+  title.textContent = 'Wird geladen…';
+  body.innerHTML = '<div class="loading-state"><span class="spinner"></span> Lade Issue-Dokumentation…</div>';
+  viewer.classList.add('open');
+
+  try {
+    const res = await fetch(`/api/paperclip/issues/${issueId}/full`);
+    const data = await res.json();
+    const issue = data.issue || {};
+    title.textContent = issue.title || identifier;
+
+    let html = '';
+
+    // Description
+    if (data.descHtml && data.descHtml.trim()) {
+      html += `
+        <div class="comment-block">
+          <div class="comment-meta">
+            <span class="agent-tag">📋 Beschreibung</span>
+            <span>${issue.identifier || ''}</span>
+          </div>
+          <div class="md-content">${data.descHtml}</div>
+        </div>
+      `;
+    }
+
+    // Agent comments
+    if (data.comments && data.comments.length > 0) {
+      for (const c of data.comments) {
+        const date = c.createdAt ? new Date(c.createdAt).toLocaleString('de-DE') : '';
+        html += `
+          <div class="comment-block">
+            <div class="comment-meta">
+              <span class="agent-tag">🤖 Agent-Dokumentation</span>
+              <span>${date}</span>
+              <button class="copy-btn" data-value="${escAttr(c.body)}" style="margin-left:auto">Kopieren</button>
+            </div>
+            <div class="md-content">${c.bodyHtml}</div>
+          </div>
+        `;
+      }
+    }
+
+    if (!html) {
+      html = '<div class="empty-state">Keine Dokumentation in diesem Issue</div>';
+    }
+
+    body.innerHTML = `<style>
+      .md-content h1 { font-size:20px;color:var(--accent);margin:0.8em 0 0.4em }
+      .md-content h2 { font-size:16px;border-bottom:1px solid var(--border);padding-bottom:4px;margin:1em 0 0.4em }
+      .md-content h3 { font-size:14px;color:var(--primary-light);margin:0.8em 0 0.3em }
+      .md-content p { line-height:1.7;margin:0.5em 0;color:var(--text) }
+      .md-content ul,ol { padding-left:20px;margin:0.4em 0 }
+      .md-content li { margin:0.25em 0;line-height:1.6 }
+      .md-content a { color:var(--accent) }
+      .md-content table { width:100%;border-collapse:collapse;margin:0.8em 0;font-size:13px }
+      .md-content th,td { border:1px solid var(--border);padding:7px 10px;text-align:left }
+      .md-content th { background:var(--bg);color:var(--accent);font-weight:600 }
+      .md-content code { background:var(--bg);color:var(--text-code);padding:2px 5px;border-radius:3px;font-family:monospace;font-size:13px }
+      .md-content pre { background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;overflow-x:auto;margin:0.8em 0;position:relative }
+      .md-content pre code { background:none;padding:0 }
+    </style>${html}`;
+
+    // Copy buttons in viewer
+    body.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); copyToClipboard(btn.dataset.value, btn); });
+    });
+
+    // Add copy buttons to code blocks
+    body.querySelectorAll('pre').forEach(pre => {
+      const btn = document.createElement('button');
+      btn.className = 'pre-copy-btn';
+      btn.textContent = 'Kopieren';
+      btn.addEventListener('click', () => {
+        const code = pre.querySelector('code');
+        copyToClipboard(code ? code.textContent : pre.textContent, btn);
+        btn.textContent = '✓';
+        setTimeout(() => btn.textContent = 'Kopieren', 1800);
+      });
+      pre.appendChild(btn);
+    });
+
+  } catch(e) {
+    body.innerHTML = `<div class="empty-state" style="color:var(--error)">Fehler: ${escHtml(String(e))}</div>`;
+  }
+}
+
+// Issue viewer close
+document.getElementById('issue-viewer-close').addEventListener('click', () => {
+  document.getElementById('issue-viewer').classList.remove('open');
+});
+document.getElementById('issue-viewer').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+
+// =================== END ISSUE DOCS TAB ===================
+
 async function renderIssues(area) {
   if (!currentProject) { area.innerHTML = '<div class="empty-state">Kein Projekt ausgewählt</div>'; return; }
 
@@ -980,12 +1303,12 @@ async function renderIssues(area) {
   }
 
   const statusOrder = ['in_progress', 'todo', 'in_review', 'blocked', 'backlog', 'done', 'cancelled'];
-  issues.sort((a, b) => (statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)) || a.identifier.localeCompare(b.identifier));
+  issues.sort((a, b) => (statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)) || (b.issueNumber - a.issueNumber));
 
   let html = '<div class="issue-list">';
   for (const issue of issues) {
     html += `
-      <div class="issue-item">
+      <div class="issue-item" data-issue-id="${escAttr(issue.id)}" data-issue-identifier="${escAttr(issue.identifier||'')}">
         <div class="issue-item-header">
           <span class="issue-id">${escHtml(issue.identifier)}</span>
           <span class="issue-title">${escHtml(issue.title)}</span>
@@ -996,6 +1319,10 @@ async function renderIssues(area) {
   }
   html += '</div>';
   area.innerHTML = html;
+
+  area.querySelectorAll('.issue-item[data-issue-id]').forEach(el => {
+    el.addEventListener('click', () => openIssueViewer(el.dataset.issueId, el.dataset.issueIdentifier));
+  });
 }
 
 function statusLabel(s) {
@@ -1018,8 +1345,10 @@ function escAttr(s) {
 // Tab buttons
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    if (!currentProject && btn.dataset.tab !== 'overview') return;
-    currentTab = btn.dataset.tab;
+    const tab = btn.dataset.tab;
+    // issuedocs works globally without needing a project selected
+    if (!currentProject && tab !== 'overview' && tab !== 'issuedocs') return;
+    currentTab = tab;
     updateTabs();
     renderContent();
   });

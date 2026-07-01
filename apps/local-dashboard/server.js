@@ -252,13 +252,63 @@ app.get('/api/paperclip/issues', async (req, res) => {
   }
   try {
     const url = new URL(`${apiUrl}/api/companies/${companyId}/issues`);
-    url.searchParams.set('limit', '50');
+    url.searchParams.set('limit', '100');
     if (projectId) url.searchParams.set('projectId', String(projectId));
     const response = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     const data = await response.json();
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// API: Get issue with all comments (full documentation view)
+app.get('/api/paperclip/issues/:issueId/full', async (req, res) => {
+  const { issueId } = req.params;
+  const apiUrl = process.env.PAPERCLIP_API_URL || 'http://127.0.0.1:3100';
+  const apiKey = process.env.PAPERCLIP_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'Paperclip not configured' });
+  try {
+    const [issueRes, commentsRes] = await Promise.all([
+      fetch(`${apiUrl}/api/issues/${issueId}`, { headers: { Authorization: `Bearer ${apiKey}` } }),
+      fetch(`${apiUrl}/api/issues/${issueId}/comments`, { headers: { Authorization: `Bearer ${apiKey}` } }),
+    ]);
+    const issue = await issueRes.json();
+    const comments = await commentsRes.json();
+    const agentComments = Array.isArray(comments)
+      ? comments.filter((c) => c.authorAgentId && c.body && c.body.length > 50)
+      : [];
+    // Render markdown to HTML
+    const descHtml = issue.description ? marked.parse(issue.description) : '';
+    const commentsHtml = agentComments.map((c) => ({
+      id: c.id,
+      createdAt: c.createdAt,
+      bodyHtml: marked.parse(c.body || ''),
+      body: c.body,
+    }));
+    res.json({ issue, descHtml, comments: commentsHtml });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// API: Search all issues across all projects (for the docs tab)
+app.get('/api/paperclip/all-issues', async (req, res) => {
+  const { q, projectId } = req.query;
+  const apiUrl = process.env.PAPERCLIP_API_URL || 'http://127.0.0.1:3100';
+  const apiKey = process.env.PAPERCLIP_API_KEY;
+  const companyId = process.env.PAPERCLIP_COMPANY_ID;
+  if (!apiKey || !companyId) return res.status(503).json({ error: 'Paperclip not configured' });
+  try {
+    const url = new URL(`${apiUrl}/api/companies/${companyId}/issues`);
+    url.searchParams.set('limit', '200');
+    if (q) url.searchParams.set('q', String(q));
+    if (projectId) url.searchParams.set('projectId', String(projectId));
+    const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${apiKey}` } });
+    const data = await response.json();
+    res.json(Array.isArray(data) ? data : []);
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
