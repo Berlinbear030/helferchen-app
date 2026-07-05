@@ -1,4 +1,4 @@
-const CACHE = 'helferchen-v1';
+const CACHE = 'helferchen-v3';
 const STATIC = [
   '/',
   '/index.html',
@@ -20,17 +20,21 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Pass API requests through; cache-first for everything else
+  // Pass API requests through
   if (e.request.url.includes('/api/')) return;
+  
+  // Stale-while-revalidate for everything else
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (!res || res.status !== 200 || res.type === 'opaque') return res;
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
-        return res;
-      }).catch(() => caches.match('/index.html'));
+    caches.open(CACHE).then(cache => {
+      return cache.match(e.request).then(cached => {
+        const networked = fetch(e.request).then(res => {
+          if (res && res.status === 200 && res.type !== 'opaque') {
+            cache.put(e.request, res.clone());
+          }
+          return res;
+        }).catch(() => cache.match('/index.html'));
+        return cached || networked;
+      });
     })
   );
 });

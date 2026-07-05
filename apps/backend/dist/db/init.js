@@ -294,6 +294,18 @@ async function initDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
     await (0, pool_1.query)(`
+    CREATE TABLE IF NOT EXISTS call_logs (
+      id CHAR(36) NOT NULL DEFAULT (UUID()),
+      caller_id VARCHAR(50) NOT NULL,
+      unique_id VARCHAR(100) NULL,
+      status ENUM('missed','answered','callback_initiated','handled') NOT NULL DEFAULT 'missed',
+      note TEXT NULL,
+      handled_by CHAR(36) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+    await (0, pool_1.query)(`
     CREATE TABLE IF NOT EXISTS roles (
       id CHAR(36) NOT NULL,
       name VARCHAR(100) UNIQUE NOT NULL,

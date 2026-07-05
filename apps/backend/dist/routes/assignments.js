@@ -15,6 +15,11 @@ router.get('/', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), asyn
     }));
     res.json(result);
 });
+// GET /api/assignments/employees — employee list for Anrufagent (admin + kundenbetreuer)
+router.get('/employees', auth_1.authenticateToken, (0, auth_1.requireRole)('admin', 'kundenbetreuer'), async (_req, res) => {
+    const users = await queries_1.UserRepo.findAll();
+    res.json(users.map((u) => ({ id: u.id, full_name: u.full_name })));
+});
 router.get('/my', auth_1.authenticateToken, async (req, res) => {
     const userId = req.user?.id;
     if (!userId)
@@ -26,7 +31,7 @@ router.get('/my', auth_1.authenticateToken, async (req, res) => {
     }));
     res.json(result);
 });
-router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)('admin'), async (req, res) => {
+router.post('/', auth_1.authenticateToken, (0, auth_1.requireRole)('admin', 'kundenbetreuer'), async (req, res) => {
     let { customer_id, assigned_user_id, title, description, scheduled_at, new_customer, hourly_rate } = req.body;
     if (customer_id === 'NEW_CUSTOMER' && new_customer) {
         const names = new_customer.name.split(' ');
