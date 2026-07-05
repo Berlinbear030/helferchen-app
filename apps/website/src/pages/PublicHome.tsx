@@ -236,8 +236,8 @@ function BookingPortal() {
 }
 
 function PublicHome() {
-  const phoneNumber = "0152 2207 4984";
-  const phoneHref = "tel:015222074984";
+  const phoneNumber = "030 71067627";
+  const phoneHref = "tel:03071067627";
   const [showBooking, setShowBooking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
