@@ -14,6 +14,7 @@ const db = {
         { id: 'u3', username: 'board', password_hash: boardHash, role: 'admin', email: 'board@helferchen.info', full_name: 'Board Member', created_at: new Date().toISOString() },
         { id: 'u2', username: 'employee1', password_hash: empHash, role: 'employee', email: 'emp1@helferchen.info', full_name: 'Max Mustermann', created_at: new Date().toISOString() },
     ],
+    sipUsers: [],
     customers: [
         { id: 'c1', first_name: 'Erika', last_name: 'Mustermann', address: 'Musterstr. 1, 80333 München', phone_number: '089-123456', notes: 'Erdgeschoss', created_at: new Date().toISOString() },
         { id: 'c2', first_name: 'Hans', last_name: 'Schmidt', address: 'Hauptstr. 5, 80335 München', phone_number: '089-654321', notes: '3. OG', created_at: new Date().toISOString() },

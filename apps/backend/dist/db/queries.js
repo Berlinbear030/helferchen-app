@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ShopArticleRepo = exports.AuditRepo = exports.RoleRepo = exports.BookingRequestRepo = exports.SignatureRepo = exports.ReportRepo = exports.TimelogRepo = exports.AssignmentRepo = exports.CustomerRepo = exports.UserRepo = void 0;
+exports.SipUserRepo = exports.ShopArticleRepo = exports.AuditRepo = exports.RoleRepo = exports.BookingRequestRepo = exports.SignatureRepo = exports.ReportRepo = exports.TimelogRepo = exports.AssignmentRepo = exports.CustomerRepo = exports.UserRepo = void 0;
 const index_1 = __importDefault(require("./index"));
 const pool_1 = require("./pool");
 const crypto_1 = require("crypto");
@@ -532,9 +532,9 @@ exports.AuditRepo = {
                 entries = entries.filter(e => e.entity_id === params.entity_id);
             if (params?.limit)
                 entries = entries.slice(0, params.limit);
-            return entries;
+            return entries.map(e => ({ ...e, performed_by: e.actor_user_id, description: e.details }));
         }
-        let sql = 'SELECT id, entity_type, entity_id, action, actor_user_id, details, created_at as timestamp FROM audit_logs';
+        let sql = 'SELECT id, entity_type, entity_id, action, actor_user_id AS performed_by, details AS description, created_at AS timestamp FROM audit_logs';
         const conditions = [];
         const values = [];
         if (params?.entity_type) {
@@ -612,6 +612,52 @@ exports.ShopArticleRepo = {
     },
     async delete(id) {
         const res = await (0, pool_1.query)('DELETE FROM shop_articles WHERE id = ?', [id]);
+        return res.rowCount > 0;
+    }
+};
+exports.SipUserRepo = {
+    async findAll() {
+        if (!useDb())
+            return index_1.default.sipUsers || [];
+        const res = await (0, pool_1.query)('SELECT * FROM sip_users ORDER BY username ASC');
+        return res.rows;
+    },
+    async findById(id) {
+        if (!useDb())
+            return (index_1.default.sipUsers || []).find(u => u.id === id) || null;
+        const res = await (0, pool_1.query)('SELECT * FROM sip_users WHERE id = ?', [id]);
+        return res.rows[0] || null;
+    },
+    async findByUsername(username) {
+        if (!useDb())
+            return (index_1.default.sipUsers || []).find(u => u.username === username) || null;
+        const res = await (0, pool_1.query)('SELECT * FROM sip_users WHERE username = ?', [username]);
+        return res.rows[0] || null;
+    },
+    async create(username, password_hash, full_name) {
+        const id = (0, crypto_1.randomUUID)();
+        const created_at = new Date().toISOString();
+        if (!useDb()) {
+            const u = { id, username, password: password_hash, full_name, created_at };
+            if (!index_1.default.sipUsers)
+                index_1.default.sipUsers = [];
+            index_1.default.sipUsers.push(u);
+            return u;
+        }
+        await (0, pool_1.query)('INSERT INTO sip_users (id, username, password, full_name) VALUES (?, ?, ?, ?)', [id, username, password_hash, full_name]);
+        return { id, username, password: password_hash, full_name, created_at };
+    },
+    async delete(id) {
+        if (!useDb()) {
+            if (!index_1.default.sipUsers)
+                return false;
+            const idx = index_1.default.sipUsers.findIndex(u => u.id === id);
+            if (idx === -1)
+                return false;
+            index_1.default.sipUsers.splice(idx, 1);
+            return true;
+        }
+        const res = await (0, pool_1.query)('DELETE FROM sip_users WHERE id = ?', [id]);
         return res.rowCount > 0;
     }
 };

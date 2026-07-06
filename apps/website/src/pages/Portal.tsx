@@ -40,6 +40,11 @@ interface BookingRequest {
   address: string; service_description: string; preferred_date: string; preferred_time: string;
   status: string; assigned_user_id: string | null; notes: string; created_at: string;
 }
+interface CallLog {
+  id: string; caller_id: string; unique_id: string | null;
+  status: 'missed' | 'answered' | 'callback_initiated' | 'handled';
+  note: string | null; handled_by: string | null; created_at: string;
+}
 
 type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees' | 'assignments-admin' | 'kunden' | 'anruf';
 
@@ -1525,6 +1530,59 @@ const QUICK_SERVICES = [
 ];
 
 function AnrufagentTab({ user }: { user: User }) {
+  // ── Missed calls ────────────────────────────────────────────────────────────
+  const [callLogs, setCallLogs] = useState<CallLog[]>([]);
+  const [callLogsLoading, setCallLogsLoading] = useState(true);
+  const [callbackMsg, setCallbackMsg] = useState('');
+  const [callbackBusy, setCallbackBusy] = useState<string | null>(null);
+  const [noteValues, setNoteValues] = useState<Record<string, string>>({});
+  const [noteSaving, setNoteSaving] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'booking' | 'missed'>('booking');
+
+  const loadCallLogs = useCallback(async () => {
+    const r = await fetch(`${API}/calls`, { headers: authHeaders() }).catch(() => null);
+    if (r?.ok) setCallLogs(await r.json());
+    setCallLogsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadCallLogs();
+    const iv = setInterval(loadCallLogs, 30000);
+    return () => clearInterval(iv);
+  }, [loadCallLogs]);
+
+  const missedCount = callLogs.filter(c => c.status === 'missed').length;
+
+  const markHandled = async (id: string) => {
+    await fetch(`${API}/calls/${id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: 'handled' }) });
+    loadCallLogs();
+  };
+
+  const saveNote = async (id: string) => {
+    setNoteSaving(id);
+    await fetch(`${API}/calls/${id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ note: noteValues[id] || '' }) });
+    setNoteSaving(null);
+    loadCallLogs();
+  };
+
+  const triggerCallback = async (callId: string, callerNum: string) => {
+    setCallbackBusy(callId);
+    setCallbackMsg('');
+    const r = await fetch(`${API}/calls/${callId}/callback`, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({}),
+    }).catch(() => null);
+    if (r?.ok) {
+      setCallbackMsg(`✅ Linphone klingelt – nach Abheben wird ${callerNum} verbunden.`);
+      loadCallLogs();
+    } else {
+      const d = await r?.json().catch(() => ({}));
+      setCallbackMsg('❌ ' + (d?.error || 'Rückruf fehlgeschlagen'));
+    }
+    setCallbackBusy(null);
+  };
+
+  // ── Booking form ────────────────────────────────────────────────────────────
   const [phone, setPhone] = useState('');
   const [customerFound, setCustomerFound] = useState<Customer | null>(null);
   const [customerSearchDone, setCustomerSearchDone] = useState(false);
@@ -1571,8 +1629,10 @@ function AnrufagentTab({ user }: { user: User }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const lookupByPhone = async () => {
-    if (!phone.trim()) return;
+  const lookupByPhone = async (overridePhone?: string) => {
+    const num = (overridePhone ?? phone).trim();
+    if (!num) return;
+    setPhone(num);
     setCustomerSearching(true);
     setCustomerSearchDone(false);
     setCustomerFound(null);
@@ -1580,7 +1640,7 @@ function AnrufagentTab({ user }: { user: User }) {
     try {
       const r = await fetch(`${API}/customers`, { headers: authHeaders() });
       const customers: Customer[] = r.ok ? await r.json() : [];
-      const normalized = phone.replace(/[\s\-\(\)\+]/g, '');
+      const normalized = num.replace(/[\s\-\(\)\+]/g, '');
       const found = customers.find(c =>
         c.phone_number?.replace(/[\s\-\(\)\+]/g, '') === normalized
       );
@@ -1692,195 +1752,321 @@ function AnrufagentTab({ user }: { user: User }) {
   const labelSt: React.CSSProperties = { display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#374151', marginBottom: '4px' };
   const fieldSt: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '4px' };
 
+  const statusLabel: Record<string, string> = {
+    missed: 'Verpasst',
+    answered: 'Angenommen',
+    callback_initiated: 'Rückruf läuft',
+    handled: 'Erledigt',
+  };
+  const statusColor: Record<string, string> = {
+    missed: '#DC2626',
+    answered: '#16A34A',
+    callback_initiated: '#D97706',
+    handled: '#6B7280',
+  };
+
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '8px 0' }}>
-      <div style={{ background: 'linear-gradient(135deg, #00454A 0%, #006B72 100%)', borderRadius: '12px', padding: '20px 24px', marginBottom: '24px', color: 'white' }}>
+    <div style={{ maxWidth: '780px', margin: '0 auto', padding: '8px 0' }}>
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #00454A 0%, #006B72 100%)', borderRadius: '12px', padding: '20px 24px', marginBottom: '16px', color: 'white' }}>
         <h2 style={{ margin: '0 0 4px', fontSize: '1.4rem' }}>📞 Anrufagent</h2>
         <p style={{ margin: 0, opacity: 0.85, fontSize: '0.92rem' }}>Kunden direkt beim Anruf einbuchen – schnell und fehlerfrei.</p>
       </div>
 
-      {msg && (
-        <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: '16px', borderRadius: '8px' }}>
-          {msg}
-        </div>
-      )}
-
-      {/* Step 1: Phone */}
-      <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>1</div>
-          <h3 style={{ margin: 0, fontSize: '1rem' }}>Telefonnummer des Anrufers</h3>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <input
-            type="tel"
-            placeholder="+49 123 456789"
-            value={phone}
-            onChange={e => { setPhone(e.target.value); setCustomerSearchDone(false); setCustomerFound(null); setIsNewCustomer(false); }}
-            onKeyDown={e => e.key === 'Enter' && lookupByPhone()}
-            style={{ ...inputSt, flex: 1 }}
-            autoFocus
-          />
-          <button
-            type="button"
-            onClick={lookupByPhone}
-            disabled={!phone.trim() || customerSearching}
-            style={{ padding: '10px 18px', background: '#00454A', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', whiteSpace: 'nowrap', opacity: !phone.trim() ? 0.5 : 1 }}
-          >
-            {customerSearching ? '...' : '🔍 Suchen'}
-          </button>
-        </div>
-        {customerSearchDone && customerFound && (
-          <div style={{ marginTop: '10px', padding: '10px 14px', background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.2rem' }}>✅</span>
-            <div>
-              <span style={{ fontWeight: 700, color: '#15803D' }}>Bekannter Kunde gefunden: </span>
-              <span style={{ color: '#1F2937' }}>{customerFound.first_name} {customerFound.last_name}</span>
-              <span style={{ color: '#6B7280', fontSize: '0.85rem', marginLeft: '8px' }}>{customerFound.address}</span>
-            </div>
-          </div>
-        )}
-        {customerSearchDone && isNewCustomer && (
-          <div style={{ marginTop: '10px', padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.2rem' }}>🆕</span>
-            <span style={{ color: '#92400E', fontWeight: 600 }}>Nummer nicht gefunden – neuer Kunde wird angelegt.</span>
-          </div>
-        )}
+      {/* View switcher */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <button
+          onClick={() => setActiveView('booking')}
+          style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', background: activeView === 'booking' ? '#00454A' : '#E5E7EB', color: activeView === 'booking' ? 'white' : '#374151' }}
+        >
+          📋 Auftrag einbuchen
+        </button>
+        <button
+          onClick={() => setActiveView('missed')}
+          style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', background: activeView === 'missed' ? '#DC2626' : '#E5E7EB', color: activeView === 'missed' ? 'white' : '#374151', position: 'relative' }}
+        >
+          📵 Verpasste Anrufe
+          {missedCount > 0 && (
+            <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#DC2626', color: '#fff', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, border: '2px solid white' }}>
+              {missedCount > 9 ? '9+' : missedCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Step 2: Customer data */}
-      {(customerFound || isNewCustomer) && (
-        <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>2</div>
-            <h3 style={{ margin: 0, fontSize: '1rem' }}>Kundendaten</h3>
-            {customerFound && <span style={{ fontSize: '0.78rem', background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>Vorausgefüllt</span>}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
-            <div style={fieldSt}>
-              <label style={labelSt}>Vorname *</label>
-              <input style={inputSt} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Max" disabled={!!customerFound} required />
+      {/* ── Missed calls view ─────────────────────────────────────────── */}
+      {activeView === 'missed' && (
+        <div>
+          {callbackMsg && (
+            <div style={{ background: callbackMsg.startsWith('❌') ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${callbackMsg.startsWith('❌') ? '#FCA5A5' : '#86EFAC'}`, borderRadius: '8px', padding: '10px 14px', marginBottom: '12px' }}>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: callbackMsg.startsWith('❌') ? '#DC2626' : '#16A34A', fontWeight: 600 }}>{callbackMsg}</p>
             </div>
-            <div style={fieldSt}>
-              <label style={labelSt}>Nachname *</label>
-              <input style={inputSt} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Mustermann" disabled={!!customerFound} required />
+          )}
+
+          {callLogsLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#9CA3AF' }}>Lade Anrufliste…</div>
+          ) : callLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>📭</div>
+              <p style={{ fontSize: '1rem' }}>Noch keine Anrufe aufgezeichnet.</p>
+              <p style={{ fontSize: '0.85rem', marginTop: '6px' }}>Anrufe erscheinen hier sobald Asterisk aktiv ist und ein Anruf verpasst wurde.</p>
             </div>
-          </div>
-
-          <div style={{ ...fieldSt, marginBottom: '14px' }}>
-            <label style={labelSt}>E-Mail (optional)</label>
-            <input style={inputSt} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="max@beispiel.de" disabled={!!customerFound} />
-          </div>
-
-          <div style={fieldSt} ref={addressWrapRef}>
-            <label style={labelSt}>
-              Adresse *
-              {addressLoading && <span style={{ fontWeight: 400, color: '#6B7280', marginLeft: '8px', fontSize: '0.8rem' }}>Suche…</span>}
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                style={{ ...inputSt, paddingRight: addressLoading ? '36px' : '12px', borderColor: showSuggestions ? '#00454A' : '#D1D5DB' }}
-                value={address}
-                onChange={e => handleAddressInput(e.target.value)}
-                onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
-                placeholder="Musterstraße 1, 12345 Berlin"
-                autoComplete="off"
-              />
-              {showSuggestions && addressSuggestions.length > 0 && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1.5px solid #00454A', borderTop: 'none', borderRadius: '0 0 8px 8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: '220px', overflowY: 'auto' }}>
-                  {addressSuggestions.map((s, i) => (
-                    <div
-                      key={i}
-                      onMouseDown={() => selectSuggestion(s)}
-                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: i < addressSuggestions.length - 1 ? '1px solid #F3F4F6' : 'none', transition: 'background 0.1s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#F0FDF4')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                    >
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#111827' }}>📍 {s.display}</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {callLogs.map(call => (
+                <div key={call.id} style={{ background: '#fff', borderRadius: '10px', padding: '16px 20px', border: `1.5px solid ${call.status === 'missed' ? '#FCA5A5' : '#E5E7EB'}`, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '1.3rem' }}>{call.status === 'missed' ? '📵' : call.status === 'callback_initiated' ? '🔄' : '✅'}</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#111827' }}>{call.caller_id}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#6B7280' }}>{new Date(call.created_at).toLocaleString('de-DE')}</div>
+                      </div>
                     </div>
-                  ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ padding: '3px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 700, background: `${statusColor[call.status]}20`, color: statusColor[call.status] }}>
+                        {statusLabel[call.status] || call.status}
+                      </span>
+                      {call.status === 'missed' && (
+                        <>
+                          <button
+                            onClick={() => { setActiveView('booking'); lookupByPhone(call.caller_id); }}
+                            style={{ padding: '5px 12px', fontSize: '0.82rem', background: '#00454A', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            📋 Einbuchen
+                          </button>
+                          <button
+                            onClick={() => triggerCallback(call.id, call.caller_id)}
+                            disabled={callbackBusy === call.id}
+                            style={{ padding: '5px 12px', fontSize: '0.82rem', background: '#1D4ED8', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, opacity: callbackBusy === call.id ? 0.6 : 1 }}
+                          >
+                            {callbackBusy === call.id ? '⏳…' : '📲 Rückruf'}
+                          </button>
+                          <button
+                            onClick={() => markHandled(call.id)}
+                            style={{ padding: '5px 12px', fontSize: '0.82rem', background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            Erledigt
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Gesprächsnotiz */}
+                  <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: '10px' }}>
+                    <label style={{ ...labelSt, marginBottom: '6px' }}>Gesprächsnotiz</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                      <textarea
+                        rows={2}
+                        style={{ ...inputSt, resize: 'vertical', minHeight: '52px', fontFamily: 'inherit', fontSize: '0.88rem', flex: 1 }}
+                        placeholder="Kurze Notiz zum Anruf…"
+                        value={noteValues[call.id] ?? (call.note || '')}
+                        onChange={e => setNoteValues(prev => ({ ...prev, [call.id]: e.target.value }))}
+                      />
+                      <button
+                        onClick={() => saveNote(call.id)}
+                        disabled={noteSaving === call.id}
+                        style={{ padding: '8px 14px', background: '#00454A', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', opacity: noteSaving === call.id ? 0.6 : 1 }}
+                      >
+                        {noteSaving === call.id ? '…' : 'Speichern'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-            <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#9CA3AF' }}>Tipp: Straße + Hausnummer + Ort eingeben – Vorschläge erscheinen automatisch.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Assignment */}
-      {(customerFound || isNewCustomer) && (
-        <form onSubmit={handleSubmit} style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>3</div>
-            <h3 style={{ margin: 0, fontSize: '1rem' }}>Auftragsdetails</h3>
-          </div>
-
-          <div style={{ ...fieldSt, marginBottom: '14px' }}>
-            <label style={labelSt}>Dienstleistung / Titel *</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-              {QUICK_SERVICES.map(s => (
-                <button
-                  key={s} type="button"
-                  onClick={() => setTitle(s)}
-                  style={{ padding: '5px 12px', border: `1.5px solid ${title === s ? '#00454A' : '#D1D5DB'}`, borderRadius: '16px', cursor: 'pointer', fontSize: '0.82rem', background: title === s ? '#00454A' : '#fff', color: title === s ? '#fff' : '#374151', fontWeight: title === s ? 700 : 400, transition: 'all 0.15s' }}
-                >
-                  {s}
-                </button>
               ))}
             </div>
-            <input style={inputSt} value={title} onChange={e => setTitle(e.target.value)} placeholder="Oder eigenen Titel eingeben…" required />
-          </div>
-
-          <div style={{ ...fieldSt, marginBottom: '14px' }}>
-            <label style={labelSt}>Beschreibung / Notizen</label>
-            <textarea
-              style={{ ...inputSt, resize: 'vertical', minHeight: '80px', fontFamily: 'inherit' }}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Details zum Auftrag, besondere Wünsche des Kunden…"
-              rows={3}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
-            <div style={fieldSt}>
-              <label style={labelSt}>Datum & Uhrzeit *</label>
-              <input style={inputSt} type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} required />
-            </div>
-            <div style={fieldSt}>
-              <label style={labelSt}>Mitarbeiter zuweisen</label>
-              <select style={{ ...inputSt, cursor: 'pointer' }} value={assignedUserId} onChange={e => setAssignedUserId(e.target.value)}>
-                <option value="">– Noch nicht zuweisen –</option>
-                {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              type="submit"
-              disabled={saving || !title.trim() || !address.trim() || (!customerFound && (!firstName.trim() || !lastName.trim()))}
-              style={{ flex: 1, padding: '14px', background: '#00454A', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '1.05rem', cursor: 'pointer', opacity: saving ? 0.7 : 1, transition: 'opacity 0.15s' }}
-            >
-              {saving ? '⏳ Wird eingebucht…' : '✅ Auftrag einbuchen'}
-            </button>
-            <button
-              type="button"
-              onClick={resetForm}
-              style={{ padding: '14px 20px', background: '#fff', color: '#6B7280', border: '1.5px solid #D1D5DB', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' }}
-            >
-              Zurücksetzen
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       )}
 
-      {!customerFound && !isNewCustomer && (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📞</div>
-          <p style={{ fontSize: '1rem', fontWeight: 500 }}>Telefonnummer eingeben und auf Suchen klicken, um zu starten.</p>
-        </div>
+      {/* ── Booking form view ─────────────────────────────────────────── */}
+      {activeView === 'booking' && (
+        <>
+          {msg && (
+            <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: '16px', borderRadius: '8px' }}>
+              {msg}
+            </div>
+          )}
+
+          {/* Step 1: Phone */}
+          <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>1</div>
+              <h3 style={{ margin: 0, fontSize: '1rem' }}>Telefonnummer des Anrufers</h3>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                type="tel"
+                placeholder="+49 123 456789"
+                value={phone}
+                onChange={e => { setPhone(e.target.value); setCustomerSearchDone(false); setCustomerFound(null); setIsNewCustomer(false); }}
+                onKeyDown={e => e.key === 'Enter' && lookupByPhone()}
+                style={{ ...inputSt, flex: 1 }}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => lookupByPhone()}
+                disabled={!phone.trim() || customerSearching}
+                style={{ padding: '10px 18px', background: '#00454A', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', whiteSpace: 'nowrap', opacity: !phone.trim() ? 0.5 : 1 }}
+              >
+                {customerSearching ? '...' : '🔍 Suchen'}
+              </button>
+            </div>
+            {customerSearchDone && customerFound && (
+              <div style={{ marginTop: '10px', padding: '10px 14px', background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>✅</span>
+                <div>
+                  <span style={{ fontWeight: 700, color: '#15803D' }}>Bekannter Kunde gefunden: </span>
+                  <span style={{ color: '#1F2937' }}>{customerFound.first_name} {customerFound.last_name}</span>
+                  <span style={{ color: '#6B7280', fontSize: '0.85rem', marginLeft: '8px' }}>{customerFound.address}</span>
+                </div>
+              </div>
+            )}
+            {customerSearchDone && isNewCustomer && (
+              <div style={{ marginTop: '10px', padding: '10px 14px', background: '#FFF7ED', border: '1.5px solid #FED7AA', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>🆕</span>
+                <span style={{ color: '#92400E', fontWeight: 600 }}>Nummer nicht gefunden – neuer Kunde wird angelegt.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Step 2: Customer data */}
+          {(customerFound || isNewCustomer) && (
+            <div style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>2</div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>Kundendaten</h3>
+                {customerFound && <span style={{ fontSize: '0.78rem', background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>Vorausgefüllt</span>}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                <div style={fieldSt}>
+                  <label style={labelSt}>Vorname *</label>
+                  <input style={inputSt} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Max" disabled={!!customerFound} required />
+                </div>
+                <div style={fieldSt}>
+                  <label style={labelSt}>Nachname *</label>
+                  <input style={inputSt} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Mustermann" disabled={!!customerFound} required />
+                </div>
+              </div>
+
+              <div style={{ ...fieldSt, marginBottom: '14px' }}>
+                <label style={labelSt}>E-Mail (optional)</label>
+                <input style={inputSt} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="max@beispiel.de" disabled={!!customerFound} />
+              </div>
+
+              <div style={fieldSt} ref={addressWrapRef}>
+                <label style={labelSt}>
+                  Adresse *
+                  {addressLoading && <span style={{ fontWeight: 400, color: '#6B7280', marginLeft: '8px', fontSize: '0.8rem' }}>Suche…</span>}
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    style={{ ...inputSt, paddingRight: addressLoading ? '36px' : '12px', borderColor: showSuggestions ? '#00454A' : '#D1D5DB' }}
+                    value={address}
+                    onChange={e => handleAddressInput(e.target.value)}
+                    onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                    placeholder="Musterstraße 1, 12345 Berlin"
+                    autoComplete="off"
+                  />
+                  {showSuggestions && addressSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1.5px solid #00454A', borderTop: 'none', borderRadius: '0 0 8px 8px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: '220px', overflowY: 'auto' }}>
+                      {addressSuggestions.map((s, i) => (
+                        <div
+                          key={i}
+                          onMouseDown={() => selectSuggestion(s)}
+                          style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: i < addressSuggestions.length - 1 ? '1px solid #F3F4F6' : 'none', transition: 'background 0.1s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#F0FDF4')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#111827' }}>📍 {s.display}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#9CA3AF' }}>Tipp: Straße + Hausnummer + Ort eingeben – Vorschläge erscheinen automatisch.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Assignment */}
+          {(customerFound || isNewCustomer) && (
+            <form onSubmit={handleSubmit} style={{ background: '#fff', borderRadius: '10px', padding: '20px', border: '1.5px solid #E5E7EB', marginBottom: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#00454A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>3</div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>Auftragsdetails</h3>
+              </div>
+
+              <div style={{ ...fieldSt, marginBottom: '14px' }}>
+                <label style={labelSt}>Dienstleistung / Titel *</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                  {QUICK_SERVICES.map(s => (
+                    <button
+                      key={s} type="button"
+                      onClick={() => setTitle(s)}
+                      style={{ padding: '5px 12px', border: `1.5px solid ${title === s ? '#00454A' : '#D1D5DB'}`, borderRadius: '16px', cursor: 'pointer', fontSize: '0.82rem', background: title === s ? '#00454A' : '#fff', color: title === s ? '#fff' : '#374151', fontWeight: title === s ? 700 : 400, transition: 'all 0.15s' }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <input style={inputSt} value={title} onChange={e => setTitle(e.target.value)} placeholder="Oder eigenen Titel eingeben…" required />
+              </div>
+
+              <div style={{ ...fieldSt, marginBottom: '14px' }}>
+                <label style={labelSt}>Beschreibung / Notizen</label>
+                <textarea
+                  style={{ ...inputSt, resize: 'vertical', minHeight: '80px', fontFamily: 'inherit' }}
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Details zum Auftrag, besondere Wünsche des Kunden…"
+                  rows={3}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+                <div style={fieldSt}>
+                  <label style={labelSt}>Datum & Uhrzeit *</label>
+                  <input style={inputSt} type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} required />
+                </div>
+                <div style={fieldSt}>
+                  <label style={labelSt}>Mitarbeiter zuweisen</label>
+                  <select style={{ ...inputSt, cursor: 'pointer' }} value={assignedUserId} onChange={e => setAssignedUserId(e.target.value)}>
+                    <option value="">– Noch nicht zuweisen –</option>
+                    {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  type="submit"
+                  disabled={saving || !title.trim() || !address.trim() || (!customerFound && (!firstName.trim() || !lastName.trim()))}
+                  style={{ flex: 1, padding: '14px', background: '#00454A', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, fontSize: '1.05rem', cursor: 'pointer', opacity: saving ? 0.7 : 1, transition: 'opacity 0.15s' }}
+                >
+                  {saving ? '⏳ Wird eingebucht…' : '✅ Auftrag einbuchen'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  style={{ padding: '14px 20px', background: '#fff', color: '#6B7280', border: '1.5px solid #D1D5DB', borderRadius: '10px', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' }}
+                >
+                  Zurücksetzen
+                </button>
+              </div>
+            </form>
+          )}
+
+          {!customerFound && !isNewCustomer && (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9CA3AF' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📞</div>
+              <p style={{ fontSize: '1rem', fontWeight: 500 }}>Telefonnummer eingeben und auf Suchen klicken, um zu starten.</p>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

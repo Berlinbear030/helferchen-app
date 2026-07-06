@@ -123,6 +123,14 @@ export interface Role {
   created_at: string;
 }
 
+export interface SipUser {
+  id: string;
+  username: string;
+  password: string;
+  full_name: string;
+  created_at: string;
+}
+
 const adminHash = bcrypt.hashSync('admin123', 10);
 const boardHash = bcrypt.hashSync('board2026', 10);
 const empHash = bcrypt.hashSync('employee123', 10);
@@ -133,6 +141,8 @@ const db = {
     { id: 'u3', username: 'board', password_hash: boardHash, role: 'admin' as const, email: 'board@helferchen.info', full_name: 'Board Member', created_at: new Date().toISOString() },
     { id: 'u2', username: 'employee1', password_hash: empHash, role: 'employee' as const, email: 'emp1@helferchen.info', full_name: 'Max Mustermann', created_at: new Date().toISOString() },
   ] as User[],
+
+  sipUsers: [] as SipUser[],
 
   customers: [
     { id: 'c1', first_name: 'Erika', last_name: 'Mustermann', address: 'Musterstr. 1, 80333 München', phone_number: '089-123456', notes: 'Erdgeschoss', created_at: new Date().toISOString() },

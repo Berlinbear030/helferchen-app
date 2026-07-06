@@ -268,6 +268,30 @@ export async function initDatabase(): Promise<void> {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS call_logs (
+      id CHAR(36) NOT NULL DEFAULT (UUID()),
+      caller_id VARCHAR(50) NOT NULL,
+      unique_id VARCHAR(100) NULL,
+      status ENUM('missed','answered','callback_initiated','handled') NOT NULL DEFAULT 'missed',
+      note TEXT NULL,
+      handled_by CHAR(36) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS sip_users (
+      id CHAR(36) NOT NULL,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      password VARCHAR(100) NOT NULL,
+      full_name VARCHAR(255) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS roles (
       id CHAR(36) NOT NULL,
       name VARCHAR(100) UNIQUE NOT NULL,

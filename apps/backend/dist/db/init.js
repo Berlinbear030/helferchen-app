@@ -306,6 +306,16 @@ async function initDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
     await (0, pool_1.query)(`
+    CREATE TABLE IF NOT EXISTS sip_users (
+      id CHAR(36) NOT NULL,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      password VARCHAR(100) NOT NULL,
+      full_name VARCHAR(255) NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+    await (0, pool_1.query)(`
     CREATE TABLE IF NOT EXISTS roles (
       id CHAR(36) NOT NULL,
       name VARCHAR(100) UNIQUE NOT NULL,

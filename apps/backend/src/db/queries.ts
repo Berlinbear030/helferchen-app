@@ -1,4 +1,4 @@
-import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, ShopArticle, AuditEntry, Role } from './index';
+import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, ShopArticle, AuditEntry, Role, SipUser } from './index';
 import { query, dbConnected } from './pool';
 import { randomUUID } from 'crypto';
 
@@ -566,6 +566,50 @@ export const ShopArticleRepo = {
   },
   async delete(id: string): Promise<boolean> {
     const res = await query('DELETE FROM shop_articles WHERE id = ?', [id]);
+    return res.rowCount > 0;
+  }
+};
+
+export const SipUserRepo = {
+  async findAll(): Promise<SipUser[]> {
+    if (!useDb()) return db.sipUsers || [];
+    const res = await query('SELECT * FROM sip_users ORDER BY username ASC');
+    return res.rows;
+  },
+  async findById(id: string): Promise<SipUser | null> {
+    if (!useDb()) return (db.sipUsers || []).find(u => u.id === id) || null;
+    const res = await query('SELECT * FROM sip_users WHERE id = ?', [id]);
+    return res.rows[0] || null;
+  },
+  async findByUsername(username: string): Promise<SipUser | null> {
+    if (!useDb()) return (db.sipUsers || []).find(u => u.username === username) || null;
+    const res = await query('SELECT * FROM sip_users WHERE username = ?', [username]);
+    return res.rows[0] || null;
+  },
+  async create(username: string, password_hash: string, full_name: string): Promise<SipUser> {
+    const id = randomUUID();
+    const created_at = new Date().toISOString();
+    if (!useDb()) {
+      const u = { id, username, password: password_hash, full_name, created_at };
+      if (!db.sipUsers) db.sipUsers = [];
+      db.sipUsers.push(u);
+      return u;
+    }
+    await query(
+      'INSERT INTO sip_users (id, username, password, full_name) VALUES (?, ?, ?, ?)',
+      [id, username, password_hash, full_name]
+    );
+    return { id, username, password: password_hash, full_name, created_at };
+  },
+  async delete(id: string): Promise<boolean> {
+    if (!useDb()) {
+      if (!db.sipUsers) return false;
+      const idx = db.sipUsers.findIndex(u => u.id === id);
+      if (idx === -1) return false;
+      db.sipUsers.splice(idx, 1);
+      return true;
+    }
+    const res = await query('DELETE FROM sip_users WHERE id = ?', [id]);
     return res.rowCount > 0;
   }
 };

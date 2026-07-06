@@ -16,6 +16,7 @@ import shopRoutes from './routes/shop';
 import invoiceRoutes from './routes/invoices';
 import voucherRoutes from './routes/vouchers';
 import telegramRoutes from './telegram';
+import callRoutes from './routes/calls';
 import { initDatabase } from './db/init';
 import { testConnection, startKeepalive } from './db/pool';
 import { scheduleBackup } from './services/backup';
@@ -43,6 +44,7 @@ app.use('/api/shop', shopRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/vouchers', voucherRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api/calls', callRoutes);
 
 app.get('/', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'Helferchen API', version: '1.0.0' });

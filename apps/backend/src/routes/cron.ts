@@ -24,30 +24,10 @@ router.post('/report', async (req: Request, res: Response) => {
 
         let report = reportLines.join(newline);
 
-        // 3. Post to GitHub
-        const githubToken = process.env.GITHUB_TOKEN;
-        const githubRepo = process.env.GITHUB_REPO;
-        
-        if (!githubToken || !githubRepo) {
-            throw new Error('GitHub configuration missing');
-        }
+        // For now, we just log the report to console as GitHub is forbidden
+        console.log('Generated Report:', report);
 
-        const response = await fetch('https://api.github.com/repos/' + githubRepo + '/issues/124/comments', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'token ' + githubToken,
-                'Content-Type': 'application/json',
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'Helferchen-Backend'
-            },
-            body: JSON.stringify({ body: report })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to post to GitHub: ' + await response.text());
-        }
-
-        res.status(200).json({ message: 'Report posted successfully' });
+        res.status(200).json({ message: 'Report generated successfully (logging to console)' });
     } catch (error) {
         console.error('Error in cron report generation:', error);
         res.status(500).json({ message: 'Internal server error', error: String(error) });

@@ -114,6 +114,22 @@ export interface Role {
   created_at: string;
 }
 
+export interface SipUser {
+  id: string;
+  username: string;
+  password?: string;
+  full_name: string;
+  created_at: string;
+}
+
+export interface Voicemail {
+  id: string;
+  callerId: string;
+  timestamp: string;
+  duration: number;
+  fileSize: number;
+}
+
 export const adminApi = {
   getDashboard: () => apiFetch<DashboardStats>('/admin/dashboard'),
   getUsers: () => apiFetch<User[]>('/admin/users'),
@@ -144,4 +160,13 @@ export const adminApi = {
     apiFetch<void>(`/admin/roles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteRole: (id: string) =>
     apiFetch<void>(`/admin/roles/${id}`, { method: 'DELETE' }),
+
+  getSipUsers: () => apiFetch<SipUser[]>('/calls/sip-users'),
+  createSipUser: (data: { username: string; password?: string; full_name: string }) =>
+    apiFetch<SipUser>('/calls/sip-users', { method: 'POST', body: JSON.stringify(data) }),
+  deleteSipUser: (id: string) =>
+    apiFetch<void>(`/calls/sip-users/${id}`, { method: 'DELETE' }),
+  getVoicemails: () => apiFetch<Voicemail[]>('/calls/voicemails'),
+  deleteVoicemail: (id: string) =>
+    apiFetch<void>(`/calls/voicemails/${id}`, { method: 'DELETE' }),
 };
