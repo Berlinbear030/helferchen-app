@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { UserRepo } from '../db/queries';
 import { addAudit } from '../db';
+import { query } from '../db/pool';
 import { AuthRequest, authenticateToken } from '../middleware/auth';
 
 const router = Router();
@@ -18,8 +19,15 @@ router.post('/login', async (req: Request, res: Response) => {
   const permissions: string[] = (() => { try { return JSON.parse(user.permissions || '[]'); } catch { return []; } })();
   const payload = { id: user.id, username: user.username, role: user.role, permissions };
   const token = jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
-  // addAudit('user', user.id, 'login', user.id, 'User logged in');
+  // Update last_seen on login
+  await query('UPDATE users SET last_seen = NOW() WHERE id = ?', [user.id]).catch(() => {});
   res.json({ token, user: { id: user.id, username: user.username, role: user.role, full_name: user.full_name, permissions } });
+});
+
+// POST /api/auth/heartbeat — update last_seen to keep user "online"
+router.post('/heartbeat', authenticateToken, async (req: AuthRequest, res: Response) => {
+  await query('UPDATE users SET last_seen = NOW() WHERE id = ?', [req.user!.id]).catch(() => {});
+  return res.json({ ok: true });
 });
 
 router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => {

@@ -214,17 +214,21 @@ router.delete('/roles/:id', async (req: AuthRequest, res: Response) => {
 // GET /api/admin/users/live-status — live duty/call status per user
 router.get('/users/live-status', async (_req: AuthRequest, res: Response) => {
   try {
-    const [activeTimelogs, activeAssignments, sipPresence] = await Promise.all([
+    const [activeTimelogs, activeAssignments, sipPresence, recentlySeen] = await Promise.all([
       // Users with an active running timer = "in Dienst"
       dbConnected
-        ? query('SELECT DISTINCT user_id FROM time_logs WHERE end_time IS NULL', []).then(r => new Set<string>((r.rows || []).map((row: any) => row.user_id)))
+        ? query('SELECT DISTINCT user_id FROM time_logs WHERE end_time IS NULL', []).then(r => new Set<string>(r.rows.map((row: any) => row.user_id)))
         : Promise.resolve(new Set<string>()),
       // Users with an in-progress assignment = "im Auftrag"
       dbConnected
-        ? query("SELECT DISTINCT assigned_user_id FROM assignments WHERE status = 'in_progress' AND assigned_user_id IS NOT NULL", []).then(r => new Set<string>((r.rows || []).map((row: any) => row.assigned_user_id)))
+        ? query("SELECT DISTINCT assigned_user_id FROM assignments WHERE status = 'in_progress' AND assigned_user_id IS NOT NULL", []).then(r => new Set<string>(r.rows.map((row: any) => row.assigned_user_id)))
         : Promise.resolve(new Set<string>()),
       // SIP usernames currently in a call from Asterisk AMI
       queryAsteriskPresence().catch(() => ({ online: new Set<string>(), inCall: new Set<string>() })),
+      // Users active in portal in the last 5 minutes = "online"
+      dbConnected
+        ? query('SELECT id FROM users WHERE last_seen >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)', []).then(r => new Set<string>(r.rows.map((row: any) => row.id)))
+        : Promise.resolve(new Set<string>()),
     ]);
 
     const users = await UserRepo.findAll();
@@ -232,9 +236,10 @@ router.get('/users/live-status', async (_req: AuthRequest, res: Response) => {
       const inCall = sipPresence.inCall.has(u.username);
       const onDuty = activeTimelogs.has(u.id);
       const onAssignment = activeAssignments.has(u.id);
+      const online = recentlySeen.has(u.id);
       const status =
         inCall || onAssignment ? 'busy' :
-        onDuty ? 'on_duty' : 'offline';
+        (onDuty || online) ? 'on_duty' : 'offline';
       return { id: u.id, username: u.username, status };
     });
 

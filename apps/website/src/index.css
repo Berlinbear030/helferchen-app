@@ -1602,3 +1602,436 @@ h3 { font-size: 1.15rem; font-weight: 600; }
   .booking-panel { padding: 16px 12px; }
   .booking-steps { flex-direction: column; align-items: center; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   Portal V2  —  Sidebar Layout (EIS-494)
+═══════════════════════════════════════════════════════ */
+
+:root {
+  --pv2-sidebar-w: 240px;
+  --pv2-sidebar-bg: #00454A;
+  --pv2-sidebar-hover: rgba(255,255,255,0.08);
+  --pv2-sidebar-active: rgba(255,255,255,0.15);
+  --pv2-accent: #00BFA6;
+  --pv2-topbar-h: 56px;
+  --pv2-bottom-nav-h: 60px;
+}
+
+/* ── Root layout ─────────────────────────── */
+.pv2-root {
+  display: flex;
+  min-height: 100vh;
+  background: #F0F4F8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ── Overlay (mobile) ────────────────────── */
+.pv2-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+}
+
+/* ── Sidebar ─────────────────────────────── */
+.pv2-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--pv2-sidebar-w);
+  height: 100vh;
+  background: var(--pv2-sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  z-index: 300;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: transform 0.25s ease;
+  scrollbar-width: none;
+}
+.pv2-sidebar::-webkit-scrollbar { display: none; }
+
+.pv2-sidebar-brand {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+
+.pv2-user-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.pv2-user-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 2px solid var(--pv2-accent);
+}
+.pv2-user-info { min-width: 0; }
+.pv2-user-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv2-user-role {
+  font-size: 0.73rem;
+  color: rgba(255,255,255,0.55);
+  margin-top: 2px;
+}
+
+.pv2-nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pv2-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.75);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+}
+.pv2-nav-item:hover {
+  background: var(--pv2-sidebar-hover);
+  color: #fff;
+}
+.pv2-nav-item--active {
+  background: var(--pv2-sidebar-active);
+  color: #fff;
+  font-weight: 700;
+}
+.pv2-nav-icon { font-size: 1.1rem; flex-shrink: 0; }
+.pv2-nav-label { flex: 1; }
+.pv2-nav-indicator {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--pv2-accent);
+  border-radius: 2px 0 0 2px;
+}
+
+.pv2-sidebar-footer {
+  padding: 12px 8px 16px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.pv2-footer-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s, color 0.15s;
+}
+.pv2-footer-btn:hover { background: var(--pv2-sidebar-hover); color: #fff; }
+.pv2-footer-btn--logout { color: rgba(239,68,68,0.8); }
+.pv2-footer-btn--logout:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+/* ── Main area ───────────────────────────── */
+.pv2-main {
+  flex: 1;
+  margin-left: var(--pv2-sidebar-w);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-width: 0;
+}
+
+/* ── Topbar ──────────────────────────────── */
+.pv2-topbar {
+  height: var(--pv2-topbar-h);
+  background: #fff;
+  border-bottom: 1px solid #E5E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.pv2-topbar-left { display: flex; align-items: center; gap: 12px; }
+.pv2-topbar-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pv2-tab-icon { font-size: 1.1rem; }
+.pv2-topbar-right { display: flex; align-items: center; gap: 12px; }
+.pv2-topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: #374151;
+  font-weight: 500;
+}
+.pv2-online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pv2-pulse 2s infinite;
+  flex-shrink: 0;
+}
+@keyframes pv2-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.25); }
+}
+
+/* ── Hamburger ───────────────────────────── */
+.pv2-hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+}
+.pv2-hamburger:hover { background: #F3F4F6; }
+.pv2-hamburger span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: #374151;
+  border-radius: 2px;
+  transition: 0.2s;
+}
+
+/* ── Content ─────────────────────────────── */
+.pv2-content {
+  flex: 1;
+  padding: 24px;
+  overflow-x: hidden;
+}
+.pv2-tab-content { max-width: 1280px; }
+
+/* ── Loading state ───────────────────────── */
+.pv2-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 0;
+  gap: 16px;
+  color: #6B7280;
+}
+.pv2-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #E5E7EB;
+  border-top-color: var(--pv2-sidebar-bg);
+  border-radius: 50%;
+  animation: pv2-spin 0.75s linear infinite;
+}
+@keyframes pv2-spin { to { transform: rotate(360deg); } }
+
+/* ── Bottom nav (mobile) ─────────────────── */
+.pv2-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--pv2-bottom-nav-h);
+  background: #fff;
+  border-top: 1px solid #E5E7EB;
+  z-index: 150;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+.pv2-bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 2px;
+  color: #9CA3AF;
+  transition: color 0.15s;
+}
+.pv2-bottom-nav-item--active { color: var(--pv2-sidebar-bg); }
+.pv2-bottom-icon { font-size: 1.3rem; }
+.pv2-bottom-label { font-size: 0.65rem; font-weight: 600; }
+
+/* ── Mobile breakpoint ───────────────────── */
+@media (max-width: 768px) {
+  .pv2-sidebar {
+    transform: translateX(-100%);
+  }
+  .pv2-sidebar--open {
+    transform: translateX(0);
+  }
+  .pv2-main {
+    margin-left: 0;
+    padding-bottom: var(--pv2-bottom-nav-h);
+  }
+  .pv2-hamburger { display: flex; }
+  .pv2-topbar-name { display: none; }
+  .pv2-bottom-nav { display: flex; }
+  .pv2-content { padding: 16px 12px; }
+}
+
+@media (min-width: 769px) {
+  .pv2-hamburger { display: none; }
+}
+
+/* ── Dashboard V2 enhancements (EIS-494) ─ */
+.pv2-dashboard-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 28px;
+  padding: 24px 28px;
+  background: linear-gradient(135deg, #00454A 0%, #006B72 60%, #008080 100%);
+  border-radius: 16px;
+  color: #fff;
+}
+.pv2-greeting {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 4px;
+}
+.pv2-dashboard-hero .dashboard-date {
+  color: rgba(255,255,255,0.7);
+  margin: 0;
+}
+.pv2-team-online-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+
+.pv2-team-status-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid #E5E7EB;
+}
+.pv2-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.pv2-panel-title { font-weight: 700; font-size: 0.97rem; color: #111827; }
+.pv2-panel-sub { font-size: 0.8rem; color: #6B7280; }
+.pv2-team-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pv2-team-member {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+}
+.pv2-team-avatar-wrap {
+  position: relative;
+}
+.pv2-team-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #E5E7EB;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.pv2-team-status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+}
+.pv2-team-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv2-team-status-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* ── Employee card V2 ─────────────────── */
+.employee-card {
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+.employee-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+  transform: translateY(-2px);
+}

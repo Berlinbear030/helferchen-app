@@ -213,6 +213,10 @@ export async function initDatabase(): Promise<void> {
   try {
     await query('ALTER TABLE users ADD COLUMN deleted_at DATETIME NULL DEFAULT NULL');
   } catch (e) {}
+  // EIS-494: track last portal activity for online-status
+  try {
+    await query('ALTER TABLE users ADD COLUMN last_seen DATETIME NULL DEFAULT NULL');
+  } catch (e) {}
 
   await query(`
     CREATE TABLE IF NOT EXISTS mail_users (

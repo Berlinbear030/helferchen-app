@@ -72,11 +72,28 @@ function DashboardTab({ user }: { user: User }) {
   const [detailType, setDetailType] = useState<DetailType | null>(null);
   const [detailBookings, setDetailBookings] = useState<BookingRequest[]>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [teamStatus, setTeamStatus] = useState<LiveStatus[]>([]);
+  const [employees, setEmployees] = useState<{ id: string; full_name: string; role: string }[]>([]);
 
   useEffect(() => {
     fetch(`${API}/dashboard/stats`, { headers: authHeaders() })
       .then(r => r.json()).then(setStats).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (user.role !== 'admin') return;
+    const loadTeam = async () => {
+      const [sRes, uRes] = await Promise.all([
+        fetch(`${API}/admin/users/live-status`, { headers: authHeaders() }),
+        fetch(`${API}/admin/users`, { headers: authHeaders() }),
+      ]);
+      if (sRes.ok) setTeamStatus(await sRes.json());
+      if (uRes.ok) setEmployees(await uRes.json());
+    };
+    loadTeam();
+    const iv = setInterval(loadTeam, 15000);
+    return () => clearInterval(iv);
+  }, [user.role]);
 
   const handleCardClick = async (type: DetailType) => {
     if (detailType === type) { setDetailType(null); return; }
@@ -93,6 +110,8 @@ function DashboardTab({ user }: { user: User }) {
   if (!stats) return <div className="error-banner">Dashboard konnte nicht geladen werden.</div>;
 
   const today = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Guten Morgen' : hour < 17 ? 'Guten Tag' : 'Guten Abend';
 
   const detailTitles: Record<DetailType, string> = {
     daily: 'Heutige Einnahmen – Details',
@@ -101,12 +120,51 @@ function DashboardTab({ user }: { user: User }) {
     booking: 'Neue Buchungsanfragen',
   };
 
+  const onlineTeam = teamStatus.filter(s => s.status !== 'offline');
+  const statusMap = Object.fromEntries(teamStatus.map(s => [s.id, s]));
+
   return (
     <div className="dashboard-tab">
-      <div className="dashboard-greeting">
-        <h2>Hallo, {user.full_name}!</h2>
-        <p className="dashboard-date">{today}</p>
+      {/* Hero greeting */}
+      <div className="pv2-dashboard-hero">
+        <div>
+          <h2 className="pv2-greeting">{greeting}, {user.full_name}!</h2>
+          <p className="dashboard-date">{today}</p>
+        </div>
+        {user.role === 'admin' && onlineTeam.length > 0 && (
+          <div className="pv2-team-online-badge">
+            <span className="pv2-online-dot" />
+            <span>{onlineTeam.length} Mitarbeiter online</span>
+          </div>
+        )}
       </div>
+
+      {/* Team Status (admin only) */}
+      {user.role === 'admin' && employees.length > 0 && (
+        <div className="pv2-team-status-panel">
+          <div className="pv2-panel-header">
+            <span className="pv2-panel-title">👥 Team Status</span>
+            <span className="pv2-panel-sub">{onlineTeam.length} von {employees.length} aktiv</span>
+          </div>
+          <div className="pv2-team-grid">
+            {employees.slice(0, 8).map(emp => {
+              const st = statusMap[emp.id];
+              const dot = STATUS_DOT[st?.status ?? 'offline'];
+              return (
+                <div key={emp.id} className="pv2-team-member">
+                  <div className="pv2-team-avatar-wrap">
+                    <div className="pv2-team-avatar">{emp.full_name.charAt(0).toUpperCase()}</div>
+                    <span className="pv2-team-status-dot" style={{ background: dot.color }} title={dot.label} />
+                  </div>
+                  <span className="pv2-team-name">{emp.full_name.split(' ')[0]}</span>
+                  <span className="pv2-team-status-label" style={{ color: dot.color }}>{st?.status === 'busy' ? 'Aktiv' : st?.status === 'on_duty' ? 'Online' : 'Offline'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="stats-grid">
         <div className="stat-card stat-primary">
           <span className="stat-value">{stats.today_appointments}</span>
@@ -2121,7 +2179,7 @@ function AnrufagentTab({ user }: { user: User }) {
   );
 }
 
-// ── Main Portal ────────────────────────────────────────────────────────────────
+// ── Main Portal V2 ────────────────────────────────────────────────────────────
 
 export default function Portal() {
   const [user, setUser] = useState<User | null>(null);
@@ -2131,6 +2189,7 @@ export default function Portal() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2151,19 +2210,28 @@ export default function Portal() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
+  // Heartbeat: keep user "online" by pinging backend every 2 minutes
+  useEffect(() => {
+    if (!user) return;
+    const ping = () => fetch(`${API}/auth/heartbeat`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+    ping();
+    const iv = setInterval(ping, 120_000);
+    return () => clearInterval(iv);
+  }, [user]);
+
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const isAdmin = user?.role === 'admin';
       const assignmentsUrl = isAdmin ? `${API}/assignments/all` : `${API}/assignments/my`;
-      
+
       const [aRes, tRes, mRes] = await Promise.all([
         fetch(assignmentsUrl, { headers: authHeaders() }),
         fetch(`${API}/timelogs/my`, { headers: authHeaders() }),
         fetch(`${API}/assignments/map`, { headers: authHeaders() }),
       ]);
       if (aRes.status === 401 || tRes.status === 401) { localStorage.clear(); navigate('/login'); return; }
-      
+
       const mine = await aRes.json();
       const logs = await tRes.json();
       const mapData = await mRes.json();
@@ -2187,93 +2255,159 @@ export default function Portal() {
     }
   };
 
-  const handleOrderMarketing = () => {
-    window.location.href = '/werbeartikel';
-  };
-
   if (!user) return <div className="loading-screen">Laden…</div>;
 
   const isAdmin = user.role === 'admin';
   const canDelete = isAdmin;
-  const tabs: { id: Tab; label: string; requireAdmin?: boolean; requireRoles?: string[] }[] = [
-    { id: 'dashboard', label: '📊 Dashboard' },
-    { id: 'anruf', label: '📞 Anrufagent', requireRoles: ['admin', 'kundenbetreuer'] },
-    { id: 'appointments', label: '📅 Termine' },
-    { id: 'tour', label: '🗺️ Tour' },
-    { id: 'booking-requests', label: '📬 Anfragen', requireAdmin: true },
-    { id: 'timelogs', label: '⏱ Zeiten' },
-    { id: 'employees', label: '👥 Mitarbeiter', requireAdmin: true },
-    { id: 'assignments-admin', label: '🧾 Aufträge', requireAdmin: true },
-    { id: 'kunden', label: '👥 Kunden', requireAdmin: true },
+
+  interface TabDef { id: Tab; label: string; icon: string; requireAdmin?: boolean; requireRoles?: string[] }
+  const tabs: TabDef[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'anruf', label: 'Anrufagent', icon: '📞', requireRoles: ['admin', 'kundenbetreuer'] },
+    { id: 'appointments', label: 'Meine Termine', icon: '📅' },
+    { id: 'tour', label: 'Tagesroute', icon: '🗺️' },
+    { id: 'booking-requests', label: 'Buchungsanfragen', icon: '📬', requireAdmin: true },
+    { id: 'timelogs', label: 'Zeitnachweise', icon: '⏱' },
+    { id: 'employees', label: 'Mitarbeiter', icon: '👥', requireAdmin: true },
+    { id: 'assignments-admin', label: 'Auftragsübersicht', icon: '🧾', requireAdmin: true },
+    { id: 'kunden', label: 'Kundenverwaltung', icon: '🤝', requireAdmin: true },
   ];
 
+  const visibleTabs = tabs.filter(t => {
+    if (t.requireRoles) return t.requireRoles.includes(user.role);
+    if (t.requireAdmin) return isAdmin;
+    return true;
+  });
+
+  const currentTab = visibleTabs.find(t => t.id === activeTab);
+  const bottomTabs = visibleTabs.slice(0, 5);
+
+  const handleTabChange = (id: Tab) => {
+    setActiveTab(id);
+    setSidebarOpen(false);
+  };
+
   return (
-    <div className="portal-layout">
-      <div className="portal-header-wrap">
-        <header className="portal-header">
-          <div className="portal-header-left">
-            <img src="/logo.png" alt="Helferchen" style={{ height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
-            <span className="portal-user">Angemeldet als <strong>{user?.full_name}</strong></span>
+    <div className="pv2-root">
+      {/* Sidebar overlay (mobile) */}
+      {sidebarOpen && <div className="pv2-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Sidebar */}
+      <aside className={`pv2-sidebar${sidebarOpen ? ' pv2-sidebar--open' : ''}`}>
+        <div className="pv2-sidebar-brand">
+          <img src="/logo.png" alt="Helferchen" style={{ height: '36px', filter: 'brightness(0) invert(1)' }} />
+        </div>
+
+        <div className="pv2-user-card">
+          <div className="pv2-user-avatar">{user.full_name.charAt(0).toUpperCase()}</div>
+          <div className="pv2-user-info">
+            <div className="pv2-user-name">{user.full_name}</div>
+            <div className="pv2-user-role">{({ admin: 'Administrator', gebietsleiter: 'Gebietsleiter', kundenbetreuer: 'Kundenbetreuer', buchhaltung: 'Buchhaltung', mitarbeiter: 'Mitarbeiter', employee: 'Mitarbeiter' } as Record<string,string>)[user.role] || user.role}</div>
+          </div>
+        </div>
+
+        <nav className="pv2-nav">
+          {visibleTabs.map(t => (
+            <button
+              key={t.id}
+              className={`pv2-nav-item${activeTab === t.id ? ' pv2-nav-item--active' : ''}`}
+              onClick={() => handleTabChange(t.id)}
+            >
+              <span className="pv2-nav-icon">{t.icon}</span>
+              <span className="pv2-nav-label">{t.label}</span>
+              {activeTab === t.id && <span className="pv2-nav-indicator" />}
+            </button>
+          ))}
+        </nav>
+
+        <div className="pv2-sidebar-footer">
+          {isAdmin && (
+            <button className="pv2-footer-btn" onClick={() => navigate('/admin')}>
+              ⚙ Admin-Einstellungen
+            </button>
+          )}
+          <button className="pv2-footer-btn" onClick={() => window.open('/app', '_blank')}>
+            📱 App starten
+          </button>
+          <button className="pv2-footer-btn pv2-footer-btn--logout" onClick={() => { localStorage.clear(); navigate('/'); }}>
+            ⎋ Abmelden
+          </button>
+        </div>
+      </aside>
+
+      {/* Main area */}
+      <div className="pv2-main">
+        {/* Topbar */}
+        <header className="pv2-topbar">
+          <div className="pv2-topbar-left">
+            <button className="pv2-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Menü">
+              <span /><span /><span />
+            </button>
+            <div className="pv2-topbar-title">
+              <span className="pv2-tab-icon">{currentTab?.icon}</span>
+              {currentTab?.label || 'Portal'}
+            </div>
+          </div>
+          <div className="pv2-topbar-right">
+            <div className="pv2-topbar-user">
+              <span className="pv2-online-dot" title="Online" />
+              <span className="pv2-topbar-name">{user.full_name}</span>
+            </div>
           </div>
         </header>
 
-        <div className="portal-action-bar">
-          <div className="portal-action-left">
-            <button className="btn-action-outline" onClick={() => window.open('/app', '_blank')}>
-              App starten
-            </button>
-            <button className="btn-action-outline" onClick={handleInstallApp}>
-              App installieren
-            </button>
-            <button className="btn-action-outline" onClick={handleOrderMarketing}>
-              Werbematerial bestellen
-            </button>
-            <button className="btn-action-logout" onClick={() => { localStorage.clear(); navigate('/'); }}>
-              &#x2192; Abmelden
-            </button>
-          </div>
-          {isAdmin && (
-            <button className="btn-action-settings" onClick={() => navigate('/admin')} title="Admin-Einstellungen">
-              ⚙
-            </button>
+        {/* Content */}
+        <main className="pv2-content">
+          {error && <div className="error-banner">{error}</div>}
+          {loading && activeTab !== 'dashboard' ? (
+            <div className="pv2-loading">
+              <div className="pv2-spinner" />
+              <p>Daten werden geladen…</p>
+            </div>
+          ) : (
+            <div className="pv2-tab-content">
+              {activeTab === 'dashboard' && <DashboardTab user={user} />}
+              {activeTab === 'anruf' && (isAdmin || user.role === 'kundenbetreuer') && <AnrufagentTab user={user} />}
+              {activeTab === 'appointments' && <AppointmentsTab assignments={assignments} onRefresh={loadData} canDelete={canDelete} />}
+              {activeTab === 'tour' && (
+                <div>
+                  <TourTab assignments={assignments} unassigned={unassignedAssignments} selectedDate={selectedDate} setSelectedDate={setSelectedDate} user={user} />
+                  <h3 style={{ margin: '24px 0 12px' }}>Kartenansicht (OpenStreetMap)</h3>
+                  <OsmMapView mine={assignments} unassigned={unassignedAssignments} filterDate={selectedDate} user={user ?? undefined} onAccept={loadData} />
+                </div>
+              )}
+              {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab canDelete={canDelete} />}
+              {activeTab === 'timelogs' && <TimelogsTab timelogs={timelogs} assignments={assignments} />}
+              {activeTab === 'employees' && isAdmin && <EmployeesTab />}
+              {activeTab === 'assignments-admin' && isAdmin && <AssignmentsAdminTab canDelete={canDelete} />}
+              {activeTab === 'kunden' && isAdmin && <KundenTab canDelete={canDelete} />}
+            </div>
           )}
-        </div>
+        </main>
       </div>
 
-      <nav className="portal-tabs">
-        {tabs.filter(t => {
-          if (t.requireRoles) return t.requireRoles.includes(user.role);
-          if (t.requireAdmin) return isAdmin;
-          return true;
-        }).map(t => (
-          <button key={t.id} className={`tab-btn ${activeTab === t.id ? 'tab-active' : ''}`} onClick={() => setActiveTab(t.id)}>
-            {t.label}
+      {/* Mobile bottom nav */}
+      <nav className="pv2-bottom-nav">
+        {bottomTabs.map(t => (
+          <button
+            key={t.id}
+            className={`pv2-bottom-nav-item${activeTab === t.id ? ' pv2-bottom-nav-item--active' : ''}`}
+            onClick={() => handleTabChange(t.id)}
+          >
+            <span className="pv2-bottom-icon">{t.icon}</span>
+            <span className="pv2-bottom-label">{t.label.split(' ')[0]}</span>
           </button>
         ))}
-      </nav>
-
-      <main className="portal-content">
-        {error && <div className="error-banner">{error}</div>}
-        {loading && activeTab !== 'dashboard' ? <div className="loading-text">Daten werden geladen…</div> : (
-          <>
-            {activeTab === 'dashboard' && <DashboardTab user={user} />}
-            {activeTab === 'anruf' && (isAdmin || user.role === 'kundenbetreuer') && <AnrufagentTab user={user} />}
-            {activeTab === 'appointments' && <AppointmentsTab assignments={assignments} onRefresh={loadData} canDelete={canDelete} />}
-            {activeTab === 'tour' && (
-              <div>
-                <TourTab assignments={assignments} unassigned={unassignedAssignments} selectedDate={selectedDate} setSelectedDate={setSelectedDate} user={user} />
-                <h3 style={{ margin: '24px 0 12px' }}>Kartenansicht (OpenStreetMap)</h3>
-                <OsmMapView mine={assignments} unassigned={unassignedAssignments} filterDate={selectedDate} user={user ?? undefined} onAccept={loadData} />
-              </div>
-            )}
-            {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab canDelete={canDelete} />}
-            {activeTab === 'timelogs' && <TimelogsTab timelogs={timelogs} assignments={assignments} />}
-            {activeTab === 'employees' && isAdmin && <EmployeesTab />}
-            {activeTab === 'assignments-admin' && isAdmin && <AssignmentsAdminTab canDelete={canDelete} />}
-            {activeTab === 'kunden' && isAdmin && <KundenTab canDelete={canDelete} />}
-          </>
+        {visibleTabs.length > 5 && (
+          <button
+            className={`pv2-bottom-nav-item${sidebarOpen ? ' pv2-bottom-nav-item--active' : ''}`}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            <span className="pv2-bottom-icon">☰</span>
+            <span className="pv2-bottom-label">Mehr</span>
+          </button>
         )}
-      </main>
+      </nav>
     </div>
   );
 }
