@@ -129,15 +129,26 @@ router.post('/:id/self-assign', authenticateToken, async (req: AuthRequest, res:
   res.json({ ...assignment, assigned_user_id: userId });
 });
 
-// PATCH /api/assignments/:id — admin can reassign to a different employee
+// PATCH /api/assignments/:id — admin can update all fields
 router.patch('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
-  const assignment = await AssignmentRepo.findById(String(req.params.id));
+  const id = String(req.params.id);
+  const assignment = await AssignmentRepo.findById(id);
   if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
-  const { assigned_user_id, title, description, scheduled_at } = req.body;
-  if (assigned_user_id !== undefined) {
-    await AssignmentRepo.reassign(String(req.params.id), assigned_user_id || null);
+  const { assigned_user_id, title, description, scheduled_at, customer_id, hourly_rate } = req.body;
+  const updates: string[] = [];
+  const values: any[] = [];
+  if (assigned_user_id !== undefined) { updates.push('assigned_user_id = ?'); values.push(assigned_user_id || null); }
+  if (title !== undefined) { updates.push('title = ?'); values.push(title); }
+  if (description !== undefined) { updates.push('description = ?'); values.push(description); }
+  if (scheduled_at !== undefined) { updates.push('scheduled_at = ?'); values.push(scheduled_at.replace('T', ' ').slice(0, 19)); }
+  if (customer_id !== undefined) { updates.push('customer_id = ?'); values.push(customer_id); }
+  if (hourly_rate !== undefined) { updates.push('hourly_rate = ?'); values.push(parseFloat(hourly_rate)); }
+  if (updates.length > 0) {
+    values.push(id);
+    await query(`UPDATE assignments SET ${updates.join(', ')} WHERE id = ?`, values);
   }
-  res.json({ ...assignment, assigned_user_id: assigned_user_id ?? assignment.assigned_user_id });
+  const updated = await AssignmentRepo.findById(id);
+  res.json(updated);
 });
 
 router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -150,6 +161,20 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
 
   await AssignmentRepo.updateStatus(String(req.params.id), String(status));
   res.json({ ...assignment, status });
+});
+
+// GET /api/assignments/:id/details — full detail with timelogs, reports, customer, user (admin)
+router.get('/:id/details', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id);
+  const assignment = await AssignmentRepo.findById(id);
+  if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
+  const [customer, user, timelogs, reports] = await Promise.all([
+    CustomerRepo.findById(assignment.customer_id),
+    assignment.assigned_user_id ? UserRepo.findById(assignment.assigned_user_id) : Promise.resolve(null),
+    query('SELECT * FROM time_logs WHERE assignment_id = ? ORDER BY start_time DESC', [id]).then(r => r.rows),
+    query('SELECT r.*, s.image_data IS NOT NULL as has_signature FROM reports r LEFT JOIN signatures s ON s.id = r.signature_id WHERE r.assignment_id = ? ORDER BY r.created_at DESC', [id]).then(r => r.rows),
+  ]);
+  res.json({ ...assignment, customer, assigned_user: user ? { id: user.id, full_name: user.full_name } : null, timelogs, reports });
 });
 
 router.delete('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {

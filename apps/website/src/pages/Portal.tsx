@@ -690,6 +690,12 @@ function EmployeesTab() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [confirmDel, setConfirmDel] = useState<{ id: string; name: string } | null>(null);
+  const [editEmp, setEditEmp] = useState<Employee | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
+  const [creating, setCreating] = useState(false);
   const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchLiveStatus = useCallback(async () => {
@@ -719,10 +725,7 @@ function EmployeesTab() {
     return () => { if (statusIntervalRef.current) clearInterval(statusIntervalRef.current); };
   }, [load, fetchLiveStatus]);
 
-  const del = async (id: string, name: string) => {
-    setConfirmDel({ id, name });
-  };
-
+  const del = async (id: string, name: string) => { setConfirmDel({ id, name }); };
   const confirmDelExecute = async () => {
     if (!confirmDel) return;
     await fetch(`${API}/admin/users/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
@@ -730,24 +733,124 @@ function EmployeesTab() {
     load();
   };
 
+  const openEdit = (emp: Employee) => {
+    setEditEmp(emp);
+    setEditForm({ full_name: emp.full_name, email: emp.email || '', role: emp.role, password: '' });
+  };
+
+  const saveEdit = async () => {
+    if (!editEmp) return;
+    setEditSaving(true);
+    const body: any = {};
+    if (editForm.full_name !== editEmp.full_name) body.full_name = editForm.full_name;
+    if (editForm.email !== (editEmp.email || '')) body.email = editForm.email;
+    if (editForm.role !== editEmp.role) body.role = editForm.role;
+    if (editForm.password) body.password = editForm.password;
+    const r = await fetch(`${API}/admin/users/${editEmp.id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) });
+    setEditSaving(false);
+    if (r.ok) {
+      setMsg('✅ Mitarbeiter aktualisiert.');
+      setEditEmp(null);
+      load();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      setMsg('❌ ' + (d.message || 'Fehler beim Speichern'));
+    }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const createEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+    const r = await fetch(`${API}/admin/users`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(createForm) });
+    setCreating(false);
+    if (r.ok) {
+      setMsg('✅ Mitarbeiter angelegt.');
+      setShowCreate(false);
+      setCreateForm({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
+      load();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      setMsg('❌ ' + (d.message || 'Fehler beim Anlegen'));
+    }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
   if (loading) return <div className="loading-text">Lade Mitarbeiter…</div>;
+
+  const ROLES = ['admin', 'gebietsleiter', 'kundenbetreuer', 'buchhaltung', 'mitarbeiter'];
 
   return (
     <div className="employees-tab">
       {confirmDel && <ConfirmDialog message={`${confirmDel.name} wirklich löschen?`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
-      <div className="employees-header">
-        <h3>Mitarbeiterverwaltung ({employees.length})</h3>
-        <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: '#6b7280', alignItems: 'center' }}>
-          {Object.values(STATUS_DOT).map(({ color, label }) => (
-            <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: color }} />
-              {label}
-            </span>
-          ))}
+
+      {/* Edit modal */}
+      {editEmp && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '28px 32px', width: '420px', maxWidth: '95vw', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0 }}>Mitarbeiter bearbeiten</h3>
+              <button onClick={() => setEditEmp(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF' }}>×</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Name *</label>
+                <input value={editForm.full_name} onChange={e => setEditForm((f: any) => ({ ...f, full_name: e.target.value }))} style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem', boxSizing: 'border-box' }} /></div>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>E-Mail</label>
+                <input type="email" value={editForm.email} onChange={e => setEditForm((f: any) => ({ ...f, email: e.target.value }))} style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem', boxSizing: 'border-box' }} /></div>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Rolle</label>
+                <select value={editForm.role} onChange={e => setEditForm((f: any) => ({ ...f, role: e.target.value }))} style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem' }}>
+                  {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
+                </select></div>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Neues Passwort (leer lassen = unverändert)</label>
+                <input type="password" value={editForm.password} onChange={e => setEditForm((f: any) => ({ ...f, password: e.target.value }))} placeholder="••••••••" style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem', boxSizing: 'border-box' }} /></div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button onClick={saveEdit} disabled={editSaving} style={{ flex: 1, padding: '10px', background: '#00454A', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem' }}>{editSaving ? 'Speichern…' : '💾 Speichern'}</button>
+              <button onClick={() => setEditEmp(null)} style={{ padding: '10px 16px', background: '#F3F4F6', color: '#374151', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Abbrechen</button>
+            </div>
+          </div>
         </div>
+      )}
+
+      <div className="employees-header">
+        <div>
+          <h3 style={{ margin: '0 0 4px' }}>Mitarbeiterverwaltung ({employees.length})</h3>
+          <div style={{ display: 'flex', gap: '12px', fontSize: '0.78rem', color: '#6b7280', alignItems: 'center' }}>
+            {Object.values(STATUS_DOT).map(({ color, label }) => (
+              <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: color }} />{label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <button className="btn-primary" onClick={() => setShowCreate(!showCreate)}>
+          {showCreate ? '× Abbrechen' : '+ Neuer Mitarbeiter'}
+        </button>
       </div>
 
-      {msg && <div className={`msg-banner ${msg.includes('Fehler') ? 'msg-error' : 'msg-success'}`}>{msg}</div>}
+      {/* Create form */}
+      {showCreate && (
+        <form onSubmit={createEmployee} style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: '10px', padding: '20px', marginBottom: '20px' }}>
+          <h4 style={{ margin: '0 0 16px', color: '#00454A' }}>Neuen Mitarbeiter anlegen</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Vollständiger Name *</label>
+              <input required value={createForm.full_name} onChange={e => setCreateForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Max Mustermann" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
+            <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Benutzername *</label>
+              <input required value={createForm.username} onChange={e => setCreateForm(f => ({ ...f, username: e.target.value }))} placeholder="maxmustermann" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
+            <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>E-Mail</label>
+              <input type="email" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} placeholder="max@helferchen.info" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
+            <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Passwort *</label>
+              <input required type="password" value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
+            <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Rolle *</label>
+              <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem' }}>
+                {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
+              </select></div>
+          </div>
+          <button type="submit" disabled={creating} className="btn-primary">{creating ? 'Anlegen…' : '✓ Mitarbeiter anlegen'}</button>
+        </form>
+      )}
+
+      {msg && <div className={`msg-banner ${msg.includes('❌') ? 'msg-error' : 'msg-success'}`}>{msg}</div>}
 
       <div className="employees-list">
         {employees.length === 0 && <p className="empty-state">Keine Mitarbeiter vorhanden.</p>}
@@ -758,24 +861,21 @@ function EmployeesTab() {
             <div key={emp.id} className="employee-card">
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <div className="employee-avatar">{emp.full_name.charAt(0).toUpperCase()}</div>
-                <span
-                  title={dot.label}
-                  style={{
-                    position: 'absolute', bottom: 0, right: 0,
-                    width: 12, height: 12, borderRadius: '50%',
-                    background: dot.color, border: '2px solid #fff',
-                  }}
-                />
+                <span title={dot.label} style={{ position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, borderRadius: '50%', background: dot.color, border: '2px solid #fff' }} />
               </div>
               <div className="employee-info">
                 <strong>{emp.full_name}</strong>
                 <span className="employee-username">@{emp.username}</span>
                 {emp.email && <span className="employee-email">{emp.email}</span>}
+                <span style={{ fontSize: '0.72rem', color: dot.color, fontWeight: 700 }}>{dot.label}</span>
               </div>
               <span className="role-badge" style={{ background: ROLE_COLORS[emp.role] || '#374151' }}>
                 {ROLE_LABELS[emp.role] || emp.role}
               </span>
-              <button className="btn-danger btn-sm btn-icon" onClick={() => del(emp.id, emp.full_name)} title="Löschen">✕</button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button className="btn-primary btn-sm" onClick={() => openEdit(emp)} title="Bearbeiten" style={{ padding: '5px 10px', fontSize: '0.82rem' }}>✎ Bearbeiten</button>
+                <button className="btn-danger btn-sm btn-icon" onClick={() => del(emp.id, emp.full_name)} title="Löschen">✕</button>
+              </div>
             </div>
           );
         })}
@@ -1091,6 +1191,11 @@ function BookingRequestsMap({ requests }: { requests: BookingRequest[] }) {
 
 // ── Admin: Aufträge verwalten ───────────────────────────────────────────────────
 
+interface AssignmentDetail extends Assignment {
+  timelogs?: any[];
+  reports?: any[];
+}
+
 function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [employees, setEmployees] = useState<{ id: string; full_name: string }[]>([]);
@@ -1105,6 +1210,12 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
   const [timeFilter, setTimeFilter] = useState('all');
   const [searchQ, setSearchQ] = useState('');
   const [confirmDel, setConfirmDel] = useState<{ id: string; title: string } | null>(null);
+  const [editAssignment, setEditAssignment] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<AssignmentDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1125,30 +1236,54 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
   useEffect(() => { load(); }, [load]);
 
   const reassign = async (id: string, userId: string) => {
-    await fetch(`${API}/assignments/${id}`, {
-      method: 'PATCH', headers: authHeaders(),
-      body: JSON.stringify({ assigned_user_id: userId || null }),
-    });
-    setMsg('Zuweisung gespeichert.');
+    await fetch(`${API}/assignments/${id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ assigned_user_id: userId || null }) });
+    setMsg('✅ Zuweisung gespeichert.');
     setTimeout(() => setMsg(''), 3000);
     load();
   };
 
-  const deleteAssignment = (id: string, title: string) => {
-    setConfirmDel({ id, title });
-  };
+  const deleteAssignment = (id: string, title: string) => { setConfirmDel({ id, title }); };
 
   const confirmDelExecute = async () => {
     if (!confirmDel) return;
     const r = await fetch(`${API}/assignments/${confirmDel.id}`, { method: 'DELETE', headers: authHeaders() });
     setConfirmDel(null);
-    if (r.ok) {
-      setMsg('✅ Auftrag gelöscht.');
-      setTimeout(() => setMsg(''), 3000);
-      load();
-    } else {
-      setMsg('❌ Löschen fehlgeschlagen.');
-    }
+    if (r.ok) { setMsg('✅ Auftrag gelöscht.'); load(); }
+    else setMsg('❌ Löschen fehlgeschlagen.');
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const openEdit = (a: any) => {
+    setEditAssignment(a);
+    const d = new Date(a.scheduled_at);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dt = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    setEditForm({ title: a.title, description: a.description || '', scheduled_at: dt, customer_id: a.customer?.id || a.customer_id, assigned_user_id: a.assigned_user?.id || a.assigned_user_id || '', hourly_rate: a.hourly_rate || 65 });
+  };
+
+  const saveEdit = async () => {
+    if (!editAssignment) return;
+    setEditSaving(true);
+    const r = await fetch(`${API}/assignments/${editAssignment.id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(editForm) });
+    setEditSaving(false);
+    if (r.ok) { setMsg('✅ Auftrag gespeichert.'); setEditAssignment(null); load(); }
+    else { const d = await r.json().catch(() => ({})); setMsg('❌ ' + (d.message || 'Fehler')); }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const loadDetail = async (id: string) => {
+    if (detailId === id) { setDetailId(null); setDetail(null); return; }
+    setDetailId(id);
+    setDetailLoading(true);
+    setDetail(null);
+    const r = await fetch(`${API}/assignments/${id}/details`, { headers: authHeaders() });
+    if (r.ok) setDetail(await r.json());
+    setDetailLoading(false);
+  };
+
+  const changeStatus = async (id: string, status: string) => {
+    await fetch(`${API}/assignments/${id}/status`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }) });
+    load();
   };
 
   const convertRequest = (r: BookingRequest) => {
@@ -1214,185 +1349,218 @@ function AssignmentsAdminTab({ canDelete }: { canDelete: boolean }) {
     })
     .filter(a => !searchQ || `${a.title} ${a.customer?.first_name} ${a.customer?.last_name} ${a.customer?.address}`.toLowerCase().includes(searchQ.toLowerCase()));
 
+  const inpSt: React.CSSProperties = { width: '100%', padding: '8px 10px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.9rem', boxSizing: 'border-box' };
+
   return (
-    <div className="assignments-admin-layout" style={{ display: 'flex', gap: '24px' }}>
+    <div>
       {confirmDel && <ConfirmDialog message={`Auftrag "${confirmDel.title}" wirklich löschen? Alle zugehörigen Zeitnachweise und Berichte werden ebenfalls gelöscht.`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
-      <div style={{ flex: 1 }}>
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <h3 style={{ margin: 0 }}>Auftragsübersicht ({filteredAssignments.length}/{assignments.length})</h3>
-            <button className="btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
-              {showCreate ? '× Abbrechen' : '+ Neuer Auftrag'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <input type="search" placeholder="🔍 Suchen nach Titel, Kunde, Adresse…" value={searchQ} onChange={e => setSearchQ(e.target.value)}
-              style={{ padding: '7px 12px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.88rem', width: '100%', boxSizing: 'border-box' }} />
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {[['all','Alle'],['pending','Ausstehend'],['in_progress','In Bearbeitung'],['completed','Abgeschlossen'],['cancelled','Abgebrochen']].map(([v,l]) => (
-                <button key={v} style={fbtn2(statusFilter === v)} onClick={() => setStatusFilter(v)}>{l}</button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {[['all','Alle Zeiten'],['today','Heute'],['week','Diese Woche'],['month','Dieser Monat']].map(([v,l]) => (
-                <button key={v} style={fbtn2(timeFilter === v)} onClick={() => setTimeFilter(v)}>{l}</button>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {msg && <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: 12 }}>{msg}</div>}
-
-        {showCreate && (
-          <form className="employee-form" onSubmit={create} style={{ marginBottom: 24, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Titel *</label>
-                <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="z.B. Einkaufshilfe" />
-              </div>
-              <div className="form-group">
-                <label>Datum/Zeit *</label>
-                <input type="datetime-local" required value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} />
-              </div>
+      {/* Edit modal */}
+      {editAssignment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: '14px', padding: '28px 32px', width: '520px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0 }}>✎ Auftrag bearbeiten</h3>
+              <button onClick={() => setEditAssignment(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF' }}>×</button>
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Kunde *</label>
-                <select required value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}>
-                  <option value="">– Kunde wählen –</option>
-                  <option value="NEW_CUSTOMER_DIRECT">🆕 Neuer Kunde (direkt anlegen)</option>
-                  {form.customer_id === 'NEW_CUSTOMER' && <option value="NEW_CUSTOMER">🆕 Neu: {form.new_customer?.name}</option>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Titel *</label>
+                <input value={editForm.title} onChange={e => setEditForm((f: any) => ({ ...f, title: e.target.value }))} style={inpSt} /></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div><label style={{ fontSize: '0.82rem', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Datum & Uhrzeit *</label>
+                  <input type="datetime-local" value={editForm.scheduled_at} onChange={e => setEditForm((f: any) => ({ ...f, scheduled_at: e.target.value }))} style={inpSt} /></div>
+                <div><label style={{ fontSize: '0.82rem', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Stundensatz (€)</label>
+                  <input type="number" step="0.5" value={editForm.hourly_rate} onChange={e => setEditForm((f: any) => ({ ...f, hourly_rate: e.target.value }))} style={inpSt} /></div>
+              </div>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Kunde</label>
+                <select value={editForm.customer_id} onChange={e => setEditForm((f: any) => ({ ...f, customer_id: e.target.value }))} style={inpSt}>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name} – {c.address}</option>)}
-                </select>
-                {(form.customer_id === 'NEW_CUSTOMER' || form.customer_id === 'NEW_CUSTOMER_DIRECT') && (
-                  <div style={{ marginTop: '8px', padding: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#059669', marginBottom: '6px', fontWeight: '600' }}>
-                      Neuen Kunden anlegen:
-                    </div>
-                    {form.customer_id === 'NEW_CUSTOMER_DIRECT' ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <input placeholder="Name (Vor- und Nachname) *" required value={form.new_customer?.name || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, name: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
-                        <input placeholder="Telefon *" required value={form.new_customer?.phone || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, phone: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
-                        <input placeholder="Adresse *" required value={form.new_customer?.address || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, address: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: '0.75rem', color: '#374151' }}>
-                        {form.new_customer?.name} · {form.new_customer?.phone}
-                        <br />Adresse: {form.new_customer?.address}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="form-group">
-                <label>Mitarbeiter zuweisen</label>
-                <select value={form.assigned_user_id} onChange={e => setForm(f => ({ ...f, assigned_user_id: e.target.value }))}>
+                </select></div>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Mitarbeiter</label>
+                <select value={editForm.assigned_user_id} onChange={e => setEditForm((f: any) => ({ ...f, assigned_user_id: e.target.value }))} style={inpSt}>
                   <option value="">– Nicht zugewiesen –</option>
-                  {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
-                </select>
+                  {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                </select></div>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Beschreibung</label>
+                <textarea value={editForm.description} onChange={e => setEditForm((f: any) => ({ ...f, description: e.target.value }))} rows={3} style={{ ...inpSt, resize: 'vertical', fontFamily: 'inherit' }} /></div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button onClick={saveEdit} disabled={editSaving} style={{ flex: 1, padding: '11px', background: '#00454A', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem' }}>{editSaving ? 'Speichern…' : '💾 Speichern'}</button>
+              <button onClick={() => setEditAssignment(null)} style={{ padding: '11px 16px', background: '#F3F4F6', color: '#374151', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: '24px' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Filters */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0 }}>Auftragsübersicht ({filteredAssignments.length}/{assignments.length})</h3>
+              <button className="btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
+                {showCreate ? '× Abbrechen' : '+ Neuer Auftrag'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <input type="search" placeholder="🔍 Suchen nach Titel, Kunde, Adresse…" value={searchQ} onChange={e => setSearchQ(e.target.value)}
+                style={{ padding: '7px 12px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.88rem', width: '100%', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {[['all','Alle'],['pending','Ausstehend'],['in_progress','In Bearbeitung'],['completed','Abgeschlossen'],['cancelled','Abgebrochen']].map(([v,l]) => (
+                  <button key={v} style={fbtn2(statusFilter === v)} onClick={() => setStatusFilter(v)}>{l}</button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {[['all','Alle Zeiten'],['today','Heute'],['week','Diese Woche'],['month','Dieser Monat']].map(([v,l]) => (
+                  <button key={v} style={fbtn2(timeFilter === v)} onClick={() => setTimeFilter(v)}>{l}</button>
+                ))}
               </div>
             </div>
-            <div className="form-group">
-              <label>Beschreibung</label>
-              <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Optionale Details…" style={{ width: '100%', resize: 'vertical' }} />
-            </div>
-            <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Speichern…' : 'Auftrag erstellen'}</button>
-          </form>
-        )}
+          </div>
 
-        <div className="table-scroll-wrap">
-        <table className="admin-table" style={{ width: '100%', tableLayout: 'auto' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', padding: '12px' }}>Titel / Auftrag</th>
-              <th style={{ textAlign: 'left', padding: '12px' }}>Kunde</th>
-              <th style={{ textAlign: 'left', padding: '12px' }}>📍 Adresse</th>
-              <th style={{ textAlign: 'left', padding: '12px' }}>📝 Arbeiten / Details</th>
-              <th style={{ textAlign: 'left', padding: '12px' }}>📅 Termin</th>
-              <th style={{ textAlign: 'left', padding: '12px' }}>Status</th>
-              <th style={{ textAlign: 'left', padding: '12px' }}>Zuweisung</th>
-              {canDelete && <th style={{ padding: '12px' }}></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAssignments.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', color: '#9CA3AF', padding: '24px' }}>Keine Aufträge für diesen Filter.</td></tr>}
-            {filteredAssignments.map(a => (
-              <tr key={a.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '12px' }}>
-                  <div style={{ fontWeight: '700', color: '#00454A' }}>{a.title}</div>
-                  <div style={{ fontSize: '0.7rem', color: '#9CA3AF' }}>ID: {a.id.slice(0, 8)}</div>
-                </td>
-                <td style={{ padding: '12px' }}>
-                  {a.customer ? (
-                    <div>
-                      <div style={{ fontWeight: '600' }}>{a.customer.first_name} {a.customer.last_name}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>📞 {a.customer.phone_number}</div>
-                    </div>
-                  ) : '–'}
-                </td>
-                <td style={{ padding: '12px' }}>
-                  {a.customer ? (
-                    <div style={{ maxWidth: '300px', fontSize: '0.9rem', fontWeight: '500', color: '#111827' }}>
-                      📍 {a.customer.address}
-                    </div>
-                  ) : (
-                    <div style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '0.85rem' }}>
-                      ⚠️ Adresse fehlt (Kein Kunde!)
-                    </div>
-                  )}
-                </td>
-                <td style={{ padding: '12px' }}>
-                  <div style={{ fontSize: '0.85rem', color: '#1F2937', fontWeight: '600', marginBottom: '4px' }}>
-                    {a.title}
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: '#374151', maxWidth: '350px', whiteSpace: 'pre-wrap', maxHeight: '150px', overflowY: 'auto', background: '#F3F4F6', padding: '10px', borderRadius: '6px', border: '1px solid #D1D5DB', lineHeight: '1.4' }}>
-                    {a.description || <span style={{ color: '#9CA3AF', fontStyle: 'italic' }}>Keine weiteren Details angegeben</span>}
-                  </div>
-                </td>
-                <td style={{ padding: '12px', whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                  {a.scheduled_at ? new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : '–'}
-                </td>
-                <td style={{ padding: '12px' }}>
-                  <span className={`status-badge status-${a.status}`}>{statusLabel(a.status)}</span>
-                </td>
-                <td style={{ padding: '12px' }}>
-                  <select
-                    value={a.assigned_user?.id || a.assigned_user_id || ''}
-                    onChange={e => reassign(a.id, e.target.value)}
-                    style={{ fontSize: '0.85rem', padding: '4px 8px', borderRadius: '4px', border: '1px solid #D1D5DB', width: '100%' }}
-                  >
-                    <option value="">🟡 Nicht zugewiesen</option>
-                    {employees.map(emp => <option key={emp.id} value={emp.id}>🟢 {emp.full_name}</option>)}
-                  </select>
-                </td>
-                {canDelete && (
-                  <td style={{ padding: '12px' }}>
-                    <button className="btn-danger btn-sm btn-icon" onClick={() => deleteAssignment(a.id, a.title)} title="Auftrag löschen">✕</button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      </div>
+          {msg && <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`} style={{ marginBottom: 12 }}>{msg}</div>}
 
-      <div className="assignments-sidebar" style={{ width: '300px', flexShrink: 0, background: '#F3F4F6', padding: '16px', borderRadius: '8px' }}>
-        <h4 style={{ marginTop: 0, marginBottom: '12px' }}>Angenommene Anfragen</h4>
-        {requests.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#6B7280' }}>Keine Anfragen zum Umwandeln.</p> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {requests.map(r => (
-              <div key={r.id} style={{ background: '#fff', padding: '10px', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontSize: '0.85rem' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{r.name}</div>
-                <div style={{ color: '#4B5563', fontSize: '0.8rem', marginBottom: '8px' }}>{r.service_description.slice(0, 50)}...</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#6B7280' }}>{r.preferred_date}</span>
-                  <button className="btn-primary btn-sm" style={{ padding: '2px 8px' }} onClick={() => convertRequest(r)}>Umwandeln</button>
+          {showCreate && (
+            <form className="employee-form" onSubmit={create} style={{ marginBottom: 24, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Titel *</label>
+                  <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="z.B. Einkaufshilfe" />
+                </div>
+                <div className="form-group">
+                  <label>Datum/Zeit *</label>
+                  <input type="datetime-local" required value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} />
                 </div>
               </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Kunde *</label>
+                  <select required value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}>
+                    <option value="">– Kunde wählen –</option>
+                    <option value="NEW_CUSTOMER_DIRECT">🆕 Neuer Kunde (direkt anlegen)</option>
+                    {form.customer_id === 'NEW_CUSTOMER' && <option value="NEW_CUSTOMER">🆕 Neu: {form.new_customer?.name}</option>}
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.first_name} {c.last_name} – {c.address}</option>)}
+                  </select>
+                  {(form.customer_id === 'NEW_CUSTOMER' || form.customer_id === 'NEW_CUSTOMER_DIRECT') && (
+                    <div style={{ marginTop: '8px', padding: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px' }}>
+                      {form.customer_id === 'NEW_CUSTOMER_DIRECT' ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <input placeholder="Name *" required value={form.new_customer?.name || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, name: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
+                          <input placeholder="Telefon *" required value={form.new_customer?.phone || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, phone: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
+                          <input placeholder="Adresse *" required value={form.new_customer?.address || ''} onChange={e => setForm((f: any) => ({ ...f, new_customer: { ...f.new_customer, address: e.target.value } }))} style={{ padding: '4px 8px', border: '1px solid #D1D5DB', borderRadius: '4px', fontSize: '0.85rem' }} />
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.75rem', color: '#374151' }}>{form.new_customer?.name} · {form.new_customer?.phone}<br />Adresse: {form.new_customer?.address}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label>Mitarbeiter zuweisen</label>
+                  <select value={form.assigned_user_id} onChange={e => setForm(f => ({ ...f, assigned_user_id: e.target.value }))}>
+                    <option value="">– Nicht zugewiesen –</option>
+                    {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Beschreibung</label>
+                <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Optionale Details…" style={{ width: '100%', resize: 'vertical' }} />
+              </div>
+              <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Speichern…' : 'Auftrag erstellen'}</button>
+            </form>
+          )}
+
+          {/* Card list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {filteredAssignments.length === 0 && <p className="empty-state">Keine Aufträge für diesen Filter.</p>}
+            {filteredAssignments.map(a => (
+              <div key={a.id} style={{ background: '#fff', borderRadius: '10px', border: '1px solid #E5E7EB', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  {/* Status indicator */}
+                  <div style={{ width: '4px', height: '50px', background: a.status === 'completed' ? '#22c55e' : a.status === 'in_progress' ? '#3b82f6' : a.status === 'cancelled' ? '#ef4444' : '#f59e0b', borderRadius: '2px', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.97rem', color: '#111827' }}>{a.title}</div>
+                        {a.customer && <div style={{ fontSize: '0.82rem', color: '#6B7280', marginTop: '2px' }}>👤 {a.customer.first_name} {a.customer.last_name} · 📍 {a.customer.address}</div>}
+                      </div>
+                      <div style={{ display: 'flex', align: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#6B7280', whiteSpace: 'nowrap' }}>
+                          📅 {a.scheduled_at ? new Date(a.scheduled_at).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '–'}
+                        </span>
+                        <select value={a.status} onChange={e => changeStatus(a.id, e.target.value)}
+                          style={{ fontSize: '0.78rem', padding: '3px 7px', borderRadius: '5px', border: '1px solid #D1D5DB', cursor: 'pointer' }}>
+                          {[['pending','Ausstehend'],['in_progress','In Bearbeitung'],['completed','Abgeschlossen'],['cancelled','Abgebrochen']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                        <select value={a.assigned_user?.id || a.assigned_user_id || ''} onChange={e => reassign(a.id, e.target.value)}
+                          style={{ fontSize: '0.78rem', padding: '3px 7px', borderRadius: '5px', border: '1px solid #D1D5DB', maxWidth: '160px', cursor: 'pointer' }}>
+                          <option value="">Nicht zugewiesen</option>
+                          {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
+                        </select>
+                        <button onClick={() => openEdit(a)} style={{ padding: '4px 10px', background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: '5px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap' }}>✎ Bearbeiten</button>
+                        <button onClick={() => loadDetail(a.id)} style={{ padding: '4px 10px', background: detailId === a.id ? '#F0FDF4' : '#F9FAFB', color: '#374151', border: '1px solid #E5E7EB', borderRadius: '5px', cursor: 'pointer', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>{detailId === a.id ? '▲ Details' : '▼ Details'}</button>
+                        {canDelete && <button onClick={() => deleteAssignment(a.id, a.title)} style={{ padding: '4px 8px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '5px', cursor: 'pointer', fontSize: '0.78rem' }}>✕</button>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Detail panel */}
+                {detailId === a.id && (
+                  <div style={{ borderTop: '1px solid #F3F4F6', padding: '14px 16px', background: '#FAFAFA' }}>
+                    {detailLoading ? <div style={{ color: '#6B7280', fontSize: '0.88rem' }}>Lade Details…</div> : detail ? (
+                      <div>
+                        {detail.description && <p style={{ margin: '0 0 10px', fontSize: '0.88rem', color: '#374151', background: '#F3F4F6', padding: '8px 12px', borderRadius: '6px' }}>📝 {detail.description}</p>}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '8px' }}>
+                          {/* Timelogs */}
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '8px', color: '#374151' }}>⏱ Zeitnachweise ({(detail.timelogs || []).length})</div>
+                            {(detail.timelogs || []).length === 0 ? <p style={{ fontSize: '0.82rem', color: '#9CA3AF' }}>Keine Zeitnachweise</p> : (detail.timelogs || []).map((t: any) => (
+                              <div key={t.id} style={{ fontSize: '0.8rem', padding: '6px 10px', background: '#fff', borderRadius: '6px', marginBottom: '4px', border: '1px solid #E5E7EB' }}>
+                                <div style={{ fontWeight: 600 }}>{new Date(t.start_time).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                                <div style={{ color: '#6B7280' }}>{t.end_time ? `bis ${new Date(t.end_time).toLocaleTimeString('de-DE', { timeStyle: 'short' })} · ${formatDuration(t.start_time, t.end_time)}` : '🔴 Läuft noch'} {t.is_signed ? '· ✅ Signiert' : ''}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Reports */}
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '8px', color: '#374151' }}>📄 Berichte ({(detail.reports || []).length})</div>
+                            {(detail.reports || []).length === 0 ? <p style={{ fontSize: '0.82rem', color: '#9CA3AF' }}>Kein Bericht vorhanden</p> : (detail.reports || []).map((r: any) => (
+                              <div key={r.id} style={{ fontSize: '0.8rem', padding: '6px 10px', background: '#fff', borderRadius: '6px', marginBottom: '4px', border: '1px solid #E5E7EB' }}>
+                                <div style={{ fontWeight: 600, color: r.has_signature ? '#16A34A' : '#DC2626' }}>{r.has_signature ? '✅ Bezahlt' : '❗ Offene Rechnung'}</div>
+                                {r.notes && <div style={{ color: '#374151', marginTop: '2px' }}>{r.notes.slice(0, 80)}{r.notes.length > 80 ? '…' : ''}</div>}
+                                <button onClick={() => downloadReportPdf(r.id)} style={{ marginTop: '6px', padding: '3px 8px', background: '#00454A', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}>📄 PDF</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : <div style={{ color: '#9CA3AF', fontSize: '0.85rem' }}>Details konnten nicht geladen werden.</div>}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
-        )}
+        </div>
+
+        {/* Sidebar: accepted booking requests */}
+        <div className="assignments-sidebar" style={{ width: '260px', flexShrink: 0, background: '#F3F4F6', padding: '16px', borderRadius: '8px', alignSelf: 'flex-start' }}>
+          <h4 style={{ marginTop: 0, marginBottom: '12px' }}>📬 Angenommene Anfragen</h4>
+          {requests.length === 0 ? <p style={{ fontSize: '0.85rem', color: '#6B7280' }}>Keine Anfragen zum Umwandeln.</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {requests.map(r => (
+                <div key={r.id} style={{ background: '#fff', padding: '10px', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', fontSize: '0.85rem' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{r.name}</div>
+                  <div style={{ color: '#4B5563', fontSize: '0.78rem', marginBottom: '6px' }}>{r.service_description.slice(0, 50)}{r.service_description.length > 50 ? '…' : ''}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#6B7280', fontSize: '0.75rem' }}>{r.preferred_date}</span>
+                    <button className="btn-primary btn-sm" style={{ padding: '3px 8px', fontSize: '0.78rem' }} onClick={() => convertRequest(r)}>→ Umwandeln</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1426,6 +1594,10 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
   const [confirmDelReport, setConfirmDelReport] = useState<string | null>(null);
   const [confirmDelCustomer, setConfirmDelCustomer] = useState<Customer | null>(null);
   const [delMsg, setDelMsg] = useState('');
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', address: '', phone_number: '', email: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMsg, setEditMsg] = useState('');
 
   const loadKunden = useCallback(async () => {
     const [cR, aR, rR, sR] = await Promise.all([
@@ -1477,6 +1649,31 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
   const getReport = (aid: string) => reports.find(r => r.assignment_id === aid);
   const customerAssignments = (cid: string) => assignments.filter(a => a.customer?.id === cid);
 
+  const openEdit = (c: Customer) => {
+    setEditCustomer(c);
+    setEditForm({ first_name: c.first_name, last_name: c.last_name, address: c.address, phone_number: c.phone_number || '', email: c.email || '' });
+    setEditMsg('');
+  };
+
+  const saveEdit = async () => {
+    if (!editCustomer) return;
+    setEditSaving(true);
+    const r = await fetch(`${API}/customers/${editCustomer.id}`, {
+      method: 'PATCH', headers: authHeaders(), body: JSON.stringify(editForm),
+    });
+    setEditSaving(false);
+    if (r.ok) {
+      const updated: Customer = await r.json();
+      setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
+      if (selected?.id === updated.id) setSelected(updated);
+      setEditCustomer(null);
+      setEditMsg('');
+    } else {
+      const d = await r.json().catch(() => ({}));
+      setEditMsg('❌ ' + (d.error || d.message || 'Fehler'));
+    }
+  };
+
   const fbtn3 = (active: boolean): React.CSSProperties => ({ padding: '5px 12px', border: '1px solid #D1D5DB', borderRadius: '16px', cursor: 'pointer', fontSize: '0.82rem', background: active ? '#00454A' : 'white', color: active ? 'white' : '#374151', fontWeight: active ? 700 : 400 });
 
   const filtered = customers.filter(c => {
@@ -1495,6 +1692,54 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
       {confirmDelReport && <ConfirmDialog message="Rechnung/Bericht wirklich löschen?" onConfirm={confirmDelReportExecute} onCancel={() => setConfirmDelReport(null)} />}
       {confirmDelCustomer && <ConfirmDialog message={`Kunde "${confirmDelCustomer.first_name} ${confirmDelCustomer.last_name}" und alle zugehörigen Aufträge, Berichte und Zeitnachweise unwiderruflich löschen? (DSGVO)`} onConfirm={confirmDelCustomerExecute} onCancel={() => setConfirmDelCustomer(null)} />}
       {delMsg && <div className={`msg-banner ${delMsg.startsWith('❌') ? 'msg-error' : 'msg-success'}`}>{delMsg}</div>}
+
+      {editCustomer && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '28px 32px', width: '420px', maxWidth: '95vw', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#111' }}>Kunde bearbeiten</h3>
+              <button onClick={() => setEditCustomer(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#9CA3AF', lineHeight: 1 }}>×</button>
+            </div>
+            {editMsg && <div style={{ background: '#FEE2E2', color: '#991B1B', padding: '8px 12px', borderRadius: '6px', marginBottom: '14px', fontSize: '0.88rem' }}>{editMsg}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.8rem', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Vorname</label>
+                  <input value={editForm.first_name} onChange={e => setEditForm(f => ({ ...f, first_name: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.92rem', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.8rem', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Nachname</label>
+                  <input value={editForm.last_name} onChange={e => setEditForm(f => ({ ...f, last_name: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.92rem', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Adresse</label>
+                <input value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.92rem', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Telefon</label>
+                <input value={editForm.phone_number} onChange={e => setEditForm(f => ({ ...f, phone_number: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.92rem', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: '#6B7280', display: 'block', marginBottom: '4px' }}>E-Mail</label>
+                <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.92rem', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button onClick={() => setEditCustomer(null)} style={{ padding: '8px 18px', border: '1px solid #D1D5DB', borderRadius: '6px', background: '#fff', cursor: 'pointer', fontSize: '0.9rem' }}>Abbrechen</button>
+              <button onClick={saveEdit} disabled={editSaving}
+                style={{ padding: '8px 18px', border: 'none', borderRadius: '6px', background: '#00454A', color: '#fff', cursor: editSaving ? 'not-allowed' : 'pointer', fontSize: '0.9rem', fontWeight: 600, opacity: editSaving ? 0.7 : 1 }}>
+                {editSaving ? 'Speichern…' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     <div className="kunden-layout" style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', width: '100%' }}>
       {/* List */}
       <div className="kunden-list-col" style={{ width: selected ? '340px' : '100%', flexShrink: 0 }}>
@@ -1557,6 +1802,11 @@ function KundenTab({ canDelete }: { canDelete: boolean }) {
               {selected.phone_number && <p style={{ margin: 0, color: '#6B7280', fontSize: '0.88rem' }}>📞 {selected.phone_number}</p>}
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button onClick={() => openEdit(selected)}
+                style={{ padding: '5px 12px', background: '#00454A', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}
+                title="Kunde bearbeiten">
+                ✏️ Bearbeiten
+              </button>
               {canDelete && (
                 <button onClick={() => setConfirmDelCustomer(selected)}
                   style={{ padding: '5px 12px', background: '#EF4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}

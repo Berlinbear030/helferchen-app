@@ -25,6 +25,26 @@ router.post('/', authenticateToken, requireRole('admin', 'kundenbetreuer'), asyn
   res.status(201).json(customer);
 });
 
+// PATCH /customers/:id — edit customer data (admin only)
+router.patch('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+  const id = req.params.id as string;
+  const customer = await CustomerRepo.findById(id);
+  if (!customer) return res.status(404).json({ error: 'Nicht gefunden.' });
+  const { first_name, last_name, address, phone_number, notes } = req.body;
+  const updates: string[] = [];
+  const values: any[] = [];
+  if (first_name !== undefined) { updates.push('first_name = ?'); values.push(first_name); }
+  if (last_name !== undefined) { updates.push('last_name = ?'); values.push(last_name); }
+  if (address !== undefined) { updates.push('address = ?'); values.push(address); }
+  if (phone_number !== undefined) { updates.push('phone_number = ?'); values.push(phone_number); }
+  if (notes !== undefined) { updates.push('notes = ?'); values.push(notes); }
+  if (updates.length === 0) return res.status(400).json({ error: 'Keine Felder zum Aktualisieren.' });
+  values.push(id);
+  await query(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`, values);
+  const updated = await CustomerRepo.findById(id);
+  return res.json(updated);
+});
+
 // DELETE /customers/:id — DSGVO: cascading hard delete (admin only)
 router.delete('/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   try {
