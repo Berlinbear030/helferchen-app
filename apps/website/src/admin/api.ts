@@ -130,6 +130,13 @@ export interface Voicemail {
   fileSize: number;
 }
 
+export interface SipPresence {
+  id: string;
+  username: string;
+  full_name: string;
+  status: 'online' | 'in_call' | 'offline' | 'unknown';
+}
+
 export const adminApi = {
   getDashboard: () => apiFetch<DashboardStats>('/admin/dashboard'),
   getUsers: () => apiFetch<User[]>('/admin/users'),
@@ -162,6 +169,7 @@ export const adminApi = {
     apiFetch<void>(`/admin/roles/${id}`, { method: 'DELETE' }),
 
   getSipUsers: () => apiFetch<SipUser[]>('/calls/sip-users'),
+  getPresence: () => apiFetch<SipPresence[]>('/calls/presence'),
   createSipUser: (data: { username: string; password?: string; full_name: string }) =>
     apiFetch<SipUser>('/calls/sip-users', { method: 'POST', body: JSON.stringify(data) }),
   deleteSipUser: (id: string) =>

@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
-import { adminApi, SipUser, Voicemail } from './api';
+import { useEffect, useRef, useState } from 'react';
+import { adminApi, SipPresence, SipUser, Voicemail } from './api';
 
 export default function PhoneSystem() {
-  const [activeTab, setActiveTab] = useState<'sip' | 'voicemail'>('sip');
+  const [activeTab, setActiveTab] = useState<'status' | 'sip' | 'voicemail'>('status');
   const [sipUsers, setSipUsers] = useState<SipUser[]>([]);
   const [voicemails, setVoicemails] = useState<Voicemail[]>([]);
+  const [presence, setPresence] = useState<SipPresence[]>([]);
   const [loading, setLoading] = useState(true);
+  const [presenceLoading, setPresenceLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const presenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Create Sip User state
   const [newUsername, setNewUsername] = useState('');
@@ -20,6 +23,11 @@ export default function PhoneSystem() {
 
   useEffect(() => {
     fetchData();
+    fetchPresence();
+    presenceIntervalRef.current = setInterval(fetchPresence, 10000);
+    return () => {
+      if (presenceIntervalRef.current) clearInterval(presenceIntervalRef.current);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -42,6 +50,18 @@ export default function PhoneSystem() {
       setError(err.message || 'Fehler beim Laden der Telefonanlagen-Daten.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPresence = async () => {
+    setPresenceLoading(true);
+    try {
+      const data = await adminApi.getPresence();
+      setPresence(data);
+    } catch (_) {
+      // silently keep old data on error
+    } finally {
+      setPresenceLoading(false);
     }
   };
 
@@ -157,6 +177,38 @@ export default function PhoneSystem() {
       {/* Tabs Menu */}
       <div style={{ display: 'flex', borderBottom: '2px solid #e5e7eb', marginBottom: '2rem' }}>
         <button
+          onClick={() => setActiveTab('status')}
+          style={{
+            padding: '0.75rem 1.5rem',
+            background: 'none',
+            border: 'none',
+            borderBottom: activeTab === 'status' ? '3px solid #1a1a2e' : 'none',
+            color: activeTab === 'status' ? '#1a1a2e' : '#6b7280',
+            fontWeight: activeTab === 'status' ? 600 : 500,
+            fontSize: '1rem',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            position: 'relative',
+          }}
+        >
+          🟢 Live-Status
+          {presence.some(p => p.status === 'in_call') && (
+            <span style={{
+              position: 'absolute',
+              top: '4px',
+              right: '-6px',
+              background: '#ef4444',
+              color: '#fff',
+              borderRadius: '50%',
+              padding: '0.15rem 0.4rem',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+            }}>
+              {presence.filter(p => p.status === 'in_call').length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('sip')}
           style={{
             padding: '0.75rem 1.5rem',
@@ -211,6 +263,77 @@ export default function PhoneSystem() {
           <div style={{ display: 'inline-block', width: '2.5rem', height: '2.5rem', border: '3px solid #e5e7eb', borderTopColor: '#1a1a2e', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1rem' }} />
           <div>Lade Telefonanlagen-Konfiguration...</div>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : activeTab === 'status' ? (
+        /* Live-Status Tab */
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#111827' }}>Mitarbeiter-Status</h2>
+            <span style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
+              {presenceLoading ? 'Aktualisiere...' : 'Aktualisiert alle 10 Sek.'}
+            </span>
+          </div>
+
+          {presence.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#6b7280', border: '2px dashed #e5e7eb', borderRadius: '8px' }}>
+              <span style={{ fontSize: '2rem' }}>📵</span>
+              <p style={{ margin: '0.5rem 0 0 0' }}>Keine SIP-Nutzer konfiguriert. Legen Sie Nebenstellen im Tab „SIP-Nutzer verwalten" an.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+              {presence.map(p => {
+                const isOnline = p.status === 'online';
+                const isInCall = p.status === 'in_call';
+                const dotColor = isInCall ? '#ef4444' : isOnline ? '#22c55e' : '#9ca3af';
+                const bg = isInCall ? '#fef2f2' : isOnline ? '#f0fdf4' : '#f9fafb';
+                const border = isInCall ? '#fee2e2' : isOnline ? '#dcfce7' : '#e5e7eb';
+                const label = isInCall ? 'Im Gespräch' : isOnline ? 'Online' : p.status === 'unknown' ? 'Unbekannt' : 'Offline';
+                const icon = isInCall ? '📞' : isOnline ? '🟢' : '⚫';
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      background: bg,
+                      border: `1px solid ${border}`,
+                      borderRadius: '10px',
+                      padding: '1.25rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <div style={{
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        background: dotColor,
+                        flexShrink: 0,
+                        boxShadow: isInCall ? '0 0 0 3px #fca5a533' : isOnline ? '0 0 0 3px #86efac33' : 'none',
+                      }} />
+                      <span style={{ fontWeight: 600, color: '#111827', fontSize: '1rem' }}>{p.full_name}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', color: isInCall ? '#b91c1c' : isOnline ? '#15803d' : '#6b7280' }}>
+                      <span>{icon}</span>
+                      <span>{label}</span>
+                    </div>
+                    <code style={{ fontSize: '0.75rem', color: '#9ca3af', background: '#f3f4f6', borderRadius: '4px', padding: '0.1rem 0.35rem', alignSelf: 'flex-start' }}>{p.username}</code>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Legend */}
+          <div style={{ marginTop: '1.5rem', padding: '0.75rem 1rem', background: '#f9fafb', borderRadius: '8px', fontSize: '0.8rem', color: '#6b7280', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+            <span><span style={{ color: '#22c55e' }}>●</span> Online — eingeloggt, erreichbar</span>
+            <span><span style={{ color: '#ef4444' }}>●</span> Im Gespräch — aktiver Anruf</span>
+            <span><span style={{ color: '#9ca3af' }}>●</span> Offline — nicht eingeloggt</span>
+          </div>
+
+          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '8px', fontSize: '0.82rem', color: '#1e40af' }}>
+            💡 <strong>Anrufweiterleitung:</strong> Wenn ein Mitarbeiter beschäftigt ist, klingelt das Telefon automatisch bei allen anderen eingeloggten Mitarbeitern. Wenn niemand erreichbar ist, landet der Anrufer auf dem Anrufbeantworter.
+          </div>
         </div>
       ) : activeTab === 'sip' ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '2rem', alignItems: 'start' }}>

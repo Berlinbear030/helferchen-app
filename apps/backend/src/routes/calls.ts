@@ -268,6 +268,101 @@ ${callbackDialLine}
   }
 }
 
+// AMI presence query: returns sets of online and in-call usernames
+async function queryAsteriskPresence(): Promise<{ online: Set<string>; inCall: Set<string> }> {
+  const portsToTry = process.env.AMI_PORT ? [parseInt(process.env.AMI_PORT, 10)] : [5038, 5039];
+
+  for (const port of portsToTry) {
+    try {
+      return await new Promise<{ online: Set<string>; inCall: Set<string> }>((resolve, reject) => {
+        const online = new Set<string>();
+        const inCall = new Set<string>();
+        let buf = '';
+        let loginSent = false;
+        let queriesSent = false;
+        let contactsDone = false;
+        let channelsDone = false;
+        let settled = false;
+
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          try { client.destroy(); } catch (_) {}
+          resolve({ online, inCall });
+        };
+
+        const client = net.createConnection({ host: '127.0.0.1', port }, () => {
+          client.on('data', (data: Buffer) => {
+            buf += data.toString();
+
+            if (!loginSent && buf.includes('Asterisk Call Manager')) {
+              loginSent = true;
+              client.write(`Action: Login\r\nUsername: helferchen\r\nSecret: HelferAMI2026!\r\n\r\n`);
+            }
+
+            if (!queriesSent && buf.includes('Authentication accepted')) {
+              queriesSent = true;
+              client.write(`Action: PJSIPShowContacts\r\nActionID: pjsip-contacts\r\n\r\n`);
+              client.write(`Action: CoreShowChannels\r\nActionID: core-channels\r\n\r\n`);
+            }
+
+            // Parse ContactStatusDetail blocks — AOR is the endpoint/username
+            const contactRegex = /Event: ContactStatusDetail[\s\S]*?AOR:\s*(\S+)[\s\S]*?Status:\s*(Reachable|Unreachable)/g;
+            let m: RegExpExecArray | null;
+            while ((m = contactRegex.exec(buf)) !== null) {
+              if (m[2] === 'Reachable') online.add(m[1]);
+            }
+
+            // Parse CoreShowChannel blocks — extract username from channel name
+            const channelRegex = /Event: CoreShowChannel\s[\s\S]*?Channel: PJSIP\/([a-zA-Z0-9_-]+)-/g;
+            while ((m = channelRegex.exec(buf)) !== null) {
+              inCall.add(m[1]);
+            }
+
+            if (queriesSent && !contactsDone && buf.includes('Event: PJSIPShowContactsComplete')) contactsDone = true;
+            if (queriesSent && !channelsDone && buf.includes('Event: CoreShowChannelsComplete')) channelsDone = true;
+            if (contactsDone && channelsDone) {
+              client.write('Action: Logoff\r\n\r\n');
+              finish();
+            }
+          });
+          client.on('error', reject);
+        });
+        client.on('error', reject);
+        setTimeout(() => finish(), 5000);
+      });
+    } catch (_) {
+      // try next port
+    }
+  }
+  return { online: new Set(), inCall: new Set() };
+}
+
+// GET /api/calls/presence — live SIP user status (online / in_call / offline)
+router.get('/presence', authenticateToken, requireRole('admin', 'kundenbetreuer'), async (_req: Request, res: Response) => {
+  const users = await SipUserRepo.findAll().catch(() => [] as any[]);
+  const linphoneUsers = users.filter((u: any) => u.username !== 'homeasterisk');
+
+  try {
+    const { online, inCall } = await queryAsteriskPresence();
+    const result = linphoneUsers.map((u: any) => ({
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name,
+      status: inCall.has(u.username) ? 'in_call' : online.has(u.username) ? 'online' : 'offline',
+    }));
+    return res.json(result);
+  } catch (_) {
+    const result = linphoneUsers.map((u: any) => ({
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name,
+      status: 'unknown',
+    }));
+    return res.json(result);
+  }
+});
+
 // POST /api/calls/webhook — Asterisk AGI notifies of missed call
 router.post('/webhook', async (req: Request, res: Response) => {
   const secret = req.headers['x-helferchen-secret'];
@@ -422,7 +517,7 @@ router.delete('/sip-users/:id', authenticateToken, requireRole('admin'), async (
 });
 
 // GET /api/calls/voicemails — list voicemails
-router.get('/voicemails', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/voicemails', authenticateToken, requireRole('admin', 'kundenbetreuer'), async (req: Request, res: Response) => {
   const dir = '/var/spool/asterisk/voicemail/default/shared/INBOX';
   if (!fs.existsSync(dir)) {
     return res.json([]);
@@ -478,7 +573,7 @@ router.get('/voicemails', authenticateToken, requireRole('admin'), async (req: R
 });
 
 // GET /api/calls/voicemails/:id/audio — stream voicemail audio
-router.get('/voicemails/:id/audio', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/voicemails/:id/audio', authenticateToken, requireRole('admin', 'kundenbetreuer'), async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const dir = '/var/spool/asterisk/voicemail/default/shared/INBOX';
   
@@ -496,7 +591,7 @@ router.get('/voicemails/:id/audio', authenticateToken, requireRole('admin'), asy
 });
 
 // DELETE /api/calls/voicemails/:id — delete voicemail
-router.delete('/voicemails/:id', authenticateToken, requireRole('admin'), async (req: Request, res: Response) => {
+router.delete('/voicemails/:id', authenticateToken, requireRole('admin', 'kundenbetreuer'), async (req: Request, res: Response) => {
   const id = String(req.params.id);
   const dir = '/var/spool/asterisk/voicemail/default/shared/INBOX';
   
