@@ -694,7 +694,7 @@ function EmployeesTab() {
   const [editForm, setEditForm] = useState<any>({});
   const [editSaving, setEditSaving] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
+  const [createForm, setCreateForm] = useState({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter', private_email: '' });
   const [creating, setCreating] = useState(false);
   const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -735,7 +735,9 @@ function EmployeesTab() {
 
   const openEdit = (emp: Employee) => {
     setEditEmp(emp);
-    setEditForm({ full_name: emp.full_name, email: emp.email || '', role: emp.role, password: '' });
+    const cars: string[] = (emp as any).assigned_cars ? JSON.parse((emp as any).assigned_cars) : [];
+    const mats: string[] = (emp as any).assigned_materials ? JSON.parse((emp as any).assigned_materials) : [];
+    setEditForm({ full_name: emp.full_name, email: emp.email || '', role: emp.role, password: '', private_email: (emp as any).private_email || '', assigned_cars: cars.join(', '), assigned_materials: mats.join(', ') });
   };
 
   const saveEdit = async () => {
@@ -746,6 +748,11 @@ function EmployeesTab() {
     if (editForm.email !== (editEmp.email || '')) body.email = editForm.email;
     if (editForm.role !== editEmp.role) body.role = editForm.role;
     if (editForm.password) body.password = editForm.password;
+    if (editForm.private_email !== ((editEmp as any).private_email || '')) body.private_email = editForm.private_email;
+    const carsArr = editForm.assigned_cars ? editForm.assigned_cars.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    body.assigned_cars = JSON.stringify(carsArr);
+    const matsArr = editForm.assigned_materials ? editForm.assigned_materials.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+    body.assigned_materials = JSON.stringify(matsArr);
     const r = await fetch(`${API}/admin/users/${editEmp.id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) });
     setEditSaving(false);
     if (r.ok) {
@@ -765,9 +772,11 @@ function EmployeesTab() {
     const r = await fetch(`${API}/admin/users`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(createForm) });
     setCreating(false);
     if (r.ok) {
-      setMsg('✅ Mitarbeiter angelegt.');
+      const info = await r.json().catch(() => ({}));
+      const welcomeNote = createForm.private_email ? ` Willkommens-E-Mail an ${createForm.private_email} gesendet.` : '';
+      setMsg(`✅ Mitarbeiter angelegt. Helferchen-Mail: ${info.mail_address || '—'}.${welcomeNote}`);
       setShowCreate(false);
-      setCreateForm({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter' });
+      setCreateForm({ username: '', password: '', full_name: '', email: '', role: 'mitarbeiter', private_email: '' });
       load();
     } else {
       const d = await r.json().catch(() => ({}));
@@ -801,8 +810,20 @@ function EmployeesTab() {
                 <select value={editForm.role} onChange={e => setEditForm((f: any) => ({ ...f, role: e.target.value }))} style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem' }}>
                   {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
                 </select></div>
-              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Neues Passwort (leer lassen = unverändert)</label>
+              <div><label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Neues Passwort (leer = unverändert)</label>
                 <input type="password" value={editForm.password} onChange={e => setEditForm((f: any) => ({ ...f, password: e.target.value }))} placeholder="••••••••" style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem', boxSizing: 'border-box' }} /></div>
+              <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '12px' }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>📧 Private E-Mail (für Willkommens-E-Mails & Aufträge)</label>
+                <input type="email" value={editForm.private_email} onChange={e => setEditForm((f: any) => ({ ...f, private_email: e.target.value }))} placeholder="max@gmail.com" style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>🚗 Zugewiesene Fahrzeuge (kommagetrennt)</label>
+                <input value={editForm.assigned_cars} onChange={e => setEditForm((f: any) => ({ ...f, assigned_cars: e.target.value }))} placeholder="VW Caddy · 123 ABC, Mercedes Sprinter · 456 DEF" style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>🧰 Zugewiesenes Material (kommagetrennt)</label>
+                <input value={editForm.assigned_materials} onChange={e => setEditForm((f: any) => ({ ...f, assigned_materials: e.target.value }))} placeholder="Reinigungsset, Erste-Hilfe-Koffer" style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #D1D5DB', borderRadius: '7px', fontSize: '0.95rem', boxSizing: 'border-box' }} />
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               <button onClick={saveEdit} disabled={editSaving} style={{ flex: 1, padding: '10px', background: '#00454A', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem' }}>{editSaving ? 'Speichern…' : '💾 Speichern'}</button>
@@ -837,14 +858,16 @@ function EmployeesTab() {
               <input required value={createForm.full_name} onChange={e => setCreateForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Max Mustermann" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
             <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Benutzername *</label>
               <input required value={createForm.username} onChange={e => setCreateForm(f => ({ ...f, username: e.target.value }))} placeholder="maxmustermann" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
-            <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>E-Mail</label>
-              <input type="email" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} placeholder="max@helferchen.info" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
+            <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Helferchen E-Mail (leer = automatisch)</label>
+              <input type="email" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} placeholder="max@helferchen.info (auto)" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
             <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Passwort *</label>
               <input required type="password" value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
             <div><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Rolle *</label>
               <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))} style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem' }}>
                 {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
               </select></div>
+            <div style={{ gridColumn: 'span 2' }}><label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>📧 Private E-Mail (Willkommens-E-Mail & Zugangsdaten werden hierhin gesendet)</label>
+              <input type="email" value={createForm.private_email} onChange={e => setCreateForm(f => ({ ...f, private_email: e.target.value }))} placeholder="max.mustermann@gmail.com" style={{ width: '100%', padding: '8px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }} /></div>
           </div>
           <button type="submit" disabled={creating} className="btn-primary">{creating ? 'Anlegen…' : '✓ Mitarbeiter anlegen'}</button>
         </form>
@@ -866,8 +889,15 @@ function EmployeesTab() {
               <div className="employee-info">
                 <strong>{emp.full_name}</strong>
                 <span className="employee-username">@{emp.username}</span>
-                {emp.email && <span className="employee-email">{emp.email}</span>}
+                {emp.email && <span className="employee-email">🏢 {emp.email}</span>}
+                {(emp as any).private_email && <span className="employee-email" style={{ color: '#6B7280', fontSize: '0.75rem' }}>📧 {(emp as any).private_email}</span>}
                 <span style={{ fontSize: '0.72rem', color: dot.color, fontWeight: 700 }}>{dot.label}</span>
+                {(emp as any).assigned_cars && JSON.parse((emp as any).assigned_cars).length > 0 && (
+                  <span style={{ fontSize: '0.72rem', color: '#374151' }}>🚗 {JSON.parse((emp as any).assigned_cars).join(', ')}</span>
+                )}
+                {(emp as any).assigned_materials && JSON.parse((emp as any).assigned_materials).length > 0 && (
+                  <span style={{ fontSize: '0.72rem', color: '#374151' }}>🧰 {JSON.parse((emp as any).assigned_materials).join(', ')}</span>
+                )}
               </div>
               <span className="role-badge" style={{ background: ROLE_COLORS[emp.role] || '#374151' }}>
                 {ROLE_LABELS[emp.role] || emp.role}
@@ -2576,6 +2606,9 @@ export default function Portal() {
               ⚙ Admin-Einstellungen
             </button>
           )}
+          <button className="pv2-footer-btn" onClick={() => window.open('/werbeartikel', '_blank')}>
+            🛍 Werbeartikel-Shop
+          </button>
           <button className="pv2-footer-btn" onClick={() => window.open('/app', '_blank')}>
             📱 App starten
           </button>

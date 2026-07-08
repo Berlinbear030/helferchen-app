@@ -217,6 +217,10 @@ export async function initDatabase(): Promise<void> {
   try {
     await query('ALTER TABLE users ADD COLUMN last_seen DATETIME NULL DEFAULT NULL');
   } catch (e) {}
+  // EIS-494 v2: employee profile extensions
+  try { await query('ALTER TABLE users ADD COLUMN private_email TEXT NULL'); } catch (e) {}
+  try { await query('ALTER TABLE users ADD COLUMN assigned_cars TEXT NULL'); } catch (e) {}
+  try { await query('ALTER TABLE users ADD COLUMN assigned_materials TEXT NULL'); } catch (e) {}
 
   await query(`
     CREATE TABLE IF NOT EXISTS mail_users (

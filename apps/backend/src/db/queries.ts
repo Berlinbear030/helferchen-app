@@ -17,7 +17,7 @@ export const UserRepo = {
   },
   async findAll(): Promise<User[]> {
     if (!useDb()) return db.users;
-    const res = await query('SELECT id, username, full_name, email, role, address, qualification, permissions, created_at FROM users WHERE deleted_at IS NULL ORDER BY username ASC');
+    const res = await query('SELECT id, username, full_name, email, role, address, qualification, permissions, private_email, assigned_cars, assigned_materials, created_at FROM users WHERE deleted_at IS NULL ORDER BY username ASC');
     return res.rows;
   },
   async create(username: string, password_hash: string, full_name: string, email: string, role: string): Promise<User> {
@@ -45,7 +45,7 @@ export const UserRepo = {
     const res = await query('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [id]);
     return res.rowCount > 0;
   },
-  async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string; permissions?: string }): Promise<boolean> {
+  async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string; permissions?: string; private_email?: string; assigned_cars?: string; assigned_materials?: string }): Promise<boolean> {
     if (!useDb()) return false;
     const setClauses: string[] = [];
     const values: unknown[] = [];
@@ -56,6 +56,9 @@ export const UserRepo = {
     if (fields.address !== undefined) { setClauses.push('address = ?'); values.push(fields.address); }
     if (fields.qualification !== undefined) { setClauses.push('qualification = ?'); values.push(fields.qualification); }
     if (fields.permissions !== undefined) { setClauses.push('permissions = ?'); values.push(fields.permissions); }
+    if (fields.private_email !== undefined) { setClauses.push('private_email = ?'); values.push(fields.private_email); }
+    if (fields.assigned_cars !== undefined) { setClauses.push('assigned_cars = ?'); values.push(fields.assigned_cars); }
+    if (fields.assigned_materials !== undefined) { setClauses.push('assigned_materials = ?'); values.push(fields.assigned_materials); }
     if (setClauses.length === 0) return false;
     values.push(id);
     const res = await query(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, values);

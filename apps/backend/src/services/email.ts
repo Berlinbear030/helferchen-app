@@ -19,6 +19,96 @@ function createTransporter() {
   });
 }
 
+export async function sendWelcomeEmail(employee: {
+  full_name: string;
+  private_email: string;
+  username: string;
+  password: string;
+  mail_address: string;
+}): Promise<boolean> {
+  if (!employee.private_email) return false;
+  const transporter = createTransporter();
+  try {
+    await transporter.sendMail({
+      from: `"Helferchen" <${FROM}>`,
+      to: employee.private_email,
+      subject: `Willkommen bei Helferchen – Deine Zugangsdaten`,
+      html: welcomeEmailHtml(employee),
+      text: `Hallo ${employee.full_name},\n\nwillkommen bei Helferchen! Hier sind deine Zugangsdaten:\n\nPortal-Login:\nBenutzername: ${employee.username}\nPasswort: ${employee.password}\nURL: https://helferchen.info/portal\n\nHelferchen E-Mail:\nAdresse: ${employee.mail_address}\nPasswort: ${employee.password}\n\nE-Mail-Server (IMAP):\nServer: helferchen.info\nPort: 993\nVerschlüsselung: SSL/TLS\n\nE-Mail-Server (SMTP):\nServer: helferchen.info\nPort: 587\nVerschlüsselung: STARTTLS\n\nBei Fragen wende dich an info@helferchen.info\n\nViele Grüße\nDein Helferchen-Team`,
+    });
+    console.log(`[email] Welcome email sent to ${employee.private_email}`);
+    return true;
+  } catch (err) {
+    console.error('[email] Welcome email failed:', err);
+    return false;
+  }
+}
+
+function welcomeEmailHtml(e: { full_name: string; username: string; password: string; mail_address: string }): string {
+  return emailHeader('Willkommen bei Helferchen') + `
+      <tr>
+        <td style="padding:36px 36px 28px;">
+          <h2 style="color:#00454A;margin:0 0 8px;font-size:22px;">Willkommen im Team! 🎉</h2>
+          <p style="color:#4B5563;margin:0 0 24px;font-size:15px;">
+            Hallo <strong>${escapeHtml(e.full_name)}</strong>,<br>
+            schön, dass du dabei bist! Hier sind deine Zugangsdaten für das Helferchen-System.
+          </p>
+
+          <table width="100%" cellpadding="0" cellspacing="0"
+                 style="background:#f0faf4;border-radius:8px;border-left:4px solid #00454A;margin-bottom:24px;">
+            <tr><td style="padding:20px 24px;">
+              <p style="margin:0 0 12px;font-weight:bold;color:#00454A;font-size:15px;">🔐 Portal-Zugang</p>
+              <table cellpadding="0" cellspacing="0" width="100%">
+                <tr><td style="padding:4px 0;color:#6B7280;font-size:14px;width:140px;">Adresse</td>
+                    <td style="padding:4px 0;color:#111827;font-size:14px;font-weight:600;"><a href="https://helferchen.info/portal" style="color:#00454A;">helferchen.info/portal</a></td></tr>
+                <tr><td style="padding:4px 0;color:#6B7280;font-size:14px;">Benutzername</td>
+                    <td style="padding:4px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(e.username)}</td></tr>
+                <tr><td style="padding:4px 0;color:#6B7280;font-size:14px;">Passwort</td>
+                    <td style="padding:4px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(e.password)}</td></tr>
+              </table>
+            </td></tr>
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0"
+                 style="background:#EFF6FF;border-radius:8px;border-left:4px solid #3B82F6;margin-bottom:24px;">
+            <tr><td style="padding:20px 24px;">
+              <p style="margin:0 0 12px;font-weight:bold;color:#1D4ED8;font-size:15px;">📧 Deine Helferchen-E-Mail</p>
+              <table cellpadding="0" cellspacing="0" width="100%">
+                <tr><td style="padding:4px 0;color:#6B7280;font-size:14px;width:140px;">Adresse</td>
+                    <td style="padding:4px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(e.mail_address)}</td></tr>
+                <tr><td style="padding:4px 0;color:#6B7280;font-size:14px;">Passwort</td>
+                    <td style="padding:4px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(e.password)}</td></tr>
+              </table>
+            </td></tr>
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0"
+                 style="background:#F9FAFB;border-radius:8px;border:1px solid #E5E7EB;margin-bottom:20px;">
+            <tr><td style="padding:16px 20px;">
+              <p style="margin:0 0 10px;font-weight:bold;color:#374151;font-size:14px;">📱 E-Mail auf dem Handy einrichten</p>
+              <table cellpadding="0" cellspacing="0" width="100%">
+                <tr><td colspan="2" style="padding:4px 0;color:#374151;font-size:13px;font-weight:700;">IMAP (Posteingang)</td></tr>
+                <tr><td style="padding:2px 0 2px 10px;color:#6B7280;font-size:13px;width:120px;">Server</td>
+                    <td style="padding:2px 0;color:#111827;font-size:13px;font-weight:600;">helferchen.info</td></tr>
+                <tr><td style="padding:2px 0 2px 10px;color:#6B7280;font-size:13px;">Port</td>
+                    <td style="padding:2px 0;color:#111827;font-size:13px;font-weight:600;">993 (SSL/TLS)</td></tr>
+                <tr><td colspan="2" style="padding:8px 0 4px;color:#374151;font-size:13px;font-weight:700;">SMTP (Postausgang)</td></tr>
+                <tr><td style="padding:2px 0 2px 10px;color:#6B7280;font-size:13px;">Server</td>
+                    <td style="padding:2px 0;color:#111827;font-size:13px;font-weight:600;">helferchen.info</td></tr>
+                <tr><td style="padding:2px 0 2px 10px;color:#6B7280;font-size:13px;">Port</td>
+                    <td style="padding:2px 0;color:#111827;font-size:13px;font-weight:600;">587 (STARTTLS)</td></tr>
+                <tr><td style="padding:2px 0 2px 10px;color:#6B7280;font-size:13px;">Benutzername</td>
+                    <td style="padding:2px 0;color:#111827;font-size:13px;font-weight:600;">${escapeHtml(e.mail_address)}</td></tr>
+              </table>
+            </td></tr>
+          </table>
+
+          <p style="color:#6B7280;font-size:13px;margin:0;">Bitte ändere dein Passwort nach dem ersten Login. Bei Fragen: <a href="mailto:info@helferchen.info" style="color:#00454A;">info@helferchen.info</a></p>
+        </td>
+      </tr>
+` + emailFooter();
+}
+
 export async function sendBookingConfirmation(booking: {
   name: string;
   email: string;

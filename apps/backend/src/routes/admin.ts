@@ -5,6 +5,7 @@ import { UserRepo, AuditRepo, CustomerRepo, AssignmentRepo, TimelogRepo, ReportR
 import { query, dbConnected } from '../db/pool';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
 import { queryAsteriskPresence } from '../services/asterisk';
+import { sendWelcomeEmail } from '../services/email';
 
 const MAIL_DOMAIN = 'helferchen.info';
 
@@ -46,7 +47,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
 
 // POST /api/admin/users
 router.post('/users', async (req: AuthRequest, res: Response) => {
-  const { username, password, role, email, full_name } = req.body;
+  const { username, password, role, email, full_name, private_email } = req.body;
   if (!username || !password || !role) return res.status(400).json({ message: 'username, password, role are required' });
 
   const existing = await UserRepo.findByUsername(username);
@@ -61,8 +62,14 @@ router.post('/users', async (req: AuthRequest, res: Response) => {
   const user = await UserRepo.create(username, password_hash, name, userEmail, role);
   await createMailAccount(mailAddress, password);
 
+  // Store private email and send welcome email with credentials
+  if (private_email) {
+    await query('UPDATE users SET private_email = ? WHERE id = ?', [private_email, user.id]);
+    sendWelcomeEmail({ full_name: name, private_email, username, password, mail_address: mailAddress }).catch(() => {});
+  }
+
   await AuditRepo.create('user', user.id, 'created', req.user!.id, `User ${username} created with role ${role}, email: ${mailAddress}`);
-  res.status(201).json({ id: user.id, username: user.username, role: user.role, email: userEmail, mail_address: mailAddress });
+  res.status(201).json({ id: user.id, username: user.username, role: user.role, email: userEmail, mail_address: mailAddress, private_email: private_email || null });
 });
 
 // DELETE /api/admin/users/:id
@@ -347,7 +354,7 @@ router.get('/users/:id/stats', async (req: AuthRequest, res: Response) => {
 // PATCH /api/admin/users/:id — update user (all editable fields)
 router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const { role, password, email, full_name, address, qualification, permissions } = req.body;
+    const { role, password, email, full_name, address, qualification, permissions, private_email, assigned_cars, assigned_materials } = req.body;
     const user = await UserRepo.findById(req.params.id as string);
     if (!user) return res.status(404).json({ message: 'User not found' });
     if ((user as any).deleted_at) return res.status(404).json({ message: 'User not found' });
@@ -364,6 +371,9 @@ router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
       updateFields.permissions = JSON.stringify(Array.isArray(permissions) ? permissions : []);
       changes.push('permissions updated');
     }
+    if (private_email !== undefined) { updateFields.private_email = private_email; changes.push('private_email updated'); }
+    if (assigned_cars !== undefined) { updateFields.assigned_cars = Array.isArray(assigned_cars) ? JSON.stringify(assigned_cars) : assigned_cars; changes.push('assigned_cars updated'); }
+    if (assigned_materials !== undefined) { updateFields.assigned_materials = Array.isArray(assigned_materials) ? JSON.stringify(assigned_materials) : assigned_materials; changes.push('assigned_materials updated'); }
     if (password) {
       updateFields.password_hash = await bcrypt.hash(password, 10);
       changes.push('password changed');
