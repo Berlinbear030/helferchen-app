@@ -357,18 +357,5 @@ async function initDatabase() {
             await (0, pool_1.query)('INSERT IGNORE INTO mail_users (email, password) VALUES (?, ?)', [email, mailHash]);
         }
     }
-    console.log('Seeding sample data for demonstration...');
-    const sampleCustId = 'c1111111-1111-1111-1111-111111111111';
-    await (0, pool_1.query)(`INSERT IGNORE INTO customers (id, first_name, last_name, address, phone_number, notes)
-     VALUES (?, 'Erika', 'Mustermann', 'Musterstraße 1, 10115 Berlin', '030-1234567', 'Beispielkunde')`, [sampleCustId]);
-    const sampleAssignId = 'a1111111-1111-1111-1111-111111111111';
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10) + ' 10:00:00';
-    await (0, pool_1.query)(`INSERT IGNORE INTO assignments (id, customer_id, title, description, scheduled_at, status)
-     VALUES (?, ?, 'Fensterreinigung', 'Alle Fenster im Erdgeschoss reinigen.', ?, 'pending')`, [sampleAssignId, sampleCustId, tomorrowStr]);
-    const sampleRequestId = 'b1111111-1111-1111-1111-111111111111';
-    await (0, pool_1.query)(`INSERT IGNORE INTO booking_requests (id, name, phone, email, address, service_description, preferred_date, preferred_time, status)
-     VALUES (?, 'Hans Schmidt', '0151-9876543', 'hans@example.com', 'Alexanderplatz 1, 10178 Berlin', 'Hilfe beim Aufbau eines Regals', ?, '14:00', 'open')`, [sampleRequestId, tomorrow.toISOString().slice(0, 10)]);
     console.log('Database initialization complete.');
 }

@@ -618,11 +618,33 @@ const ROLE_COLORS: Record<string, string> = {
   buchhaltung: '#B45309', mitarbeiter: '#374151', employee: '#374151',
 };
 
+interface LiveStatus { id: string; username: string; status: 'on_duty' | 'busy' | 'offline'; }
+
+const STATUS_DOT: Record<string, { color: string; label: string }> = {
+  on_duty: { color: '#22c55e', label: 'In Dienst' },
+  busy:    { color: '#f97316', label: 'Im Auftrag / Gespräch' },
+  offline: { color: '#d1d5db', label: 'Nicht eingeloggt' },
+};
+
 function EmployeesTab() {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [liveStatus, setLiveStatus] = useState<Record<string, LiveStatus>>({});
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [confirmDel, setConfirmDel] = useState<{ id: string; name: string } | null>(null);
+  const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchLiveStatus = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/admin/users/live-status`, { headers: authHeaders() });
+      if (r.ok) {
+        const data: LiveStatus[] = await r.json();
+        const map: Record<string, LiveStatus> = {};
+        for (const s of data) map[s.id] = s;
+        setLiveStatus(map);
+      }
+    } catch (_) {}
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -632,7 +654,12 @@ function EmployeesTab() {
     } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    fetchLiveStatus();
+    statusIntervalRef.current = setInterval(fetchLiveStatus, 15000);
+    return () => { if (statusIntervalRef.current) clearInterval(statusIntervalRef.current); };
+  }, [load, fetchLiveStatus]);
 
   const del = async (id: string, name: string) => {
     setConfirmDel({ id, name });
@@ -652,26 +679,48 @@ function EmployeesTab() {
       {confirmDel && <ConfirmDialog message={`${confirmDel.name} wirklich löschen?`} onConfirm={confirmDelExecute} onCancel={() => setConfirmDel(null)} />}
       <div className="employees-header">
         <h3>Mitarbeiterverwaltung ({employees.length})</h3>
+        <div style={{ display: 'flex', gap: '12px', fontSize: '0.8rem', color: '#6b7280', alignItems: 'center' }}>
+          {Object.values(STATUS_DOT).map(({ color, label }) => (
+            <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: color }} />
+              {label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {msg && <div className={`msg-banner ${msg.includes('Fehler') ? 'msg-error' : 'msg-success'}`}>{msg}</div>}
 
       <div className="employees-list">
         {employees.length === 0 && <p className="empty-state">Keine Mitarbeiter vorhanden.</p>}
-        {employees.map(emp => (
-          <div key={emp.id} className="employee-card">
-            <div className="employee-avatar">{emp.full_name.charAt(0).toUpperCase()}</div>
-            <div className="employee-info">
-              <strong>{emp.full_name}</strong>
-              <span className="employee-username">@{emp.username}</span>
-              {emp.email && <span className="employee-email">{emp.email}</span>}
+        {employees.map(emp => {
+          const ls = liveStatus[emp.id];
+          const dot = STATUS_DOT[ls?.status ?? 'offline'];
+          return (
+            <div key={emp.id} className="employee-card">
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div className="employee-avatar">{emp.full_name.charAt(0).toUpperCase()}</div>
+                <span
+                  title={dot.label}
+                  style={{
+                    position: 'absolute', bottom: 0, right: 0,
+                    width: 12, height: 12, borderRadius: '50%',
+                    background: dot.color, border: '2px solid #fff',
+                  }}
+                />
+              </div>
+              <div className="employee-info">
+                <strong>{emp.full_name}</strong>
+                <span className="employee-username">@{emp.username}</span>
+                {emp.email && <span className="employee-email">{emp.email}</span>}
+              </div>
+              <span className="role-badge" style={{ background: ROLE_COLORS[emp.role] || '#374151' }}>
+                {ROLE_LABELS[emp.role] || emp.role}
+              </span>
+              <button className="btn-danger btn-sm btn-icon" onClick={() => del(emp.id, emp.full_name)} title="Löschen">✕</button>
             </div>
-            <span className="role-badge" style={{ background: ROLE_COLORS[emp.role] || '#374151' }}>
-              {ROLE_LABELS[emp.role] || emp.role}
-            </span>
-            <button className="btn-danger btn-sm btn-icon" onClick={() => del(emp.id, emp.full_name)} title="Löschen">✕</button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
     </div>

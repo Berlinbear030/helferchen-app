@@ -9,6 +9,7 @@ const child_process_1 = require("child_process");
 const queries_1 = require("../db/queries");
 const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
+const asterisk_1 = require("../services/asterisk");
 const MAIL_DOMAIN = 'helferchen.info';
 function normalizeLastName(fullName) {
     const last = fullName.trim().split(/\s+/).pop() || fullName;
@@ -196,6 +197,36 @@ router.delete('/roles/:id', async (req, res) => {
         return res.status(404).json({ message: 'Role not found or is system role' });
     await queries_1.AuditRepo.create('role', id, 'deleted', req.user.id, `Role ${role.name} deleted`);
     res.status(204).send();
+});
+// GET /api/admin/users/live-status — live duty/call status per user
+router.get('/users/live-status', async (_req, res) => {
+    try {
+        const [activeTimelogs, activeAssignments, sipPresence] = await Promise.all([
+            // Users with an active running timer = "in Dienst"
+            pool_1.dbConnected
+                ? (0, pool_1.query)('SELECT DISTINCT user_id FROM time_logs WHERE end_time IS NULL', []).then(r => new Set((r.rows || []).map((row) => row.user_id)))
+                : Promise.resolve(new Set()),
+            // Users with an in-progress assignment = "im Auftrag"
+            pool_1.dbConnected
+                ? (0, pool_1.query)("SELECT DISTINCT assigned_user_id FROM assignments WHERE status = 'in_progress' AND assigned_user_id IS NOT NULL", []).then(r => new Set((r.rows || []).map((row) => row.assigned_user_id)))
+                : Promise.resolve(new Set()),
+            // SIP usernames currently in a call from Asterisk AMI
+            (0, asterisk_1.queryAsteriskPresence)().catch(() => ({ online: new Set(), inCall: new Set() })),
+        ]);
+        const users = await queries_1.UserRepo.findAll();
+        const result = users.map((u) => {
+            const inCall = sipPresence.inCall.has(u.username);
+            const onDuty = activeTimelogs.has(u.id);
+            const onAssignment = activeAssignments.has(u.id);
+            const status = inCall || onAssignment ? 'busy' :
+                onDuty ? 'on_duty' : 'offline';
+            return { id: u.id, username: u.username, status };
+        });
+        return res.json(result);
+    }
+    catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
 });
 // GET /api/admin/users/:id — get single user
 router.get('/users/:id', async (req, res) => {

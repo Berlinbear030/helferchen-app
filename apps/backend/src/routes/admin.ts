@@ -4,6 +4,7 @@ import { spawnSync } from 'child_process';
 import { UserRepo, AuditRepo, CustomerRepo, AssignmentRepo, TimelogRepo, ReportRepo, SignatureRepo, RoleRepo } from '../db/queries';
 import { query, dbConnected } from '../db/pool';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
+import { queryAsteriskPresence } from '../services/asterisk';
 
 const MAIL_DOMAIN = 'helferchen.info';
 
@@ -208,6 +209,39 @@ router.delete('/roles/:id', async (req: AuthRequest, res: Response) => {
   if (!ok) return res.status(404).json({ message: 'Role not found or is system role' });
   await AuditRepo.create('role', id as string, 'deleted', req.user!.id, `Role ${role.name} deleted`);
   res.status(204).send();
+});
+
+// GET /api/admin/users/live-status — live duty/call status per user
+router.get('/users/live-status', async (_req: AuthRequest, res: Response) => {
+  try {
+    const [activeTimelogs, activeAssignments, sipPresence] = await Promise.all([
+      // Users with an active running timer = "in Dienst"
+      dbConnected
+        ? query('SELECT DISTINCT user_id FROM time_logs WHERE end_time IS NULL', []).then(r => new Set<string>((r.rows || []).map((row: any) => row.user_id)))
+        : Promise.resolve(new Set<string>()),
+      // Users with an in-progress assignment = "im Auftrag"
+      dbConnected
+        ? query("SELECT DISTINCT assigned_user_id FROM assignments WHERE status = 'in_progress' AND assigned_user_id IS NOT NULL", []).then(r => new Set<string>((r.rows || []).map((row: any) => row.assigned_user_id)))
+        : Promise.resolve(new Set<string>()),
+      // SIP usernames currently in a call from Asterisk AMI
+      queryAsteriskPresence().catch(() => ({ online: new Set<string>(), inCall: new Set<string>() })),
+    ]);
+
+    const users = await UserRepo.findAll();
+    const result = users.map((u: any) => {
+      const inCall = sipPresence.inCall.has(u.username);
+      const onDuty = activeTimelogs.has(u.id);
+      const onAssignment = activeAssignments.has(u.id);
+      const status =
+        inCall || onAssignment ? 'busy' :
+        onDuty ? 'on_duty' : 'offline';
+      return { id: u.id, username: u.username, status };
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/admin/users/:id — get single user
