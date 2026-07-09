@@ -191,6 +191,28 @@ export async function initDatabase(): Promise<void> {
   try { await query("ALTER TABLE reports ADD COLUMN payment_method VARCHAR(20) NOT NULL DEFAULT 'bar'"); } catch {}
   try { await query('ALTER TABLE reports ADD COLUMN payment_due_days INT NULL DEFAULT 14'); } catch {}
 
+  // EIS-502: Zahlungsart Bar/Karte (SumUp) im Helfer-Flow — additiv, bestehende Daten bleiben unangetastet.
+  // Bewusst ein eigenes Feld (collection_method), nicht das bestehende `payment_method` (das steuert die
+  // Rechnungs-Zahlungsbedingungen im Admin-Bereich und hat eine andere Bedeutung).
+  try { await query('ALTER TABLE reports ADD COLUMN collection_method VARCHAR(20) NULL'); } catch {}
+  try { await query('ALTER TABLE time_logs ADD COLUMN collection_method VARCHAR(20) NULL'); } catch {}
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS daily_closings (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      closing_date DATE NOT NULL,
+      starting_change DECIMAL(10,2) NOT NULL,
+      bar_revenue DECIMAL(10,2) NULL,
+      deposited_amount DECIMAL(10,2) NULL,
+      closed_at DATETIME NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE KEY unique_user_closing_date (user_id, closing_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   // booking_requests migration: ensure all columns exist on older deployments
   for (const col of ['street', 'house_number', 'zip', 'city']) {
     try { await query(`ALTER TABLE booking_requests ADD COLUMN ${col} VARCHAR(255)`); } catch {}
@@ -327,6 +349,17 @@ export async function initDatabase(): Promise<void> {
     );
   }
 
+  // EIS-506: Mitarbeiter-Onboarding & Compliance-Workflow (additive; existing users default to 'active')
+  try { await query("ALTER TABLE users ADD COLUMN birth_date DATE NULL"); } catch (e) {}
+  try { await query("ALTER TABLE users ADD COLUMN onboarding_status VARCHAR(20) NOT NULL DEFAULT 'active'"); } catch (e) {}
+  try { await query("UPDATE users SET onboarding_status = 'active' WHERE onboarding_status IS NULL"); } catch (e) {}
+  try { await query("ALTER TABLE users ADD COLUMN level INT NOT NULL DEFAULT 0"); } catch (e) {}
+  try { await query("ALTER TABLE users ADD COLUMN criminal_record_upload LONGTEXT NULL"); } catch (e) {}
+  try { await query("ALTER TABLE users ADD COLUMN onboarding_submitted_at DATETIME NULL"); } catch (e) {}
+  try { await query("ALTER TABLE users ADD COLUMN onboarding_reviewed_by CHAR(36) NULL"); } catch (e) {}
+  try { await query("ALTER TABLE users ADD COLUMN onboarding_review_note TEXT NULL"); } catch (e) {}
+  try { await query("ALTER TABLE users ADD COLUMN onboarding_reviewed_at DATETIME NULL"); } catch (e) {}
+
   // EIS-500: Abwesenheits-/Urlaubsantrag Self-Service (additive, no existing data touched)
   await query(`
     CREATE TABLE IF NOT EXISTS leave_requests (
@@ -344,6 +377,130 @@ export async function initDatabase(): Promise<void> {
       PRIMARY KEY (id),
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // EIS-504: generisches, rollenbasiertes Aktions-/To-Do-System (Fundament für den Action-Slider)
+  await query(`
+    CREATE TABLE IF NOT EXISTS actions (
+      id CHAR(36) NOT NULL,
+      type VARCHAR(50) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      body TEXT,
+      target_role VARCHAR(30) NULL,
+      target_user_id CHAR(36) NULL,
+      severity VARCHAR(20) NOT NULL DEFAULT 'normal',
+      link_tab VARCHAR(50) NULL,
+      entity_type VARCHAR(50) NULL,
+      entity_id CHAR(36) NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'open',
+      created_by_user_id CHAR(36) NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      resolved_at DATETIME NULL,
+      resolved_by_user_id CHAR(36) NULL,
+      PRIMARY KEY (id),
+      FOREIGN KEY (target_user_id) REFERENCES users(id),
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id),
+      FOREIGN KEY (resolved_by_user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  try { await query('CREATE INDEX idx_actions_role_status ON actions (target_role, status)'); } catch (e) {}
+  try { await query('CREATE INDEX idx_actions_user_status ON actions (target_user_id, status)'); } catch (e) {}
+
+  // EIS-507: persist shop orders so admins have an overview (previously email-only)
+  await query(`
+    CREATE TABLE IF NOT EXISTS shop_orders (
+      id CHAR(36) NOT NULL,
+      customer_name VARCHAR(255) NOT NULL,
+      customer_email VARCHAR(255) NOT NULL,
+      items TEXT NOT NULL,
+      total DECIMAL(10,2) NOT NULL DEFAULT 0,
+      status VARCHAR(20) NOT NULL DEFAULT 'new',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // EIS-505: Promoter-Code, Kunden-Level-Routing & Provisions-Split (additiv)
+  await query(`
+    CREATE TABLE IF NOT EXISTS promoters (
+      id CHAR(36) NOT NULL,
+      code VARCHAR(50) UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // customers: Kunden-Level (0=Starter,1=Trust,2=Premium), permanenter Promoter-Link, fester Stamm-Mitarbeiter
+  try { await query('ALTER TABLE customers ADD COLUMN level TINYINT NOT NULL DEFAULT 0'); } catch (e) {}
+  try { await query('ALTER TABLE customers ADD COLUMN promoter_id CHAR(36) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE customers ADD COLUMN stamm_user_id CHAR(36) NULL'); } catch (e) {}
+
+  // users: Mitarbeiter-Stufe für First-Match-Boost-Sichtbarkeit (standard | premium_flex | senior_crew)
+  try { await query("ALTER TABLE users ADD COLUMN employee_tier VARCHAR(30) NOT NULL DEFAULT 'standard'"); } catch (e) {}
+
+  // booking_requests: Promoter-Code bei Auftragseingang erfassen
+  try { await query('ALTER TABLE booking_requests ADD COLUMN promoter_code VARCHAR(50) NULL'); } catch (e) {}
+
+  // assignments: Snapshot von Kunden-Level/Promoter zum Zeitpunkt der Auftragsvergabe (stabil für den
+  // Provisions-Split, auch wenn sich der Kunde später ändert), Sichtbarkeitsfenster für First-Match-Boost,
+  // Eskalationsstatus für Level 1/2 Direct-Push (Ablehnung/Krankheit -> Gebietsleiter)
+  try { await query('ALTER TABLE assignments ADD COLUMN promoter_id CHAR(36) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE assignments ADD COLUMN customer_level TINYINT NULL'); } catch (e) {}
+  try { await query('ALTER TABLE assignments ADD COLUMN boost_visible_until DATETIME NULL'); } catch (e) {}
+  try { await query('ALTER TABLE assignments ADD COLUMN escalation_status VARCHAR(30) NULL'); } catch (e) {}
+
+  // reports (Rechnungen): Zahlungsstatus + Provisions-Split bei bezahlten Rechnungen
+  try { await query('ALTER TABLE reports ADD COLUMN is_paid BOOLEAN NOT NULL DEFAULT FALSE'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN paid_at DATETIME NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN commission_helper_pct DECIMAL(5,2) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN commission_helferchen_pct DECIMAL(5,2) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN commission_promoter_pct DECIMAL(5,2) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN commission_helper_amount DECIMAL(10,2) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN commission_helferchen_amount DECIMAL(10,2) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN commission_promoter_amount DECIMAL(10,2) NULL'); } catch (e) {}
+
+  // EIS-498: Backoffice & Finance — Rechnungsfreigabe, Care-Call, Mahnwesen (additiv)
+  // Rechnungsentwurf entsteht automatisch (reports.create), Finance & Billing gibt manuell frei
+  // (approval_status), bevor Versand per Post (print_status) oder E-Mail erlaubt ist.
+  try { await query("ALTER TABLE reports ADD COLUMN approval_status VARCHAR(20) NOT NULL DEFAULT 'draft'"); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN approved_by_user_id CHAR(36) NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN approved_at DATETIME NULL'); } catch (e) {}
+  try { await query("ALTER TABLE reports ADD COLUMN print_status VARCHAR(20) NOT NULL DEFAULT 'none'"); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN print_requested_at DATETIME NULL'); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN printed_at DATETIME NULL'); } catch (e) {}
+  // Mahnwesen: offen -> mahnung_1 -> mahnung_2 -> gesperrt (nur für unbezahlte Überweisungsrechnungen)
+  try { await query("ALTER TABLE reports ADD COLUMN dunning_stage VARCHAR(20) NOT NULL DEFAULT 'offen'"); } catch (e) {}
+  try { await query('ALTER TABLE reports ADD COLUMN dunning_last_sent_at DATETIME NULL'); } catch (e) {}
+
+  // customers: Buchungssperre nach eskaliertem Mahnwesen
+  try { await query('ALTER TABLE customers ADD COLUMN booking_blocked BOOLEAN NOT NULL DEFAULT FALSE'); } catch (e) {}
+  try { await query('ALTER TABLE customers ADD COLUMN booking_blocked_reason TEXT NULL'); } catch (e) {}
+
+  // users: Pluspunkte aus positivem Kunden-Feedback (Care-Call)
+  try { await query('ALTER TABLE users ADD COLUMN positive_points INT NOT NULL DEFAULT 0'); } catch (e) {}
+
+  // Quality & Care: Anruf-Erinnerung 5 Tage nach Auftrag, erfasst Lob/Kritik-Feedback
+  await query(`
+    CREATE TABLE IF NOT EXISTS care_calls (
+      id CHAR(36) NOT NULL,
+      assignment_id CHAR(36) NOT NULL,
+      report_id CHAR(36) NOT NULL,
+      customer_id CHAR(36) NOT NULL,
+      due_at DATETIME NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      called_by_user_id CHAR(36) NULL,
+      called_at DATETIME NULL,
+      feedback_type VARCHAR(20) NULL,
+      feedback_note TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id),
+      FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE,
+      FOREIGN KEY (customer_id) REFERENCES customers(id),
+      UNIQUE KEY unique_report_care_call (report_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 

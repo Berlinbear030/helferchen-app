@@ -1,4 +1,4 @@
-import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, ShopArticle, AuditEntry, Role, SipUser, LeaveRequest } from './index';
+import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, ShopArticle, ShopOrder, AuditEntry, Role, SipUser, LeaveRequest, DailyClosing } from './index';
 import { query, dbConnected } from './pool';
 import { randomUUID } from 'crypto';
 
@@ -17,7 +17,7 @@ export const UserRepo = {
   },
   async findAll(): Promise<User[]> {
     if (!useDb()) return db.users;
-    const res = await query('SELECT id, username, full_name, email, role, address, qualification, permissions, private_email, assigned_cars, assigned_materials, created_at FROM users WHERE deleted_at IS NULL ORDER BY username ASC');
+    const res = await query('SELECT id, username, full_name, email, role, address, qualification, permissions, private_email, assigned_cars, assigned_materials, onboarding_status, level, created_at FROM users WHERE deleted_at IS NULL ORDER BY username ASC');
     return res.rows;
   },
   async create(username: string, password_hash: string, full_name: string, email: string, role: string): Promise<User> {
@@ -45,7 +45,7 @@ export const UserRepo = {
     const res = await query('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [id]);
     return res.rowCount > 0;
   },
-  async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string; permissions?: string; private_email?: string; assigned_cars?: string; assigned_materials?: string }): Promise<boolean> {
+  async update(id: string, fields: { password_hash?: string; email?: string; full_name?: string; role?: string; address?: string; qualification?: string; permissions?: string; private_email?: string; assigned_cars?: string; assigned_materials?: string; level?: number }): Promise<boolean> {
     if (!useDb()) return false;
     const setClauses: string[] = [];
     const values: unknown[] = [];
@@ -59,6 +59,7 @@ export const UserRepo = {
     if (fields.private_email !== undefined) { setClauses.push('private_email = ?'); values.push(fields.private_email); }
     if (fields.assigned_cars !== undefined) { setClauses.push('assigned_cars = ?'); values.push(fields.assigned_cars); }
     if (fields.assigned_materials !== undefined) { setClauses.push('assigned_materials = ?'); values.push(fields.assigned_materials); }
+    if (fields.level !== undefined) { setClauses.push('level = ?'); values.push(fields.level); }
     if (setClauses.length === 0) return false;
     values.push(id);
     const res = await query(`UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`, values);
@@ -68,7 +69,68 @@ export const UserRepo = {
     if (!useDb()) return db.users.length;
     const res = await query('SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL');
     return parseInt(res.rows[0].count);
-  }
+  },
+
+  // EIS-506: Mitarbeiter-Onboarding & Compliance-Workflow
+  async createFreelancerRegistration(data: {
+    username: string; password_hash: string; full_name: string; email: string;
+    birth_date: string; address?: string; criminal_record_upload: string;
+  }): Promise<User> {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const entry: User = {
+      id, username: data.username, password_hash: data.password_hash, full_name: data.full_name,
+      email: data.email, role: 'employee', created_at: now,
+      birth_date: data.birth_date, address: data.address, onboarding_status: 'pending_review',
+      level: 0, criminal_record_upload: data.criminal_record_upload, onboarding_submitted_at: now,
+    };
+    if (!useDb()) {
+      db.users.push(entry);
+      return entry;
+    }
+    await query(
+      `INSERT INTO users (id, username, password_hash, full_name, email, role, birth_date, address, onboarding_status, level, criminal_record_upload, onboarding_submitted_at)
+       VALUES (?, ?, ?, ?, ?, 'employee', ?, ?, 'pending_review', 0, ?, NOW())`,
+      [id, data.username, data.password_hash, data.full_name, data.email, data.birth_date, data.address || null, data.criminal_record_upload]
+    );
+    return entry;
+  },
+  async findPendingOnboarding(): Promise<User[]> {
+    if (!useDb()) return db.users.filter(u => u.onboarding_status === 'pending_review');
+    const res = await query(
+      `SELECT id, username, full_name, email, address, birth_date, onboarding_status, onboarding_submitted_at, created_at
+       FROM users WHERE onboarding_status = 'pending_review' AND deleted_at IS NULL ORDER BY onboarding_submitted_at ASC`
+    );
+    return res.rows;
+  },
+  async findOnboardingDetail(id: string): Promise<User | null> {
+    if (!useDb()) return db.users.find(u => u.id === id) || null;
+    const res = await query(
+      `SELECT id, username, full_name, email, address, qualification, birth_date, onboarding_status, level,
+              criminal_record_upload, onboarding_submitted_at, onboarding_reviewed_by, onboarding_review_note, onboarding_reviewed_at
+       FROM users WHERE id = ?`,
+      [id]
+    );
+    return res.rows[0] || null;
+  },
+  async reviewOnboarding(id: string, data: { status: 'active' | 'rejected'; reviewed_by_user_id: string; review_note?: string | null }): Promise<User | null> {
+    if (!useDb()) {
+      const entry = db.users.find(u => u.id === id);
+      if (!entry) return null;
+      entry.onboarding_status = data.status;
+      entry.onboarding_reviewed_by = data.reviewed_by_user_id;
+      entry.onboarding_review_note = data.review_note ?? null;
+      entry.onboarding_reviewed_at = new Date().toISOString();
+      if (data.status === 'active') entry.level = 0;
+      return entry;
+    }
+    await query(
+      `UPDATE users SET onboarding_status = ?, onboarding_reviewed_by = ?, onboarding_review_note = ?, onboarding_reviewed_at = NOW()
+       WHERE id = ?`,
+      [data.status, data.reviewed_by_user_id, data.review_note ?? null, id]
+    );
+    return this.findOnboardingDetail(id);
+  },
 };
 
 export const CustomerRepo = {
@@ -104,6 +166,18 @@ export const CustomerRepo = {
     }
     const res = await query('DELETE FROM customers WHERE id = ?', [id]);
     return res.rowCount > 0;
+  },
+  // EIS-505: Kunden-Level (Routing) + fester Stamm-Mitarbeiter (Direct-Push Ziel für Level 1/2)
+  async updateRouting(id: string, fields: { level?: number; stamm_user_id?: string | null }): Promise<boolean> {
+    if (!useDb()) return false;
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    if (fields.level !== undefined) { updates.push('level = ?'); values.push(fields.level); }
+    if (fields.stamm_user_id !== undefined) { updates.push('stamm_user_id = ?'); values.push(fields.stamm_user_id); }
+    if (updates.length === 0) return false;
+    values.push(id);
+    const res = await query(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`, values);
+    return res.rowCount > 0;
   }
 };
 
@@ -123,7 +197,7 @@ export const AssignmentRepo = {
     const res = await query('SELECT * FROM assignments WHERE id = ?', [id]);
     return res.rows[0] || null;
   },
-  async create(customer_id: string, assigned_user_id: string | null, title: string, description: string, scheduled_at: string, booking_request_id: string | null = null, hourly_rate: number = 65.00): Promise<Assignment> {
+  async create(customer_id: string, assigned_user_id: string | null, title: string, description: string, scheduled_at: string, booking_request_id: string | null = null, hourly_rate: number = 65.00, routing?: { promoter_id?: string | null; customer_level?: number | null; boost_visible_until?: string | null; escalation_status?: string | null }): Promise<Assignment> {
     if (!useDb()) {
       const a = { id: Date.now().toString(), customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending' as const, hourly_rate, created_at: new Date().toISOString(), booking_request_id: booking_request_id || '' };
       db.assignments.push(a as any);
@@ -132,8 +206,8 @@ export const AssignmentRepo = {
     const id = randomUUID();
     const formattedDate = scheduled_at.replace('T', ' ').slice(0, 19).padEnd(19, ':00').slice(0, 19);
     await query(
-      'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at, booking_request_id, hourly_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, customer_id, assigned_user_id || null, title, description, formattedDate, booking_request_id, hourly_rate]
+      'INSERT INTO assignments (id, customer_id, assigned_user_id, title, description, scheduled_at, booking_request_id, hourly_rate, promoter_id, customer_level, boost_visible_until, escalation_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, customer_id, assigned_user_id || null, title, description, formattedDate, booking_request_id, hourly_rate, routing?.promoter_id ?? null, routing?.customer_level ?? null, routing?.boost_visible_until ?? null, routing?.escalation_status ?? null]
     );
     return { id, customer_id, assigned_user_id: assigned_user_id || '', title, description, scheduled_at, status: 'pending', hourly_rate, created_at: new Date().toISOString() } as any;
   },
@@ -183,6 +257,31 @@ export const AssignmentRepo = {
       return true;
     }
     const res = await query('UPDATE assignments SET assigned_user_id = ? WHERE id = ?', [userId, id]);
+    return res.rowCount > 0;
+  },
+  // EIS-505: Level 1/2 Direct-Push wird abgelehnt oder der feste Mitarbeiter meldet sich krank ->
+  // Auftrag wird frei und zur manuellen Eskalation an den Gebietsleiter markiert.
+  async declineDirectPush(id: string, reason: 'declined' | 'krank'): Promise<boolean> {
+    if (!useDb()) return false;
+    const res = await query(
+      "UPDATE assignments SET assigned_user_id = NULL, escalation_status = ? WHERE id = ?",
+      [reason, id]
+    );
+    return res.rowCount > 0;
+  },
+  async findEscalations(): Promise<Assignment[]> {
+    if (!useDb()) return [];
+    const res = await query(
+      "SELECT * FROM assignments WHERE escalation_status IS NOT NULL AND (assigned_user_id IS NULL OR assigned_user_id = '') ORDER BY scheduled_at ASC"
+    );
+    return res.rows;
+  },
+  async resolveEscalation(id: string, userId: string): Promise<boolean> {
+    if (!useDb()) return false;
+    const res = await query(
+      "UPDATE assignments SET assigned_user_id = ?, escalation_status = NULL WHERE id = ?",
+      [userId, id]
+    );
     return res.rowCount > 0;
   }
 };
@@ -247,6 +346,15 @@ export const TimelogRepo = {
       return;
     }
     await query('UPDATE time_logs SET is_signed = ? WHERE id = ?', [is_signed, id]);
+  },
+  // EIS-502
+  async setCollectionMethod(id: string, collection_method: 'bar' | 'karte_sumup'): Promise<void> {
+    if (!useDb()) {
+      const t = db.timelogs.find(x => x.id === id);
+      if (t) t.collection_method = collection_method;
+      return;
+    }
+    await query('UPDATE time_logs SET collection_method = ? WHERE id = ?', [collection_method, id]);
   }
 };
 
@@ -301,6 +409,15 @@ export const ReportRepo = {
     }
     const res = await query('DELETE FROM reports WHERE id = ?', [id]);
     return res.rowCount > 0;
+  },
+  // EIS-502: Bar vs. Kartenzahlung (SumUp), gewählt vom Helfer nach Auftragsende
+  async setCollectionMethod(id: string, collection_method: 'bar' | 'karte_sumup'): Promise<void> {
+    if (!useDb()) {
+      const r = db.reports.find(x => x.id === id);
+      if (r) r.collection_method = collection_method;
+      return;
+    }
+    await query('UPDATE reports SET collection_method = ? WHERE id = ?', [collection_method, id]);
   }
 };
 
@@ -697,6 +814,54 @@ export const LeaveRequestRepo = {
       'UPDATE leave_requests SET status = ?, reviewed_by_user_id = ?, review_note = ?, reviewed_at = NOW() WHERE id = ?',
       [data.status, data.reviewed_by_user_id, data.review_note ?? null, id]
     );
+    return this.findById(id);
+  },
+};
+
+// EIS-507: persist shop orders so admins have an overview (previously email-only)
+export const ShopOrderRepo = {
+  async findAll(): Promise<ShopOrder[]> {
+    if (!useDb()) {
+      return [...db.shopOrders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    const res = await query('SELECT * FROM shop_orders ORDER BY created_at DESC');
+    return res.rows;
+  },
+  async findById(id: string): Promise<ShopOrder | null> {
+    if (!useDb()) return db.shopOrders.find(o => o.id === id) || null;
+    const res = await query('SELECT * FROM shop_orders WHERE id = ?', [id]);
+    return res.rows[0] || null;
+  },
+  async create(data: { customer_name: string; customer_email: string; items: { name: string; quantity: number; price: number }[]; total: number }): Promise<ShopOrder> {
+    const id = randomUUID();
+    const entry: ShopOrder = {
+      id,
+      customer_name: data.customer_name,
+      customer_email: data.customer_email,
+      items: JSON.stringify(data.items),
+      total: data.total,
+      status: 'new',
+      created_at: new Date().toISOString(),
+    };
+    if (!useDb()) {
+      db.shopOrders.push(entry);
+      return entry;
+    }
+    await query(
+      'INSERT INTO shop_orders (id, customer_name, customer_email, items, total, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, data.customer_name, data.customer_email, entry.items, data.total, 'new']
+    );
+    return entry;
+  },
+  async updateStatus(id: string, status: 'new' | 'done'): Promise<ShopOrder | null> {
+    if (!useDb()) {
+      const entry = db.shopOrders.find(o => o.id === id);
+      if (!entry) return null;
+      entry.status = status;
+      return entry;
+    }
+    const res = await query('UPDATE shop_orders SET status = ? WHERE id = ?', [status, id]);
+    if (res.rowCount === 0) return null;
     return this.findById(id);
   },
 };

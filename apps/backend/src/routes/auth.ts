@@ -16,6 +16,14 @@ router.post('/login', async (req: Request, res: Response) => {
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
+  // EIS-506: block login until onboarding review is complete
+  if (user.onboarding_status === 'pending_review') {
+    return res.status(403).json({ message: 'Ihr Profil wird noch vom Gebietsleiter geprüft. Bitte warten Sie auf die Freigabe.' });
+  }
+  if (user.onboarding_status === 'rejected') {
+    return res.status(403).json({ message: 'Ihre Registrierung wurde abgelehnt. Bitte kontaktieren Sie Ihren Gebietsleiter.' });
+  }
+
   const permissions: string[] = (() => { try { return JSON.parse(user.permissions || '[]'); } catch { return []; } })();
   const payload = { id: user.id, username: user.username, role: user.role, permissions };
   const token = jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '8h' });
