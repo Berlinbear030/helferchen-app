@@ -297,8 +297,8 @@ router.get('/users/:id/stats', async (req: AuthRequest, res: Response) => {
           COALESCE(r.invoice_amount_override,
             CASE
               WHEN tl.total_price IS NOT NULL THEN tl.total_price
-              WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 20
-              WHEN tl.duration_minutes IS NOT NULL THEN 20 + CEIL((tl.duration_minutes - 15.0) / 15) * 15
+              WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 25
+              WHEN tl.duration_minutes IS NOT NULL THEN 25 + CEIL((tl.duration_minutes - 15.0) / 15) * 20
               ELSE 0
             END
           ) - COALESCE(r.voucher_discount_amount, 0)
@@ -326,8 +326,8 @@ router.get('/users/:id/stats', async (req: AuthRequest, res: Response) => {
         COALESCE(r.invoice_amount_override,
           CASE
             WHEN tl.total_price IS NOT NULL THEN tl.total_price
-            WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 20
-            WHEN tl.duration_minutes IS NOT NULL THEN 20 + CEIL((tl.duration_minutes - 15.0) / 15) * 15
+            WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 25
+            WHEN tl.duration_minutes IS NOT NULL THEN 25 + CEIL((tl.duration_minutes - 15.0) / 15) * 20
             ELSE 0
           END
         ) - COALESCE(r.voucher_discount_amount, 0)

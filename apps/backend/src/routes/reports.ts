@@ -47,8 +47,8 @@ router.get('/', authenticateToken, requireRole('admin'), async (req: AuthRequest
 // GET /api/reports/customer-stats — revenue aggregation per customer (admin)
 router.get('/customer-stats', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
   function calcPrice(minutes: number): number {
-    if (minutes <= 15) return 20;
-    return 20 + Math.ceil((minutes - 15) / 15) * 15;
+    if (minutes <= 15) return 25;
+    return 25 + Math.ceil((minutes - 15) / 15) * 20;
   }
 
   const reports = await ReportRepo.findAll();

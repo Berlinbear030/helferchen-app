@@ -226,8 +226,8 @@ export const TimelogRepo = {
     const startMs = new Date(existing.rows[0].start_time).getTime();
     const durationMinutes = Math.max(1, Math.round((Date.now() - startMs) / 60000));
     const blocksCount = Math.ceil(durationMinutes / 15);
-    // €20 first 15 min, +€15 per additional 15-min block (same as MobileApp calcPrice)
-    const totalPrice = durationMinutes <= 15 ? 20 : 20 + Math.ceil((durationMinutes - 15) / 15) * 15;
+    // €25 first 15 min (inkl. Anfahrt), +€20 per additional started 15-min block (same as MobileApp calcPrice)
+    const totalPrice = durationMinutes <= 15 ? 25 : 25 + Math.ceil((durationMinutes - 15) / 15) * 20;
     await query(
       'UPDATE time_logs SET end_time = NOW(), duration_minutes = ?, blocks_count = ?, total_price = ? WHERE id = ?',
       [durationMinutes, blocksCount, totalPrice, id]

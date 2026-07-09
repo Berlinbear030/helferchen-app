@@ -1,6 +1,6 @@
 /**
  * Helferchen Mobile App — iOS-style wizard + customer overview
- * Pricing: 20€ first 15min, +15€ per additional 15min block (rounded up)
+ * Pricing: 25€ first 15min (inkl. Anfahrt), +20€ per additional started 15min block
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import L from 'leaflet';
@@ -58,13 +58,13 @@ function calcMinutes(start: string, end: string | null) { return Math.max(0, Mat
 
 function calcPrice(minutes: number): number {
   if (minutes <= 0) return 0;
-  if (minutes <= 15) return 20;
-  return 20 + Math.ceil((minutes - 15) / 15) * 15;
+  if (minutes <= 15) return 25;
+  return 25 + Math.ceil((minutes - 15) / 15) * 20;
 }
 function priceBreakdown(minutes: number): string {
   if (minutes <= 0) return '—';
-  if (minutes <= 15) return 'Grundgebühr (bis 15 Min)';
-  return `Grundgebühr + ${Math.ceil((minutes - 15) / 15)} × 15 Min`;
+  if (minutes <= 15) return 'Grundgebühr inkl. Anfahrt (bis 15 Min)';
+  return `Grundgebühr inkl. Anfahrt + ${Math.ceil((minutes - 15) / 15)} × 15 Min`;
 }
 function euro(n: number) { return n.toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €'; }
 

@@ -5,11 +5,11 @@ import { query, dbConnected } from '../db/pool';
 
 const router = Router();
 
-// €20 first 15 min, +€15 per additional 15-min block — mirrors MobileApp calcPrice
+// €25 first 15 min (inkl. Anfahrt), +€20 per additional started 15-min block — mirrors MobileApp calcPrice
 function calcPriceFromMinutes(minutes: number): number {
   if (minutes <= 0) return 0;
-  if (minutes <= 15) return 20;
-  return 20 + Math.ceil((minutes - 15) / 15) * 15;
+  if (minutes <= 15) return 25;
+  return 25 + Math.ceil((minutes - 15) / 15) * 20;
 }
 
 // Returns a map of assignment_id → actual invoiced revenue (after overrides and voucher discounts)
@@ -22,8 +22,8 @@ async function fetchRevenueMap(ids: string[]): Promise<Record<string, number>> {
         COALESCE(r.invoice_amount_override,
           CASE
             WHEN tl.total_price IS NOT NULL THEN tl.total_price
-            WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 20
-            WHEN tl.duration_minutes IS NOT NULL THEN 20 + CEIL((tl.duration_minutes - 15.0) / 15) * 15
+            WHEN tl.duration_minutes IS NOT NULL AND tl.duration_minutes <= 15 THEN 25
+            WHEN tl.duration_minutes IS NOT NULL THEN 25 + CEIL((tl.duration_minutes - 15.0) / 15) * 20
             ELSE 0
           END
         ) - COALESCE(r.voucher_discount_amount, 0)

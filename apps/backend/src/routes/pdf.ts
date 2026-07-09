@@ -27,8 +27,8 @@ function fmtTime(s: string | Date | null | undefined): string {
 }
 
 function calcPrice(minutes: number): number {
-  if (minutes <= 15) return 20;
-  return 20 + Math.ceil((minutes - 15) / 15) * 15;
+  if (minutes <= 15) return 25;
+  return 25 + Math.ceil((minutes - 15) / 15) * 20;
 }
 
 function euro(n: number): string {
@@ -69,7 +69,7 @@ async function buildPdf(reportId: string): Promise<Buffer> {
   const voucherDiscount = report.voucher_discount_amount ? Number(report.voucher_discount_amount) : 0;
   const price = Math.max(0, basePrice - voucherDiscount);
   const extraBlocks = minutes > 15 ? Math.ceil((minutes - 15) / 15) : 0;
-  const extraCost = extraBlocks * 15;
+  const extraCost = extraBlocks * 20;
   const invoiceNum = report.invoice_number || `HCH-${reportId.slice(0, 8).toUpperCase()}`;
   const invoiceDate = report.created_at ? fmtDate(report.created_at) : new Date().toLocaleDateString('de-DE');
 
@@ -189,9 +189,9 @@ async function buildPdf(reportId: string): Promise<Buffer> {
       y += 14;
     };
 
-    rowY('Grundgebühr (erste 15 Minuten)', euro(20));
+    rowY('Grundgebühr inkl. Anfahrt (erste 15 Minuten)', euro(25));
     if (extraBlocks > 0) {
-      rowY(`Zusatzzeit: ${extraBlocks} × 15 Min à 15,00 €`, euro(extraBlocks * 15));
+      rowY(`Zusatzzeit: ${extraBlocks} × 15 Min à 20,00 €`, euro(extraBlocks * 20));
     }
     if (voucherDiscount > 0) {
       const vLabel = report.voucher_label || 'Gutschein';
