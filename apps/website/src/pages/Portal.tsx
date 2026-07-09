@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../index.css';
 
@@ -2470,6 +2470,8 @@ export default function Portal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [openBookingCount, setOpenBookingCount] = useState(0);
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2524,6 +2526,42 @@ export default function Portal() {
   }, [navigate, user?.role]);
 
   useEffect(() => { if (user) loadData(); }, [user, loadData]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+    const loadOpenBookings = async () => {
+      const r = await fetch(`${API}/booking-requests?status=open`, { headers: authHeaders() });
+      if (r.ok) setOpenBookingCount((await r.json()).length || 0);
+    };
+    loadOpenBookings();
+    const iv = setInterval(loadOpenBookings, 30_000);
+    return () => clearInterval(iv);
+  }, [user]);
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  interface NotifItem { key: string; icon: string; text: string; tab: Tab }
+  const notifications: NotifItem[] = useMemo(() => {
+    const items: NotifItem[] = [];
+    if (user?.role === 'admin') {
+      if (openBookingCount > 0) {
+        items.push({ key: 'bookings', icon: '📬', text: `${openBookingCount} neue Buchungsanfrage${openBookingCount === 1 ? '' : 'n'}`, tab: 'booking-requests' });
+      }
+      const unassignedToday = unassignedAssignments.filter(a => a.scheduled_at?.startsWith(todayStr));
+      if (unassignedToday.length > 0) {
+        const text = unassignedToday.length === 1 ? '1 unzugewiesener Auftrag heute' : `${unassignedToday.length} unzugewiesene Aufträge heute`;
+        items.push({ key: 'unassigned', icon: '🗺️', text, tab: 'tour' });
+      }
+    }
+    const openToday = assignments.filter(a => a.status === 'pending' && a.scheduled_at?.startsWith(todayStr));
+    if (openToday.length > 0) {
+      items.push({ key: 'open-today', icon: '📅', text: `${openToday.length} Termin${openToday.length === 1 ? '' : 'e'} heute noch offen`, tab: 'appointments' });
+    }
+    return items;
+  }, [user, openBookingCount, unassignedAssignments, assignments, todayStr]);
 
   const handleInstallApp = async () => {
     if (deferredPrompt.current) {
@@ -2632,6 +2670,38 @@ export default function Portal() {
             </div>
           </div>
           <div className="pv2-topbar-right">
+            <div className="pv2-notif-wrap">
+              <button
+                className="pv2-notif-bell"
+                onClick={() => setNotifOpen(o => !o)}
+                aria-label="Benachrichtigungen"
+              >
+                🔔
+                {notifications.length > 0 && <span className="pv2-notif-badge">{notifications.length}</span>}
+              </button>
+              {notifOpen && (
+                <>
+                  <div className="pv2-notif-scrim" onClick={() => setNotifOpen(false)} />
+                  <div className="pv2-notif-dropdown">
+                    <div className="pv2-notif-header">Benachrichtigungen</div>
+                    {notifications.length === 0 ? (
+                      <div className="pv2-notif-empty">Alles erledigt — keine offenen Punkte. 🎉</div>
+                    ) : (
+                      notifications.map(n => (
+                        <button
+                          key={n.key}
+                          className="pv2-notif-item"
+                          onClick={() => { handleTabChange(n.tab); setNotifOpen(false); }}
+                        >
+                          <span className="pv2-notif-item-icon">{n.icon}</span>
+                          <span>{n.text}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
             <div className="pv2-topbar-user">
               <span className="pv2-online-dot" title="Online" />
               <span className="pv2-topbar-name">{user.full_name}</span>
