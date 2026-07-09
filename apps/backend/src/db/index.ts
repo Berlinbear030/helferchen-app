@@ -114,16 +114,6 @@ export interface ShopArticle {
   created_at: string;
 }
 
-export interface ShopOrder {
-  id: string;
-  customer_name: string;
-  customer_email: string;
-  items: string; // JSON array of { name, quantity, price }
-  total: number;
-  status: 'new' | 'done';
-  created_at: string;
-}
-
 export interface Role {
   id: string;
   name: string;
