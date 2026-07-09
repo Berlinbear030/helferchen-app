@@ -45,8 +45,15 @@ interface CallLog {
   status: 'missed' | 'answered' | 'callback_initiated' | 'handled';
   note: string | null; handled_by: string | null; created_at: string;
 }
+interface LeaveRequest {
+  id: string; user_id: string; user_name?: string;
+  type: 'urlaub' | 'krankmeldung';
+  start_date: string; end_date: string; reason: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  review_note: string | null; created_at: string; reviewed_at: string | null;
+}
 
-type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees' | 'assignments-admin' | 'kunden' | 'anruf';
+type Tab = 'dashboard' | 'appointments' | 'tour' | 'booking-requests' | 'timelogs' | 'employees' | 'assignments-admin' | 'kunden' | 'anruf' | 'urlaub';
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
@@ -2454,6 +2461,154 @@ function AnrufagentTab({ user }: { user: User }) {
             </div>
           )}
         </>
+// ── Urlaub / Abwesenheit Tab (EIS-500) ──────────────────────────────────────────
+
+function leaveTypeLabel(t: string) {
+  return t === 'krankmeldung' ? '🤒 Krankmeldung' : '🌴 Urlaub';
+}
+function leaveStatusLabel(s: string) {
+  return ({ pending: 'Ausstehend', approved: 'Genehmigt', rejected: 'Abgelehnt' } as Record<string, string>)[s] || s;
+}
+function leaveStatusClass(s: string) {
+  return ({ pending: 'status-pending', approved: 'status-accepted', rejected: 'status-rejected' } as Record<string, string>)[s] || '';
+}
+
+function UrlaubTab({ isAdmin }: { isAdmin: boolean }) {
+  const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
+  const [allRequests, setAllRequests] = useState<LeaveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adminFilter, setAdminFilter] = useState('pending');
+  const [type, setType] = useState<'urlaub' | 'krankmeldung'>('urlaub');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const requests: Promise<Response>[] = [fetch(`${API}/leave-requests/my`, { headers: authHeaders() })];
+      if (isAdmin) requests.push(fetch(`${API}/leave-requests?status=${adminFilter}`, { headers: authHeaders() }));
+      const [mineRes, allRes] = await Promise.all(requests);
+      if (mineRes.ok) setMyRequests(await mineRes.json());
+      if (isAdmin && allRes?.ok) setAllRequests(await allRes.json());
+    } finally { setLoading(false); }
+  }, [isAdmin, adminFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!startDate || !endDate) return;
+    if (endDate < startDate) { setMsg('❌ Enddatum darf nicht vor dem Startdatum liegen.'); setTimeout(() => setMsg(''), 5000); return; }
+    setSaving(true);
+    try {
+      const r = await fetch(`${API}/leave-requests`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ type, start_date: startDate, end_date: endDate, reason }) });
+      if (r.ok) {
+        setMsg('✅ Antrag eingereicht.');
+        setStartDate(''); setEndDate(''); setReason('');
+        load();
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setMsg('❌ ' + (d.message || 'Antrag fehlgeschlagen.'));
+      }
+    } finally { setSaving(false); setTimeout(() => setMsg(''), 5000); }
+  };
+
+  const review = async (id: string, status: 'approved' | 'rejected') => {
+    await fetch(`${API}/leave-requests/${id}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status, review_note: reviewNotes[id] || '' }) });
+    load();
+  };
+
+  return (
+    <div className="urlaub-tab">
+      {msg && <div className={`msg-banner ${msg.startsWith('❌') ? 'msg-error' : 'msg-success'}`}>{msg}</div>}
+
+      <h3 style={{ marginBottom: 12 }}>Neuen Antrag stellen</h3>
+      <form className="employee-form" onSubmit={submit} style={{ marginBottom: 24, background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+        <div className="form-row">
+          <div className="form-group">
+            <label>Art *</label>
+            <select value={type} onChange={e => setType(e.target.value as 'urlaub' | 'krankmeldung')}>
+              <option value="urlaub">🌴 Urlaub</option>
+              <option value="krankmeldung">🤒 Krankmeldung</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Von *</label>
+            <input type="date" required value={startDate} onChange={e => setStartDate(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Bis *</label>
+            <input type="date" required value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label>Begründung (optional)</label>
+          <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} placeholder="Optionale Details…" style={{ width: '100%', resize: 'vertical' }} />
+        </div>
+        <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Wird gesendet…' : 'Antrag einreichen'}</button>
+      </form>
+
+      <h3 style={{ marginBottom: 12 }}>Meine Anträge</h3>
+      {loading ? <div className="loading-text">Lade…</div> : (
+        myRequests.length === 0 ? <p className="empty-state">Noch keine Anträge gestellt.</p> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 32 }}>
+            {myRequests.map(r => (
+              <div key={r.id} className="booking-request-card">
+                <div className="booking-request-header">
+                  <strong>{leaveTypeLabel(r.type)}</strong>
+                  <span className={`status-badge ${leaveStatusClass(r.status)}`}>{leaveStatusLabel(r.status)}</span>
+                </div>
+                <p>📅 {r.start_date} bis {r.end_date}</p>
+                {r.reason && <p>📝 {r.reason}</p>}
+                {r.review_note && <p style={{ fontSize: '0.85rem', color: '#6B7280' }}>Anmerkung vom Admin: {r.review_note}</p>}
+                <p style={{ fontSize: '0.8rem', color: '#9CA3AF' }}>Eingereicht: {new Date(r.created_at).toLocaleString('de-DE')}</p>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {isAdmin && (
+        <>
+          <h3 style={{ marginBottom: 12 }}>Anträge zur Genehmigung</h3>
+          <div className="filter-row">
+            {[['pending', 'Ausstehend'], ['approved', 'Genehmigt'], ['rejected', 'Abgelehnt']].map(([v, l]) => (
+              <button key={v} className={`filter-btn ${adminFilter === v ? 'active' : ''}`} onClick={() => setAdminFilter(v)}>{l}</button>
+            ))}
+          </div>
+          {allRequests.length === 0 ? <p className="empty-state">Keine Anträge in diesem Filter.</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {allRequests.map(r => (
+                <div key={r.id} className="booking-request-card">
+                  <div className="booking-request-header">
+                    <strong>{r.user_name || 'Mitarbeiter'} · {leaveTypeLabel(r.type)}</strong>
+                    <span className={`status-badge ${leaveStatusClass(r.status)}`}>{leaveStatusLabel(r.status)}</span>
+                  </div>
+                  <p>📅 {r.start_date} bis {r.end_date}</p>
+                  {r.reason && <p>📝 {r.reason}</p>}
+                  {r.status === 'pending' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                      <input
+                        placeholder="Anmerkung (optional)"
+                        value={reviewNotes[r.id] || ''}
+                        onChange={e => setReviewNotes(s => ({ ...s, [r.id]: e.target.value }))}
+                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #D1D5DB' }}
+                      />
+                      <div className="booking-request-actions">
+                        <button className="btn-success" onClick={() => review(r.id, 'approved')}>Genehmigen</button>
+                        <button className="btn-danger" onClick={() => review(r.id, 'rejected')}>Ablehnen</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -2472,6 +2627,7 @@ export default function Portal() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [openBookingCount, setOpenBookingCount] = useState(0);
+  const [pendingLeaveCount, setPendingLeaveCount] = useState(0);
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2538,6 +2694,17 @@ export default function Portal() {
     return () => clearInterval(iv);
   }, [user]);
 
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+    const loadPendingLeave = async () => {
+      const r = await fetch(`${API}/leave-requests?status=pending`, { headers: authHeaders() });
+      if (r.ok) setPendingLeaveCount((await r.json()).length || 0);
+    };
+    loadPendingLeave();
+    const iv = setInterval(loadPendingLeave, 30_000);
+    return () => clearInterval(iv);
+  }, [user]);
+
   const todayStr = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2555,13 +2722,16 @@ export default function Portal() {
         const text = unassignedToday.length === 1 ? '1 unzugewiesener Auftrag heute' : `${unassignedToday.length} unzugewiesene Aufträge heute`;
         items.push({ key: 'unassigned', icon: '🗺️', text, tab: 'tour' });
       }
+      if (pendingLeaveCount > 0) {
+        items.push({ key: 'leave', icon: '🌴', text: `${pendingLeaveCount} neue${pendingLeaveCount === 1 ? 'r' : ''} Abwesenheitsantrag${pendingLeaveCount === 1 ? '' : '-Anträge'}`, tab: 'urlaub' });
+      }
     }
     const openToday = assignments.filter(a => a.status === 'pending' && a.scheduled_at?.startsWith(todayStr));
     if (openToday.length > 0) {
       items.push({ key: 'open-today', icon: '📅', text: `${openToday.length} Termin${openToday.length === 1 ? '' : 'e'} heute noch offen`, tab: 'appointments' });
     }
     return items;
-  }, [user, openBookingCount, unassignedAssignments, assignments, todayStr]);
+  }, [user, openBookingCount, pendingLeaveCount, unassignedAssignments, assignments, todayStr]);
 
   const handleInstallApp = async () => {
     if (deferredPrompt.current) {
@@ -2586,6 +2756,7 @@ export default function Portal() {
     { id: 'tour', label: 'Tagesroute', icon: '🗺️' },
     { id: 'booking-requests', label: 'Buchungsanfragen', icon: '📬', requireAdmin: true },
     { id: 'timelogs', label: 'Zeitnachweise', icon: '⏱' },
+    { id: 'urlaub', label: 'Urlaub & Abwesenheit', icon: '🌴' },
     { id: 'employees', label: 'Mitarbeiter', icon: '👥', requireAdmin: true },
     { id: 'assignments-admin', label: 'Auftragsübersicht', icon: '🧾', requireAdmin: true },
     { id: 'kunden', label: 'Kundenverwaltung', icon: '🤝', requireAdmin: true },
@@ -2731,6 +2902,7 @@ export default function Portal() {
               )}
               {activeTab === 'booking-requests' && isAdmin && <BookingRequestsTab canDelete={canDelete} />}
               {activeTab === 'timelogs' && <TimelogsTab timelogs={timelogs} assignments={assignments} />}
+              {activeTab === 'urlaub' && <UrlaubTab isAdmin={isAdmin} />}
               {activeTab === 'employees' && isAdmin && <EmployeesTab />}
               {activeTab === 'assignments-admin' && isAdmin && <AssignmentsAdminTab canDelete={canDelete} />}
               {activeTab === 'kunden' && isAdmin && <KundenTab canDelete={canDelete} />}

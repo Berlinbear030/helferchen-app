@@ -114,6 +114,16 @@ export interface ShopArticle {
   created_at: string;
 }
 
+export interface ShopOrder {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  items: string; // JSON array of { name, quantity, price }
+  total: number;
+  status: 'new' | 'done';
+  created_at: string;
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -129,6 +139,20 @@ export interface SipUser {
   password: string;
   full_name: string;
   created_at: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  user_id: string;
+  type: 'urlaub' | 'krankmeldung';
+  start_date: string;
+  end_date: string;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by_user_id: string | null;
+  review_note: string | null;
+  created_at: string;
+  reviewed_at: string | null;
 }
 
 const adminHash = bcrypt.hashSync('admin123', 10);
@@ -159,6 +183,7 @@ const db = {
   reports: [] as Report[],
   audit: [] as AuditEntry[],
   bookingRequests: [] as BookingRequest[],
+  leaveRequests: [] as LeaveRequest[],
 };
 
 export function addAudit(entity_type: string, entity_id: string, action: string, actor_user_id: string, details: string) {

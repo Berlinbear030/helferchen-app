@@ -1,4 +1,4 @@
-import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, ShopArticle, AuditEntry, Role, SipUser } from './index';
+import db, { User, Customer, Assignment, Timelog, Report, Signature, BookingRequest, ShopArticle, AuditEntry, Role, SipUser, LeaveRequest } from './index';
 import { query, dbConnected } from './pool';
 import { randomUUID } from 'crypto';
 
@@ -615,4 +615,88 @@ export const SipUserRepo = {
     const res = await query('DELETE FROM sip_users WHERE id = ?', [id]);
     return res.rowCount > 0;
   }
+};
+
+// EIS-500: Abwesenheits-/Urlaubsantrag Self-Service
+export const LeaveRequestRepo = {
+  async findByUserId(userId: string): Promise<LeaveRequest[]> {
+    if (!useDb()) {
+      return db.leaveRequests
+        .filter(r => r.user_id === userId)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    const res = await query('SELECT * FROM leave_requests WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+    return res.rows;
+  },
+  async findAll(status?: string): Promise<(LeaveRequest & { user_name?: string })[]> {
+    if (!useDb()) {
+      let list = [...db.leaveRequests];
+      if (status) list = list.filter(r => r.status === status);
+      return list
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .map(r => ({ ...r, user_name: db.users.find(u => u.id === r.user_id)?.full_name }));
+    }
+    let sql = 'SELECT lr.*, u.full_name as user_name FROM leave_requests lr JOIN users u ON u.id = lr.user_id';
+    const values: any[] = [];
+    if (status) {
+      sql += ' WHERE lr.status = ?';
+      values.push(status);
+    }
+    sql += ' ORDER BY lr.created_at DESC';
+    const res = await query(sql, values);
+    return res.rows;
+  },
+  async countPending(): Promise<number> {
+    if (!useDb()) return db.leaveRequests.filter(r => r.status === 'pending').length;
+    const res = await query("SELECT COUNT(*) as count FROM leave_requests WHERE status = 'pending'");
+    return parseInt(res.rows[0].count);
+  },
+  async findById(id: string): Promise<LeaveRequest | null> {
+    if (!useDb()) return db.leaveRequests.find(r => r.id === id) || null;
+    const res = await query('SELECT * FROM leave_requests WHERE id = ?', [id]);
+    return res.rows[0] || null;
+  },
+  async create(data: { user_id: string; type: 'urlaub' | 'krankmeldung'; start_date: string; end_date: string; reason?: string | null }): Promise<LeaveRequest> {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const entry: LeaveRequest = {
+      id,
+      user_id: data.user_id,
+      type: data.type,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      reason: data.reason || null,
+      status: 'pending',
+      reviewed_by_user_id: null,
+      review_note: null,
+      created_at: now,
+      reviewed_at: null,
+    };
+    if (!useDb()) {
+      db.leaveRequests.push(entry);
+      return entry;
+    }
+    await query(
+      'INSERT INTO leave_requests (id, user_id, type, start_date, end_date, reason) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, data.user_id, data.type, data.start_date, data.end_date, data.reason || null]
+    );
+    return entry;
+  },
+  async updateStatus(id: string, data: { status: 'approved' | 'rejected'; reviewed_by_user_id: string; review_note?: string | null }): Promise<LeaveRequest | null> {
+    const reviewed_at = new Date().toISOString();
+    if (!useDb()) {
+      const entry = db.leaveRequests.find(r => r.id === id);
+      if (!entry) return null;
+      entry.status = data.status;
+      entry.reviewed_by_user_id = data.reviewed_by_user_id;
+      entry.review_note = data.review_note ?? null;
+      entry.reviewed_at = reviewed_at;
+      return entry;
+    }
+    await query(
+      'UPDATE leave_requests SET status = ?, reviewed_by_user_id = ?, review_note = ?, reviewed_at = NOW() WHERE id = ?',
+      [data.status, data.reviewed_by_user_id, data.review_note ?? null, id]
+    );
+    return this.findById(id);
+  },
 };

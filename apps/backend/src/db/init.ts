@@ -327,6 +327,26 @@ export async function initDatabase(): Promise<void> {
     );
   }
 
+  // EIS-500: Abwesenheits-/Urlaubsantrag Self-Service (additive, no existing data touched)
+  await query(`
+    CREATE TABLE IF NOT EXISTS leave_requests (
+      id CHAR(36) NOT NULL,
+      user_id CHAR(36) NOT NULL,
+      type VARCHAR(20) NOT NULL DEFAULT 'urlaub',
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      reason TEXT,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      reviewed_by_user_id CHAR(36) NULL,
+      review_note TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      reviewed_at DATETIME NULL,
+      PRIMARY KEY (id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   console.log('Schema ready. Seeding default users...');
 
   const adminHash = await bcrypt.hash('admin123', 10);
