@@ -11,6 +11,7 @@ import Billing from './Billing';
 import Rechnungen from './Rechnungen';
 import Gutscheine from './Gutscheine';
 import PhoneSystem from './PhoneSystem';
+import Shop from './Shop';
 import './admin.css';
 
 const NAV = [
@@ -20,6 +21,7 @@ const NAV = [
   { path: 'reports', label: 'Berichte' },
   { path: 'invoices', label: 'Rechnungen' },
   { path: 'vouchers', label: 'Gutscheine' },
+  { path: 'shop', label: 'Shop' },
   { path: 'audit', label: 'Audit-Trail' },
   { path: 'export', label: 'Export' },
   { path: 'fraud', label: 'Betrugserkennung' },
@@ -137,6 +139,7 @@ export default function AdminDashboard() {
           <Route path="settings" element={<Settings />} />
           <Route path="invoices" element={<Rechnungen />} />
           <Route path="vouchers" element={<Gutscheine />} />
+          <Route path="shop" element={<Shop />} />
           <Route path="billing" element={<Billing />} />
         </Routes>
       </main>

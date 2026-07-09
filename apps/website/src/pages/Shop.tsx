@@ -17,10 +17,6 @@ interface CartItem extends ShopArticle {
   quantity: number;
 }
 
-function authHeaders() {
-  return { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
-}
-
 function ArticleCard({ article, onAdd }: { article: ShopArticle; onAdd: (a: ShopArticle) => void }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column' }}>
@@ -140,131 +136,6 @@ function CheckoutModal({ items, onClose, onSuccess }: { items: CartItem[]; onClo
   );
 }
 
-// Admin panel for managing articles
-function AdminArticlePanel() {
-  const [articles, setArticles] = useState<ShopArticle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', description: '', price: '', image_url: '', stock: '0' });
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  const load = async () => {
-    const res = await fetch(`${API}/shop/admin/articles`, { headers: authHeaders() });
-    if (res.ok) setArticles(await res.json());
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const res = await fetch(`${API}/shop/admin/articles`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ ...form, price: parseFloat(form.price), stock: parseInt(form.stock) }),
-      });
-      if (res.ok) {
-        setMsg('Artikel gespeichert!');
-        setShowForm(false);
-        setForm({ name: '', description: '', price: '', image_url: '', stock: '0' });
-        load();
-      }
-    } finally { setSaving(false); }
-  };
-
-  const toggleActive = async (a: ShopArticle) => {
-    await fetch(`${API}/shop/admin/articles/${a.id}`, {
-      method: 'PATCH',
-      headers: authHeaders(),
-      body: JSON.stringify({ active: !a.active }),
-    });
-    load();
-  };
-
-  const deleteArticle = async (id: string) => {
-    if (!confirm('Artikel wirklich löschen?')) return;
-    await fetch(`${API}/shop/admin/articles/${id}`, { method: 'DELETE', headers: authHeaders() });
-    load();
-  };
-
-  if (loading) return <div style={{ textAlign: 'center', padding: '24px', color: '#6B7280' }}>Laden…</div>;
-
-  return (
-    <div style={{ background: '#f9fafb', border: '1px solid #E5E7EB', borderRadius: '12px', padding: '20px', marginTop: '32px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, color: '#00454A' }}>Artikel verwalten (Admin)</h3>
-        <button className="btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>{showForm ? '× Abbrechen' : '+ Neuer Artikel'}</button>
-      </div>
-      {msg && <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '6px', marginBottom: '12px', fontSize: '0.875rem' }}>{msg}</div>}
-      {showForm && (
-        <form onSubmit={save} style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '16px', marginBottom: '16px', display: 'grid', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '0.875rem' }}>Name *</label>
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required style={{ width: '100%', padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', boxSizing: 'border-box' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '0.875rem' }}>Preis (€) *</label>
-              <input type="number" step="0.01" min="0" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} required style={{ width: '100%', padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', boxSizing: 'border-box' }} />
-            </div>
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '0.875rem' }}>Beschreibung</label>
-            <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} style={{ width: '100%', padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', resize: 'vertical', boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '0.875rem' }}>Bild-URL</label>
-              <input type="url" value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} placeholder="https://..." style={{ width: '100%', padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', boxSizing: 'border-box' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '0.875rem' }}>Lagerbestand</label>
-              <input type="number" min="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} style={{ width: '100%', padding: '6px 10px', border: '1px solid #D1D5DB', borderRadius: '6px', boxSizing: 'border-box' }} />
-            </div>
-          </div>
-          <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Speichern…' : 'Artikel speichern'}</button>
-        </form>
-      )}
-      {articles.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#9CA3AF', padding: '24px 0' }}>Noch keine Artikel vorhanden. Legen Sie den ersten an.</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-          <thead>
-            <tr style={{ background: '#f3f4f6', textAlign: 'left' }}>
-              <th style={{ padding: '8px 12px' }}>Name</th>
-              <th style={{ padding: '8px 12px' }}>Preis</th>
-              <th style={{ padding: '8px 12px' }}>Bestand</th>
-              <th style={{ padding: '8px 12px' }}>Status</th>
-              <th style={{ padding: '8px 12px' }}>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {articles.map(a => (
-              <tr key={a.id} style={{ borderBottom: '1px solid #E5E7EB' }}>
-                <td style={{ padding: '8px 12px', fontWeight: '600' }}>{a.name}</td>
-                <td style={{ padding: '8px 12px' }}>{a.price.toFixed(2)} €</td>
-                <td style={{ padding: '8px 12px' }}>{a.stock}</td>
-                <td style={{ padding: '8px 12px' }}>
-                  <span style={{ background: a.active ? '#dcfce7' : '#fee2e2', color: a.active ? '#166534' : '#991b1b', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600' }}>
-                    {a.active ? 'Aktiv' : 'Inaktiv'}
-                  </span>
-                </td>
-                <td style={{ padding: '8px 12px', display: 'flex', gap: '8px' }}>
-                  <button className="btn-sm btn-secondary" onClick={() => toggleActive(a)}>{a.active ? 'Deaktivieren' : 'Aktivieren'}</button>
-                  <button className="btn-sm" style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '4px', cursor: 'pointer', padding: '2px 8px' }} onClick={() => deleteArticle(a.id)}>Löschen</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
-
 export default function Shop() {
   const [articles, setArticles] = useState<ShopArticle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,11 +144,6 @@ export default function Shop() {
   const [ordered, setOrdered] = useState(false);
 
   const token = localStorage.getItem('token');
-  let isAdmin = false;
-  try {
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    isAdmin = user.role === 'admin';
-  } catch {}
 
   useEffect(() => {
     fetch(`${API}/shop/articles`)
@@ -342,8 +208,6 @@ export default function Shop() {
             ))}
           </div>
         )}
-
-        {isAdmin && <AdminArticlePanel />}
       </div>
 
       <Cart items={cart} onRemove={removeFromCart} onCheckout={() => setShowCheckout(true)} />

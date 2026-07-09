@@ -137,6 +137,48 @@ export interface SipPresence {
   status: 'online' | 'in_call' | 'offline' | 'unknown';
 }
 
+export interface ShopArticle {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image_url: string;
+  stock: number;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ShopOrder {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  items: { name: string; quantity: number; price: number }[];
+  total: number;
+  status: 'new' | 'done';
+  created_at: string;
+}
+
+export interface OnboardingEntry {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string;
+  address?: string;
+  birth_date?: string;
+  onboarding_status: 'active' | 'pending_review' | 'active' | 'rejected';
+  onboarding_submitted_at?: string;
+  created_at: string;
+}
+
+export interface OnboardingDetail extends OnboardingEntry {
+  qualification?: string;
+  level?: number;
+  criminal_record_upload?: string | null;
+  onboarding_reviewed_by?: string | null;
+  onboarding_review_note?: string | null;
+  onboarding_reviewed_at?: string | null;
+}
+
 export const adminApi = {
   getDashboard: () => apiFetch<DashboardStats>('/admin/dashboard'),
   getUsers: () => apiFetch<User[]>('/admin/users'),
@@ -177,4 +219,20 @@ export const adminApi = {
   getVoicemails: () => apiFetch<Voicemail[]>('/calls/voicemails'),
   deleteVoicemail: (id: string) =>
     apiFetch<void>(`/calls/voicemails/${id}`, { method: 'DELETE' }),
+
+  getShopArticles: () => apiFetch<ShopArticle[]>('/shop/admin/articles'),
+  createShopArticle: (data: { name: string; description?: string; price: number; image_url?: string; stock: number }) =>
+    apiFetch<ShopArticle>('/shop/admin/articles', { method: 'POST', body: JSON.stringify(data) }),
+  updateShopArticle: (id: string, data: Partial<{ name: string; description: string; price: number; image_url: string; stock: number; active: boolean }>) =>
+    apiFetch<ShopArticle>(`/shop/admin/articles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteShopArticle: (id: string) =>
+    apiFetch<void>(`/shop/admin/articles/${id}`, { method: 'DELETE' }),
+  getShopOrders: () => apiFetch<ShopOrder[]>('/shop/admin/orders'),
+  updateShopOrderStatus: (id: string, status: 'new' | 'done') =>
+    apiFetch<ShopOrder>(`/shop/admin/orders/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+
+  getPendingOnboarding: () => apiFetch<OnboardingEntry[]>('/onboarding/pending'),
+  getOnboardingDetail: (id: string) => apiFetch<OnboardingDetail>(`/onboarding/${id}`),
+  reviewOnboarding: (id: string, data: { status: 'active' | 'rejected'; review_note?: string }) =>
+    apiFetch<OnboardingDetail>(`/onboarding/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 };

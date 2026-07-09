@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { ShopArticleRepo } from '../db/queries';
+import { ShopArticleRepo, ShopOrderRepo } from '../db/queries';
 import { AuthRequest, authenticateToken, requireRole } from '../middleware/auth';
 import { sendShopOrderEmail } from '../services/email';
 
@@ -22,9 +22,28 @@ router.post('/order', async (req: Request, res: Response) => {
 
   const total = items.reduce((sum: number, i: { price: number; quantity: number }) => sum + i.price * i.quantity, 0);
 
+  const order = await ShopOrderRepo.create({ customer_name: customerName, customer_email: customerEmail, items, total });
+
   sendShopOrderEmail({ customerName, customerEmail, items, total, shopEmail: SHOP_EMAIL }).catch(() => {});
 
-  return res.status(201).json({ success: true });
+  return res.status(201).json({ success: true, orderId: order.id });
+});
+
+// Auth (admin): list all orders
+router.get('/admin/orders', authenticateToken, requireRole('admin'), async (_req: AuthRequest, res: Response) => {
+  const orders = await ShopOrderRepo.findAll();
+  res.json(orders.map(o => ({ ...o, items: JSON.parse(o.items) })));
+});
+
+// Auth (admin): mark order as done/new
+router.patch('/admin/orders/:id', authenticateToken, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+  const { status } = req.body;
+  if (status !== 'new' && status !== 'done') {
+    return res.status(400).json({ error: 'status muss "new" oder "done" sein.' });
+  }
+  const order = await ShopOrderRepo.updateStatus(String(req.params.id), status);
+  if (!order) return res.status(404).json({ error: 'Bestellung nicht gefunden.' });
+  res.json({ ...order, items: JSON.parse(order.items) });
 });
 
 // Auth (admin): list all articles
