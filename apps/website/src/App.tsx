@@ -6,12 +6,14 @@ import Shop from './pages/Shop';
 import MobileApp from './pages/MobileApp';
 import AdminDashboard from './admin/AdminDashboard';
 import Impressum from './pages/Impressum';
+import Registrierung from './pages/Registrierung';
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<PublicHome />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/registrieren" element={<Registrierung />} />
       <Route path="/portal" element={<Portal />} />
       <Route path="/app" element={<MobileApp />} />
       <Route path="/werbeartikel" element={<Shop />} />
